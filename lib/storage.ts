@@ -10,6 +10,7 @@ export async function loadCourses(): Promise<CourseRecord[]> {
   return data.map((row: any) => ({
     id: row.id,
     name: row.name,
+    tee_box: row.tee_box ?? "",
     city: row.city,
     state: row.state,
     holes: row.holes,
