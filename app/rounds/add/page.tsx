@@ -20,6 +20,8 @@ type RoundHole = {
   greenside_bunker: number | "";
   gir: boolean;
   grints: boolean;
+  club: string;
+  first_putt_distance: string;
 };
 
 function calcGir(score: number | "", par: number): boolean {
@@ -64,6 +66,8 @@ function buildHoles(courseHoles: HoleData[], startingHole: number, holesPlayed: 
     greenside_bunker: "",
     gir: false,
     grints: false,
+    club: "",
+    first_putt_distance: "",
   }));
 }
 
@@ -225,7 +229,7 @@ export default function AddRound() {
                 {hole.grints && <span style={{ fontSize: 11, background: "#e3f2fd", color: "#1565c0", padding: "2px 8px", borderRadius: 20 }}>GRINTS</span>}
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 8 }}>
               <div>
                 <label style={labelStyle}>Score</label>
                 <input style={inputStyle} type="number" min={1} max={20}
@@ -272,6 +276,24 @@ export default function AddRound() {
                 <input style={inputStyle} type="number" min={0} max={10}
                   value={hole.greenside_bunker}
                   onChange={e => updateHole(i, "greenside_bunker", e.target.value === "" ? "" : Number(e.target.value))} />
+              </div>
+              <div>
+                <label style={labelStyle}>Club</label>
+                <select style={selectStyle} value={hole.club} onChange={e => updateHole(i, "club", e.target.value)}>
+                  <option value="">—</option>
+                  {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>1st Putt</label>
+                <select style={selectStyle} value={hole.first_putt_distance} onChange={e => updateHole(i, "first_putt_distance", e.target.value)}>
+                  <option value="">—</option>
+                  {["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"].map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
