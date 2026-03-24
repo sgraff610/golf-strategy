@@ -91,7 +91,7 @@ export default function AddCourse() {
     border: "1px solid #ddd", borderRadius: 8,
     boxSizing: "border-box" as const,
   };
-  const selectStyle = { ...inputStyle, background: "white" };
+  const selectStyle = { ...inputStyle, background: "white", color: "#0f6e56" };
   const labelStyle = { fontSize: 13, color: "#444", display: "block" as const, marginBottom: 4 };
   const sectionLabel = { fontSize: 12, color: "#888", fontWeight: 600 as const, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block" as const };
   const btnStyle = (primary: boolean) => ({

@@ -24,9 +24,9 @@ type RoundHole = {
   first_putt_distance: string;
 };
 
-function calcGir(score: number | "", par: number): boolean {
-  if (score === "") return false;
-  return (score - 2) <= (par - 2);
+function calcGir(score: number | "", par: number, putts: number | ""): boolean {
+  if (score === "" || putts === "") return false;
+  return (score - (putts as number)) <= (par - 2);
 }
 
 function calcGrints(score: number | "", par: number): boolean {
@@ -102,7 +102,7 @@ export default function AddRound() {
       const updated = prev.map((h, i) => {
         if (i !== index) return h;
         const newHole = { ...h, [field]: value };
-        newHole.gir = calcGir(newHole.score, newHole.par);
+        newHole.gir = calcGir(newHole.score, newHole.par, newHole.putts);
         newHole.grints = calcGrints(newHole.score, newHole.par);
         return newHole;
       });
@@ -134,7 +134,7 @@ export default function AddRound() {
     border: "1px solid #ddd", borderRadius: 6,
     boxSizing: "border-box" as const,
   };
-  const selectStyle = { ...inputStyle, background: "white" };
+  const selectStyle = { ...inputStyle, background: "white", color: "#0f6e56" };
   const labelStyle = { fontSize: 12, color: "#666", display: "block" as const, marginBottom: 3 };
   const btnStyle = (primary: boolean) => ({
     padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,

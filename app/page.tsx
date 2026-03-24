@@ -59,7 +59,7 @@ export default function Home() {
   const selectStyle = {
     width: "100%", padding: "8px 12px", fontSize: 15,
     border: "1px solid #ddd", borderRadius: 8, background: "white",
-    boxSizing: "border-box" as const,
+    boxSizing: "border-box" as const, color: "#0f6e56",
   };
   const labelStyle = {
     fontSize: 13, color: "#444", display: "block" as const, marginBottom: 4,

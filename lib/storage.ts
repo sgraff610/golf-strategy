@@ -23,6 +23,7 @@ export async function saveCourse(course: CourseRecord): Promise<void> {
     .upsert({
       id: course.id,
       name: course.name,
+      tee_box: course.tee_box ?? "",
       city: course.city,
       state: course.state,
       hole_count: course.holes.length,

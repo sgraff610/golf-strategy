@@ -24,9 +24,9 @@ type RoundHole = {
   first_putt_distance: string;
 };
 
-function calcGir(score: number | "", par: number): boolean {
-  if (score === "") return false;
-  return (score - 2) <= (par - 2);
+function calcGir(score: number | "", par: number, putts: number | ""): boolean {
+  if (score === "" || putts === "") return false;
+  return (score - (putts as number)) <= (par - 2);
 }
 
 function calcGrints(score: number | "", par: number): boolean {
@@ -36,9 +36,11 @@ function calcGrints(score: number | "", par: number): boolean {
 
 export default function EditRound() {
   const params = useParams();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id as string;
+  const rawId = params?.id;
+  const id = Array.isArray(rawId) ? rawId[0] : (rawId as string) ?? "";
 
   const [courseName, setCourseName] = useState("");
+  const [teeBox, setTeeBox] = useState("");
   const [date, setDate] = useState("");
   const [holesPlayed, setHolesPlayed] = useState(18);
   const [startingHole, setStartingHole] = useState(1);
@@ -50,10 +52,20 @@ export default function EditRound() {
   const [courseId, setCourseId] = useState("");
 
   useEffect(() => {
+    console.log("id value:", id, "params:", JSON.stringify(params));
     if (!id) return;
+    console.log("FETCHING ROUND WITH ID:", id);
     supabase.from("rounds").select("*").eq("id", id).single().then(({ data, error }) => {
       if (!error && data) {
         setCourseName(data.course_name ?? "");
+        console.log("FULL DATA:", JSON.stringify(data));
+        if (data.tee_box) {
+          setTeeBox(data.tee_box);
+        } else if (data.course_id) {
+          supabase.from("courses").select("tee_box").eq("id", data.course_id).single().then(({ data: courseData }) => {
+            if (courseData?.tee_box) setTeeBox(courseData.tee_box);
+          });
+        }
         setCourseId(data.course_id ?? "");
         setDate(data.date ?? "");
         setHolesPlayed(data.holes_played ?? 18);
@@ -68,7 +80,7 @@ export default function EditRound() {
     setRoundHoles(prev => prev.map((h, i) => {
       if (i !== index) return h;
       const newHole = { ...h, [field]: value };
-      newHole.gir = calcGir(newHole.score, newHole.par);
+      newHole.gir = calcGir(newHole.score, newHole.par, newHole.putts);
       newHole.grints = calcGrints(newHole.score, newHole.par);
       return newHole;
     }));
@@ -86,14 +98,15 @@ export default function EditRound() {
     setRoundHoles(prev => prev.map(roundHole => {
       const courseHole = course.holes.find(h => h.hole === roundHole.hole);
       if (!courseHole) return roundHole;
-      return {
+      const synced = {
         ...roundHole,
         par: courseHole.par,
         yards: courseHole.yards,
         stroke_index: courseHole.stroke_index,
-        gir: calcGir(roundHole.score, courseHole.par),
         grints: calcGrints(roundHole.score, courseHole.par),
       };
+      synced.gir = calcGir(synced.score, synced.par, synced.putts);
+      return synced;
     }));
     setSyncing(false);
   }
@@ -118,7 +131,7 @@ export default function EditRound() {
     border: "1px solid #ddd", borderRadius: 6,
     boxSizing: "border-box" as const,
   };
-  const selectStyle = { ...inputStyle, background: "white" };
+  const selectStyle = { ...inputStyle, background: "white", color: "#0f6e56" };
   const labelStyle = { fontSize: 12, color: "#666", display: "block" as const, marginBottom: 3 };
   const btnStyle = (primary: boolean) => ({
     padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,
@@ -147,7 +160,9 @@ export default function EditRound() {
       </div>
 
       <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>Edit round</h1>
-      <p style={{ color: "#666", marginBottom: 24, fontSize: 14 }}>{courseName}</p>
+      <p style={{ color: "#666", marginBottom: 24, fontSize: 14 }}>
+        {courseName}{teeBox ? ` — ${teeBox} tees` : ""}
+      </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
         <div>
