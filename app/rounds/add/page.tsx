@@ -16,7 +16,7 @@ type RoundHole = {
   putts: number | "";
   tee_accuracy: TeeAccuracy;
   appr_accuracy: TeeAccuracy;
-  appr_distance: number | "";
+  appr_distance: string;
   water_penalty: number | "";
   drop_or_out: number | "";
   tree_haz: number | "";
@@ -120,6 +120,7 @@ export default function AddRound() {
   };
   const selectStyle = { ...inputStyle, background: "white", color: "#0f6e56" };
   const labelStyle = { fontSize: 12, color: "#666", display: "block" as const, marginBottom: 3 };
+  const sectionLabel = { fontSize: 11, fontWeight: 600 as const, color: "#0f6e56", textTransform: "uppercase" as const, letterSpacing: 1, margin: "0 0 6px" };
   const btnStyle = (primary: boolean) => ({
     padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,
     background: primary ? "#1a1a1a" : "white",
@@ -150,7 +151,7 @@ export default function AddRound() {
         </div>
         <div>
           <label style={labelStyle}>Date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, maxWidth: 160 }} />
         </div>
         <div>
           <label style={labelStyle}>Holes played</label>
@@ -189,7 +190,7 @@ export default function AddRound() {
           <div key={i} style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div>
-                <span style={{ fontSize: 15, fontWeight: 600 }}>Hole {hole.hole}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#0f6e56" }}>Hole {hole.hole}</span>
                 <span style={{ fontSize: 13, color: "#666", marginLeft: 8 }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -197,104 +198,122 @@ export default function AddRound() {
                 {hole.grints && <span style={{ fontSize: 11, background: "#e3f2fd", color: "#1565c0", padding: "2px 8px", borderRadius: 20 }}>GRINTS</span>}
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gridTemplateRows: "repeat(2, auto)", gridAutoFlow: "column", gap: 8 }}>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
-                <label style={labelStyle}>Score</label>
-                <input style={inputStyle} type="number" min={1} max={20}
-                  value={hole.score}
-                  onChange={e => updateHole(i, "score", e.target.value === "" ? "" : Number(e.target.value))} />
+                <p style={sectionLabel}>Scoring</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  <div>
+                    <label style={labelStyle}>Score</label>
+                    <input style={inputStyle} type="number" min={1} max={20}
+                      value={hole.score}
+                      onChange={e => updateHole(i, "score", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Putts</label>
+                    <input style={inputStyle} type="number" min={0} max={10}
+                      value={hole.putts}
+                      onChange={e => updateHole(i, "putts", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Chips</label>
+                    <input min={0} max={10} type="number" style={inputStyle}
+                      value={hole.chips}
+                      onChange={e => updateHole(i, "chips", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>1st Putt</label>
+                    <select style={selectStyle} value={hole.first_putt_distance} onChange={e => updateHole(i, "first_putt_distance", e.target.value)}>
+                      <option value="">—</option>
+                      {["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"].map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div></div>
+
               <div>
-                <label style={labelStyle}>Club</label>
-                <select style={selectStyle} value={hole.club} onChange={e => updateHole(i, "club", e.target.value)}>
-                  <option value="">—</option>
-                  {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <p style={sectionLabel}>Tee & Approach</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  <div>
+                    <label style={labelStyle}>DRIV Club</label>
+                    <select style={selectStyle} value={hole.club} onChange={e => updateHole(i, "club", e.target.value)}>
+                      <option value="">—</option>
+                      {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>DRIV Acc</label>
+                    <select style={selectStyle} value={hole.tee_accuracy} onChange={e => updateHole(i, "tee_accuracy", e.target.value)}>
+                      <option value="">—</option>
+                      <option value="Hit">Hit</option>
+                      <option value="Left">Left</option>
+                      <option value="Right">Right</option>
+                      <option value="Short">Short</option>
+                      <option value="Long">Long</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>APPR Club</label>
+                    <select style={selectStyle} value={hole.appr_distance} onChange={e => updateHole(i, "appr_distance", e.target.value)}>
+                      <option value="">—</option>
+                      {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>APPR Acc</label>
+                    <select style={selectStyle} value={hole.appr_accuracy} onChange={e => updateHole(i, "appr_accuracy", e.target.value)}>
+                      <option value="">—</option>
+                      <option value="Hit">Hit</option>
+                      <option value="Left">Left</option>
+                      <option value="Right">Right</option>
+                      <option value="Short">Short</option>
+                      <option value="Long">Long</option>
+                    </select>
+                  </div>
+                </div>
               </div>
+
               <div>
-                <label style={labelStyle}>DRIV Acc</label>
-                <select style={selectStyle} value={hole.tee_accuracy} onChange={e => updateHole(i, "tee_accuracy", e.target.value)}>
-                  <option value="">—</option>
-                  <option value="Hit">Hit</option>
-                  <option value="Left">Left</option>
-                  <option value="Right">Right</option>
-                  <option value="Short">Short</option>
-                  <option value="Long">Long</option>
-                </select>
+                <p style={sectionLabel}>Penalties</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+                  <div>
+                    <label style={labelStyle}>Water</label>
+                    <input style={inputStyle} type="number" min={0} max={10}
+                      value={hole.water_penalty}
+                      onChange={e => updateHole(i, "water_penalty", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Drop/OB</label>
+                    <input style={inputStyle} type="number" min={0} max={10}
+                      value={hole.drop_or_out}
+                      onChange={e => updateHole(i, "drop_or_out", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Tree/Haz</label>
+                    <input min={0} max={10} type="number" style={inputStyle}
+                      value={hole.tree_haz}
+                      onChange={e => updateHole(i, "tree_haz", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>FWY Bkr</label>
+                    <input style={inputStyle} type="number" min={0} max={10}
+                      value={hole.fairway_bunker}
+                      onChange={e => updateHole(i, "fairway_bunker", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>GS Bkr</label>
+                    <input style={inputStyle} type="number" min={0} max={10}
+                      value={hole.greenside_bunker}
+                      onChange={e => updateHole(i, "greenside_bunker", e.target.value === "" ? "" : Number(e.target.value))} />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label style={labelStyle}>APPR Dist</label>
-                <input min={0} max={999} type="number" style={inputStyle}
-                  value={hole.appr_distance}
-                  onChange={e => updateHole(i, "appr_distance", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div>
-                <label style={labelStyle}>APPR Acc</label>
-                <select style={selectStyle} value={hole.appr_accuracy} onChange={e => updateHole(i, "appr_accuracy", e.target.value)}>
-                  <option value="">—</option>
-                  <option value="Hit">Hit</option>
-                  <option value="Left">Left</option>
-                  <option value="Right">Right</option>
-                  <option value="Short">Short</option>
-                  <option value="Long">Long</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Chips</label>
-                <input min={0} max={10} type="number" style={inputStyle}
-                  value={hole.chips}
-                  onChange={e => updateHole(i, "chips", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div></div>
-              <div>
-                <label style={labelStyle}>Putts</label>
-                <input style={inputStyle} type="number" min={0} max={10}
-                  value={hole.putts}
-                  onChange={e => updateHole(i, "putts", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div>
-                <label style={labelStyle}>1st Putt</label>
-                <select style={selectStyle} value={hole.first_putt_distance} onChange={e => updateHole(i, "first_putt_distance", e.target.value)}>
-                  <option value="">—</option>
-                  {["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"].map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Water</label>
-                <input style={inputStyle} type="number" min={0} max={10}
-                  value={hole.water_penalty}
-                  onChange={e => updateHole(i, "water_penalty", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Drop/OB</label>
-                <input style={inputStyle} type="number" min={0} max={10}
-                  value={hole.drop_or_out}
-                  onChange={e => updateHole(i, "drop_or_out", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div>
-                <label style={labelStyle}>Tree/Haz</label>
-                <input min={0} max={10} type="number" style={inputStyle}
-                  value={hole.tree_haz}
-                  onChange={e => updateHole(i, "tree_haz", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div>
-                <label style={labelStyle}>FWY Bkr</label>
-                <input style={inputStyle} type="number" min={0} max={10}
-                  value={hole.fairway_bunker}
-                  onChange={e => updateHole(i, "fairway_bunker", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div>
-                <label style={labelStyle}>GS Bkr</label>
-                <input style={inputStyle} type="number" min={0} max={10}
-                  value={hole.greenside_bunker}
-                  onChange={e => updateHole(i, "greenside_bunker", e.target.value === "" ? "" : Number(e.target.value))} />
-              </div>
-              <div></div>
             </div>
           </div>
         ))}
