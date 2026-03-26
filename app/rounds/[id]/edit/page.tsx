@@ -169,7 +169,7 @@ export default function EditRound() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
         <div>
           <label style={labelStyle}>Date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, maxWidth: 160 }} />
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle, maxWidth: 130, padding: "3px 6px", fontSize: 13 }} />
         </div>
         <div>
           <label style={labelStyle}>Starting hole</label>
