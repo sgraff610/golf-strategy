@@ -13,6 +13,8 @@ export async function loadCourses(): Promise<CourseRecord[]> {
     tee_box: row.tee_box ?? "",
     city: row.city,
     state: row.state,
+    rating: row.rating ?? null,
+    slope: row.slope ?? null,
     holes: row.holes,
   }));
 }
