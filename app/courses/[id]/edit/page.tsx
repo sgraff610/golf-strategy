@@ -59,6 +59,8 @@ export default function EditCourse() {
   const [teeBox, setTeeBox] = useState<string>("");
   const [city, setCity] = useState<string>("");
   const [state, setState] = useState<string>("");
+  const [rating, setRating] = useState<string>("");
+  const [slope, setSlope] = useState<string>("");
   const [holes, setHoles] = useState<HoleData[]>([]);
   const [currentHole, setCurrentHole] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -76,6 +78,8 @@ export default function EditCourse() {
         setTeeBox(data.tee_box !== undefined && data.tee_box !== null ? data.tee_box : "");
         setCity(data.city ?? "");
         setState(data.state ?? "");
+        setRating(data.rating != null ? String(data.rating) : "");
+        setSlope(data.slope != null ? String(data.slope) : "");
         setHoles(data.holes ?? []);
       }
       setLoading(false);
@@ -117,6 +121,8 @@ export default function EditCourse() {
       tee_box: teeBox.trim(),
       city: city.trim(),
       state: state.trim(),
+      rating: rating !== "" ? parseFloat(rating) : null,
+      slope: slope !== "" ? parseInt(slope) : null,
       holes,
     });
     setSaving(false);
@@ -156,6 +162,16 @@ export default function EditCourse() {
         <div>
           <label style={labelStyle}>Tee box</label>
           <input style={inputStyle} value={teeBox} onChange={e => setTeeBox(e.target.value)} />
+          </div>
+        <div>
+          <label style={labelStyle}>Course Rating</label>
+          <input style={inputStyle} value={rating} type="number" step="0.1" min="60" max="80"
+            onChange={e => setRating(e.target.value)} placeholder="e.g. 71.4" />
+        </div>
+        <div>
+          <label style={labelStyle}>Slope</label>
+          <input style={inputStyle} value={slope} type="number" min="55" max="155"
+            onChange={e => setSlope(e.target.value)} placeholder="e.g. 128" />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>

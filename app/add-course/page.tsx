@@ -81,6 +81,8 @@ export default function AddCourse() {
   const [teeBox, setTeeBox] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [rating, setRating] = useState("");
+  const [slope, setSlope] = useState("");
   const [holeCount, setHoleCount] = useState<9 | 18>(18);
   const [currentHole, setCurrentHole] = useState(0);
   const [holes, setHoles] = useState<HoleData[]>([]);
@@ -126,6 +128,8 @@ export default function AddCourse() {
       tee_box: teeBox.trim(),
       city: city.trim(),
       state: state.trim(),
+      rating: rating !== "" ? parseFloat(rating) : null,
+      slope: slope !== "" ? parseInt(slope) : null,
       holes,
     };
     await saveCourse(course);
@@ -166,6 +170,12 @@ export default function AddCourse() {
         <div>
           <label style={labelStyle}>State</label>
           <input style={inputStyle} value={state} onChange={e => setState(e.target.value)} placeholder="e.g. GA" />
+          <label style={labelStyle}>Course Rating</label>
+          <input style={inputStyle} value={rating} type="number" step="0.1" min="60" max="80"
+            onChange={e => setRating(e.target.value)} placeholder="e.g. 71.4" />
+          <label style={labelStyle}>Slope</label>
+          <input style={inputStyle} value={slope} type="number" min="55" max="155"
+            onChange={e => setSlope(e.target.value)} placeholder="e.g. 128" />
         </div>
         <div>
           <label style={labelStyle}>Number of holes</label>

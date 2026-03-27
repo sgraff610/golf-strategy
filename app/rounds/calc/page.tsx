@@ -38,6 +38,36 @@ function getDriveDistance(club: string): number {
   return CLUB_DISTANCES[club] ?? 0;
 }
 
+function calculateDriveTreeLikelihood(hole: RoundHole, courseHole: HoleData | undefined): number {
+  if (!courseHole) return 0;
+  if (hole.tee_accuracy === "Hit" || hole.tee_accuracy === "") return 0;
+
+  const treeHaz = (Number(hole.tree_haz) || 0) > 0;
+
+  if (hole.tee_accuracy === "Left" && courseHole.tee_tree_hazard_left) {
+    return treeHaz ? 75 : 25;
+  }
+  if (hole.tee_accuracy === "Right" && courseHole.tee_tree_hazard_right) {
+    return treeHaz ? 75 : 25;
+  }
+  return 0;
+}
+
+function calculateDriveBunkerLikelihood(hole: RoundHole, courseHole: HoleData | undefined): number {
+  if (!courseHole) return 0;
+  if (hole.tee_accuracy === "Hit" || hole.tee_accuracy === "") return 0;
+
+  const fwyBunker = (Number(hole.fairway_bunker) || 0) > 0;
+
+  if (hole.tee_accuracy === "Left" && courseHole.tee_bunkers_left) {
+    return fwyBunker ? 100 : 0;
+  }
+  if (hole.tee_accuracy === "Right" && courseHole.tee_bunkers_right) {
+    return fwyBunker ? 100 : 0;
+  }
+  return 0;
+}
+
 function calculateDrivePenaltyLikelihood(hole: RoundHole, courseHole: HoleData | undefined): number {
   if (!courseHole) return 0;
   const water = (Number(hole.water_penalty) || 0) + (Number(hole.drop_or_out) || 0);
@@ -136,6 +166,8 @@ export default function RoundsCalc() {
             const driveDistance = getDriveDistance(hole.club);
             const penaltyLikelihood = calculateDrivePenaltyLikelihood(hole, courseHole);
             const hasPenalty = ((Number(hole.water_penalty) || 0) + (Number(hole.drop_or_out) || 0)) > 0;
+            const treeLikelihood = calculateDriveTreeLikelihood(hole, courseHole);
+            const bunkerLikelihood = calculateDriveBunkerLikelihood(hole, courseHole);
 
             return (
               <div key={i} style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "14px 16px" }}>
@@ -169,7 +201,7 @@ export default function RoundsCalc() {
                 </div>
 
                 <div style={{ marginTop: 8 }}>
-                  <label style={labelStyle}>Drive Water/OB Likelihood</label>
+                  <label style={labelStyle}>Drive Water/OB %</label>
                   <div style={{
                     ...calcStyle, padding: "8px 12px",
                     background: hasPenalty && penaltyLikelihood >= 50 ? "#fff3e0" : "#f0f9f6",
@@ -177,7 +209,33 @@ export default function RoundsCalc() {
                     color: hasPenalty && penaltyLikelihood >= 50 ? "#e65100" : "#0f6e56",
                     fontSize: 15,
                   }}>
-                    {hasPenalty ? `${penaltyLikelihood}%` : "No penalty recorded"}
+                    {`${penaltyLikelihood}%`}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 8 }}>
+                  <label style={labelStyle}>Drive Tree/Hazard %</label>
+                  <div style={{
+                    ...calcStyle, padding: "8px 12px",
+                    background: treeLikelihood >= 50 ? "#fff3e0" : "#f0f9f6",
+                    border: treeLikelihood >= 50 ? "1px solid #ffcc80" : "1px solid #b2dfdb",
+                    color: treeLikelihood >= 50 ? "#e65100" : "#0f6e56",
+                    fontSize: 15,
+                  }}>
+                    {hole.tee_accuracy ? `${treeLikelihood}%` : "—"}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 8 }}>
+                  <label style={labelStyle}>Drive Bunker %</label>
+                  <div style={{
+                    ...calcStyle, padding: "8px 12px",
+                    background: bunkerLikelihood >= 50 ? "#fff3e0" : "#f0f9f6",
+                    border: bunkerLikelihood >= 50 ? "1px solid #ffcc80" : "1px solid #b2dfdb",
+                    color: bunkerLikelihood >= 50 ? "#e65100" : "#0f6e56",
+                    fontSize: 15,
+                  }}>
+                    {hole.tee_accuracy ? `${bunkerLikelihood}%` : "—"}
                   </div>
                 </div>
               </div>

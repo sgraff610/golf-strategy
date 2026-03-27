@@ -62,6 +62,7 @@ export default function Nav() {
             <a href="/courses" style={desktopNavLink}>Courses</a>
             <a href="/rounds" style={desktopNavLink}>Rounds</a>
             <a href="/rounds/calc" style={desktopNavLink}>Analysis</a>
+            <a href="/rounds/insights" style={desktopNavLink}>Insights</a>
           </div>
         )}
       </div>
@@ -72,6 +73,7 @@ export default function Nav() {
           <a href="/courses" style={navLink} onClick={() => setOpen(false)}>Courses</a>
           <a href="/rounds" style={navLink} onClick={() => setOpen(false)}>Rounds</a>
           <a href="/rounds/calc" style={navLink} onClick={() => setOpen(false)}>Analysis</a>
+          <a href="/rounds/insights" style={navLink} onClick={() => setOpen(false)}>Insights</a>
         </div>
       )}
     </nav>

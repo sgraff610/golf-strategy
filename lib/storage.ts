@@ -26,6 +26,8 @@ export async function saveCourse(course: CourseRecord): Promise<void> {
       tee_box: course.tee_box ?? "",
       city: course.city,
       state: course.state,
+      rating: course.rating ?? null,
+      slope: course.slope ?? null,
       hole_count: course.holes.length,
       holes: course.holes,
     });

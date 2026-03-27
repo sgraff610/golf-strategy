@@ -47,5 +47,7 @@ export type CourseRecord = {
   tee_box: string;
   city: string;
   state: string;
+  rating: number | null;
+  slope: number | null;
   holes: HoleData[];
 };
