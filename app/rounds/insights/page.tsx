@@ -63,6 +63,7 @@ const DEFAULT_FILTERS: Filters = {
   siMin: "", siMax: "",
   ratingMin: "", ratingMax: "",
   slopeMin: "", slopeMax: "",
+};
 
 function getDriveWaterPct(hole: any, courseHole: HoleData | undefined): number {
   if (!courseHole) return 0;
