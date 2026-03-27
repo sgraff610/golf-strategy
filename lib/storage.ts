@@ -52,6 +52,8 @@ export async function getCourse(id: string): Promise<CourseRecord | null> {
     tee_box: data.tee_box ?? "",
     city: data.city,
     state: data.state,
+    rating: data.rating ?? null,
+    slope: data.slope ?? null,
     holes: data.holes,
   };
 }
