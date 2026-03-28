@@ -307,12 +307,6 @@ function AddCourseInner() {
   );
 }
 
-function AddCourseInner() {
-  return (
-    <Suspense fallback={<main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}><p style={{ color: "#666" }}>Loading...</p></main>}>
-      <AddCourseInner />
-    </Suspense>
-  );
 export default function AddCourse() {
   return (
     <Suspense fallback={<main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}><p style={{ color: "#666" }}>Loading...</p></main>}>
