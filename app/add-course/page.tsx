@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { HoleData, CourseRecord, DoglegDirection } from "@/lib/types";
-import { saveCourse } from "@/lib/storage";
+import { saveCourse, getCourse } from "@/lib/storage";
 
 const DOGLEG_OPTIONS: { value: DoglegDirection; label: string }[] = [
   { value: null, label: "None" },
@@ -15,23 +16,23 @@ const DOGLEG_OPTIONS: { value: DoglegDirection; label: string }[] = [
 ];
 
 const TEE_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
-  { key: "tee_tree_hazard_left", label: "Trees left" },
-  { key: "tee_tree_hazard_right", label: "Trees right" },
+  { key: "tee_tree_hazard_left", label: "Trees / Hazard left" },
+  { key: "tee_tree_hazard_right", label: "Trees / Hazard right" },
   { key: "tee_bunkers_left", label: "Bunkers left" },
   { key: "tee_bunkers_right", label: "Bunkers right" },
   { key: "tee_water_out_left", label: "Water / OB left" },
   { key: "tee_water_out_right", label: "Water / OB right" },
+  { key: "tee_water_out_across", label: "Water / OB across" },
 ];
 
 const APPROACH_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
   { key: "approach_tree_hazard_left", label: "Trees left" },
   { key: "approach_tree_hazard_right", label: "Trees right" },
-  { key: "approach_bunkers_left", label: "Bunkers left" },
-  { key: "approach_bunkers_right", label: "Bunkers right" },
+  { key: "approach_tree_hazard_long", label: "Trees long" },
   { key: "approach_water_out_left", label: "Water / OB left" },
   { key: "approach_water_out_right", label: "Water / OB right" },
   { key: "approach_water_out_short", label: "Water short" },
-  { key: "approach_water_out_long", label: "Water long" },
+  { key: "approach_water_out_long", label: "Water / OB long" },
   { key: "approach_bunker_short_middle", label: "Bunker short middle" },
   { key: "approach_bunker_short_left", label: "Bunker short left" },
   { key: "approach_bunker_middle_left", label: "Bunker middle left" },
@@ -56,8 +57,8 @@ function blankHole(n: number): HoleData {
     dogleg_direction: null,
     tee_tree_hazard_left: false, tee_tree_hazard_right: false,
     tee_bunkers_left: false, tee_bunkers_right: false,
-    tee_water_out_left: false, tee_water_out_right: false,
-    approach_tree_hazard_left: false, approach_tree_hazard_right: false,
+    tee_water_out_left: false, tee_water_out_right: false, tee_water_out_across: false,
+    approach_tree_hazard_left: false, approach_tree_hazard_right: false, approach_tree_hazard_long: false,
     approach_bunkers_left: false, approach_bunkers_right: false,
     approach_water_out_left: false, approach_water_out_right: false,
     approach_water_out_short: false, approach_water_out_long: false,
@@ -76,6 +77,9 @@ function blankHole(n: number): HoleData {
 type Step = "info" | "holes" | "done";
 
 export default function AddCourse() {
+  const searchParams = useSearchParams();
+  const copyFromId = searchParams.get("copyFrom");
+
   const [step, setStep] = useState<Step>("info");
   const [courseName, setCourseName] = useState("");
   const [teeBox, setTeeBox] = useState("");
@@ -87,6 +91,24 @@ export default function AddCourse() {
   const [currentHole, setCurrentHole] = useState(0);
   const [holes, setHoles] = useState<HoleData[]>([]);
   const [saving, setSaving] = useState(false);
+  const [copyingFrom, setCopyingFrom] = useState(false);
+
+  useEffect(() => {
+    if (!copyFromId) return;
+    setCopyingFrom(true);
+    getCourse(copyFromId).then(course => {
+      if (course) {
+        setCourseName(course.name);
+        setCity(course.city);
+        setState(course.state);
+        setRating(course.rating != null ? String(course.rating) : "");
+        setSlope(course.slope != null ? String(course.slope) : "");
+        setHoleCount(course.holes.length as 9 | 18);
+        setHoles(course.holes.map(h => ({ ...h })));
+      }
+      setCopyingFrom(false);
+    });
+  }, [copyFromId]);
 
   const inputStyle = {
     width: "100%", padding: "8px 12px", fontSize: 15,
@@ -107,13 +129,28 @@ export default function AddCourse() {
     if (!courseName.trim() || !teeBox.trim() || !city.trim() || !state.trim()) {
       return alert("Please fill in all course details.");
     }
-    setHoles(Array.from({ length: holeCount }, (_, i) => blankHole(i + 1)));
+    if (!copyFromId || holes.length === 0) {
+      setHoles(Array.from({ length: holeCount }, (_, i) => blankHole(i + 1)));
+    }
     setCurrentHole(0);
     setStep("holes");
   }
 
   function updateHole(field: keyof HoleData, value: any) {
-    setHoles(prev => prev.map((h, i) => i === currentHole ? { ...h, [field]: value } : h));
+    setHoles(prev => prev.map((h, i) => {
+      if (i !== currentHole) return h;
+      const updated = { ...h, [field]: value };
+      if (field === "par" && value === 3) {
+        updated.tee_tree_hazard_left = false;
+        updated.tee_tree_hazard_right = false;
+        updated.tee_bunkers_left = false;
+        updated.tee_bunkers_right = false;
+        updated.tee_water_out_left = false;
+        updated.tee_water_out_right = false;
+        updated.tee_water_out_across = false;
+      }
+      return updated;
+    }));
   }
 
   function toggleCheck(field: keyof HoleData) {
@@ -224,10 +261,11 @@ export default function AddCourse() {
 
         <div>
           <span style={sectionLabel}>TEE SHOT HAZARDS</span>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {hole.par === 3 && <p style={{ fontSize: 12, color: "#aaa", margin: "4px 0 8px" }}>Disabled for par 3</p>}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, opacity: hole.par === 3 ? 0.3 : 1 }}>
             {TEE_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
-                <input type="checkbox" checked={!!hole[key]} onChange={() => toggleCheck(key)} />
+              <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: hole.par === 3 ? "not-allowed" : "pointer" }}>
+                <input type="checkbox" checked={!!hole[key]} onChange={() => hole.par !== 3 && toggleCheck(key)} disabled={hole.par === 3} />
                 {label}
               </label>
             ))}

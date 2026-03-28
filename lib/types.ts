@@ -14,8 +14,10 @@ export type HoleData = {
   tee_bunkers_right: boolean;
   tee_water_out_left: boolean;
   tee_water_out_right: boolean;
+  tee_water_out_across: boolean;
   approach_tree_hazard_left: boolean;
   approach_tree_hazard_right: boolean;
+  approach_tree_hazard_long: boolean;
   approach_bunkers_left: boolean;
   approach_bunkers_right: boolean;
   approach_water_out_left: boolean;
