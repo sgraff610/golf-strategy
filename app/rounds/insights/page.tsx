@@ -30,10 +30,12 @@ type EnrichedHole = {
   stroke_index: number;
   rating: number | null;
   slope: number | null;
+  roundIndex: number; // tracks which round this hole came from (0 = oldest)
 };
 
 type Filters = {
   driveAcc: { left: boolean; right: boolean; short: boolean; long: boolean; hit: boolean };
+  drivingClub: string;
   highWater: boolean;
   highTree: boolean;
   highBunker: boolean;
@@ -55,6 +57,7 @@ type Filters = {
 
 const DEFAULT_FILTERS: Filters = {
   driveAcc: { left: false, right: false, short: false, long: false, hit: false },
+  drivingClub: "",
   highWater: false, highTree: false, highBunker: false,
   courseId: "", par: "",
   teeTreeLeft: false, teeTreeRight: false,
@@ -64,6 +67,8 @@ const DEFAULT_FILTERS: Filters = {
   ratingMin: "", ratingMax: "",
   slopeMin: "", slopeMax: "",
 };
+
+const DRIVE_CLUBS = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
 
 function getDriveWaterPct(hole: any, courseHole: HoleData | undefined): number {
   if (!courseHole) return 0;
@@ -123,6 +128,7 @@ function filterHoles(holes: EnrichedHole[], filters: Filters): EnrichedHole[] {
         (accFilters.hit && h.tee_accuracy === "Hit");
       if (!accMatch) return false;
     }
+    if (filters.drivingClub && h.club !== filters.drivingClub) return false;
     if (filters.highWater && h.drive_water_ob_pct <= 0) return false;
     if (filters.highTree && h.drive_tree_pct <= 0) return false;
     if (filters.highBunker && h.drive_bunker_pct <= 0) return false;
@@ -157,15 +163,22 @@ function impactColor(impact: number): string {
 
 export default function RoundsInsights() {
   const [allHoles, setAllHoles] = useState<EnrichedHole[]>([]);
+  const [totalRounds, setTotalRounds] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
+  // Last N rounds state
+  const [useLastN, setUseLastN] = useState(false);
+  const [lastN, setLastN] = useState(10);
+
   useEffect(() => {
     async function loadAll() {
-      const { data: rounds } = await supabase.from("rounds").select("*");
+      const { data: rounds } = await supabase.from("rounds").select("*").order("date", { ascending: true });
       if (!rounds) { setLoading(false); return; }
+      setTotalRounds(rounds.length);
       const enriched: EnrichedHole[] = [];
-      for (const round of rounds) {
+      for (let ri = 0; ri < rounds.length; ri++) {
+        const round = rounds[ri];
         const course = await getCourse(round.course_id);
         const holes = round.holes ?? [];
         for (const hole of holes) {
@@ -195,6 +208,7 @@ export default function RoundsInsights() {
             stroke_index: hole.stroke_index ?? 0,
             rating: course?.rating ?? null,
             slope: course?.slope ?? null,
+            roundIndex: ri,
           });
         }
       }
@@ -204,11 +218,18 @@ export default function RoundsInsights() {
     loadAll();
   }, []);
 
-  const filteredHoles = filterHoles(allHoles, filters);
-  const baseline = calculateAverage(allHoles);
+  // Apply last N rounds filter before any other filters
+  const roundFilteredHoles = useLastN
+    ? allHoles.filter(h => h.roundIndex >= totalRounds - lastN)
+    : allHoles;
+
+  const filteredHoles = filterHoles(roundFilteredHoles, filters);
+  const baseline = calculateAverage(roundFilteredHoles);
   const filteredAvg = calculateAverage(filteredHoles);
   const impact = filteredHoles.length > 0 ? filteredAvg - baseline : NaN;
+
   const anyFilterActive = Object.values(filters.driveAcc).some(Boolean) ||
+    !!filters.drivingClub ||
     filters.highWater || filters.highTree || filters.highBunker ||
     !!filters.courseId || !!filters.par ||
     filters.teeTreeLeft || filters.teeTreeRight ||
@@ -219,14 +240,14 @@ export default function RoundsInsights() {
     !!filters.slopeMin || !!filters.slopeMax;
 
   const correlations = [
-    { label: "Drive Hit", holes: allHoles.filter(h => h.tee_accuracy === "Hit") },
-    { label: "Drive Left", holes: allHoles.filter(h => h.tee_accuracy === "Left") },
-    { label: "Drive Right", holes: allHoles.filter(h => h.tee_accuracy === "Right") },
-    { label: "Drive Short", holes: allHoles.filter(h => h.tee_accuracy === "Short") },
-    { label: "Drive Long", holes: allHoles.filter(h => h.tee_accuracy === "Long") },
-    { label: "High Water Risk", holes: allHoles.filter(h => h.drive_water_ob_pct > 0) },
-    { label: "High Tree Risk", holes: allHoles.filter(h => h.drive_tree_pct > 0) },
-    { label: "High Bunker Risk", holes: allHoles.filter(h => h.drive_bunker_pct > 0) },
+    { label: "Drive Hit", holes: roundFilteredHoles.filter(h => h.tee_accuracy === "Hit") },
+    { label: "Drive Left", holes: roundFilteredHoles.filter(h => h.tee_accuracy === "Left") },
+    { label: "Drive Right", holes: roundFilteredHoles.filter(h => h.tee_accuracy === "Right") },
+    { label: "Drive Short", holes: roundFilteredHoles.filter(h => h.tee_accuracy === "Short") },
+    { label: "Drive Long", holes: roundFilteredHoles.filter(h => h.tee_accuracy === "Long") },
+    { label: "High Water Risk", holes: roundFilteredHoles.filter(h => h.drive_water_ob_pct > 0) },
+    { label: "High Tree Risk", holes: roundFilteredHoles.filter(h => h.drive_tree_pct > 0) },
+    { label: "High Bunker Risk", holes: roundFilteredHoles.filter(h => h.drive_bunker_pct > 0) },
   ].map(({ label, holes }) => ({
     label, count: holes.length,
     avg: calculateAverage(holes),
@@ -240,6 +261,11 @@ export default function RoundsInsights() {
     color: active ? "white" : "#0f6e56",
     borderColor: "#0f6e56",
   });
+
+  const selectStyle: React.CSSProperties = {
+    padding: "5px 10px", borderRadius: 8, border: "1px solid #0f6e56",
+    fontSize: 13, color: "#0f6e56", background: "white", cursor: "pointer",
+  };
 
   return (
     <main style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
@@ -262,13 +288,46 @@ export default function RoundsInsights() {
           <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Filters</p>
-              {anyFilterActive && (
-                <button onClick={() => setFilters(DEFAULT_FILTERS)}
+              {(anyFilterActive || useLastN) && (
+                <button onClick={() => { setFilters(DEFAULT_FILTERS); setUseLastN(false); setLastN(10); }}
                   style={{ fontSize: 12, color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
                   Reset
                 </button>
               )}
             </div>
+
+            {/* Last N Rounds */}
+            <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Rounds</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <button
+                style={pillStyle(!useLastN)}
+                onClick={() => setUseLastN(false)}
+              >
+                All rounds
+              </button>
+              <button
+                style={pillStyle(useLastN)}
+                onClick={() => setUseLastN(true)}
+              >
+                Last
+              </button>
+              {useLastN && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalRounds}
+                    value={lastN}
+                    onChange={e => setLastN(Math.max(1, Math.min(totalRounds, Number(e.target.value))))}
+                    style={{ width: 56, padding: "5px 8px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 13, color: "#0f6e56", textAlign: "center" }}
+                  />
+                  <span style={{ fontSize: 13, color: "#666" }}>rounds</span>
+                  <span style={{ fontSize: 12, color: "#999" }}>({Math.min(lastN, totalRounds)} of {totalRounds})</span>
+                </div>
+              )}
+            </div>
+
+            {/* Drive Accuracy */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Drive Accuracy</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
               {(["hit","left","right","short","long"] as const).map(acc => (
@@ -278,12 +337,26 @@ export default function RoundsInsights() {
                 </button>
               ))}
             </div>
+
+            {/* Driving Club */}
+            <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Driving Club</p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+              {DRIVE_CLUBS.map(club => (
+                <button key={club}
+                  style={pillStyle(filters.drivingClub === club)}
+                  onClick={() => setFilters(f => ({ ...f, drivingClub: f.drivingClub === club ? "" : club }))}>
+                  {club}
+                </button>
+              ))}
+            </div>
+
+            {/* Course */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Course</p>
             <div style={{ marginBottom: 12 }}>
               <select
                 value={filters.courseId}
                 onChange={e => setFilters(f => ({ ...f, courseId: e.target.value }))}
-                style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 13, color: "#0f6e56", background: "white", cursor: "pointer" }}
+                style={selectStyle}
               >
                 <option value="">All courses</option>
                 {Array.from(new Map(allHoles.map(h => [h.courseId, h.courseName])).entries()).map(([id, name]) => (
@@ -291,45 +364,33 @@ export default function RoundsInsights() {
                 ))}
               </select>
             </div>
+
+            {/* Par */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Par</p>
             <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
               {["3", "4", "5"].map(p => (
-                <button key={p} style={{
-                  padding: "5px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500,
-                  cursor: "pointer", border: "1px solid",
-                  background: filters.par === p ? "#0f6e56" : "white",
-                  color: filters.par === p ? "white" : "#0f6e56",
-                  borderColor: "#0f6e56",
-                }}
+                <button key={p} style={pillStyle(filters.par === p)}
                   onClick={() => setFilters(f => ({ ...f, par: f.par === p ? "" : p }))}>
                   Par {p}
                 </button>
               ))}
             </div>
+
+            {/* Hole Handicap */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Hole Handicap Range</p>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <select
-                value={filters.siMin}
-                onChange={e => setFilters(f => ({ ...f, siMin: e.target.value }))}
-                style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 13, color: "#0f6e56", background: "white", cursor: "pointer" }}
-              >
+              <select value={filters.siMin} onChange={e => setFilters(f => ({ ...f, siMin: e.target.value }))} style={selectStyle}>
                 <option value="">Min</option>
-                {Array.from({ length: 18 }, (_, i) => i + 1).map(n => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
+                {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
               </select>
               <span style={{ fontSize: 13, color: "#666" }}>to</span>
-              <select
-                value={filters.siMax}
-                onChange={e => setFilters(f => ({ ...f, siMax: e.target.value }))}
-                style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 13, color: "#0f6e56", background: "white", cursor: "pointer" }}
-              >
+              <select value={filters.siMax} onChange={e => setFilters(f => ({ ...f, siMax: e.target.value }))} style={selectStyle}>
                 <option value="">Max</option>
-                {Array.from({ length: 18 }, (_, i) => i + 1).map(n => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
+                {Array.from({ length: 18 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
+
+            {/* Course Rating */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Course Rating Range</p>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <input type="number" step="0.1" placeholder="Min" value={filters.ratingMin}
@@ -340,6 +401,8 @@ export default function RoundsInsights() {
                 onChange={e => setFilters(f => ({ ...f, ratingMax: e.target.value }))}
                 style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 13, color: "#0f6e56", width: 70 }} />
             </div>
+
+            {/* Slope */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Slope Range</p>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <input type="number" placeholder="Min" value={filters.slopeMin}
@@ -350,12 +413,16 @@ export default function RoundsInsights() {
                 onChange={e => setFilters(f => ({ ...f, slopeMax: e.target.value }))}
                 style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 13, color: "#0f6e56", width: 70 }} />
             </div>
+
+            {/* Tee Risks */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Tee Risks</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
               <button style={pillStyle(filters.highWater)} onClick={() => setFilters(f => ({ ...f, highWater: !f.highWater }))}>Water Risk</button>
               <button style={pillStyle(filters.highTree)} onClick={() => setFilters(f => ({ ...f, highTree: !f.highTree }))}>Tree Risk</button>
               <button style={pillStyle(filters.highBunker)} onClick={() => setFilters(f => ({ ...f, highBunker: !f.highBunker }))}>Bunker Risk</button>
             </div>
+
+            {/* Tee Hazards */}
             <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>Tee Hazards</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {[
@@ -367,13 +434,7 @@ export default function RoundsInsights() {
                 { label: "Water/OB Right", key: "teeWaterRight" },
               ].map(({ label, key }) => (
                 <button key={key}
-                  style={{
-                    padding: "5px 12px", borderRadius: 20, fontSize: 13, fontWeight: 500,
-                    cursor: "pointer", border: "1px solid",
-                    background: filters[key as keyof Filters] ? "#0f6e56" : "white",
-                    color: filters[key as keyof Filters] ? "white" : "#0f6e56",
-                    borderColor: "#0f6e56",
-                  }}
+                  style={pillStyle(!!filters[key as keyof Filters])}
                   onClick={() => setFilters(f => ({ ...f, [key]: !f[key as keyof Filters] }))}>
                   {label}
                 </button>
@@ -381,11 +442,12 @@ export default function RoundsInsights() {
             </div>
           </div>
 
+          {/* Stats cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
             <div style={{ background: "#f6f6f6", borderRadius: 8, padding: 12, textAlign: "center" }}>
               <p style={{ fontSize: 11, color: "#666", margin: "0 0 4px" }}>Baseline Avg</p>
               <p style={{ fontSize: 20, fontWeight: 700, margin: 0, color: impactColor(baseline) }}>{formatImpact(baseline)}</p>
-              <p style={{ fontSize: 11, color: "#999", margin: "4px 0 0" }}>{allHoles.length} holes</p>
+              <p style={{ fontSize: 11, color: "#999", margin: "4px 0 0" }}>{roundFilteredHoles.length} holes</p>
             </div>
             <div style={{ background: "#f6f6f6", borderRadius: 8, padding: 12, textAlign: "center" }}>
               <p style={{ fontSize: 11, color: "#666", margin: "0 0 4px" }}>Filtered Avg</p>
@@ -403,6 +465,7 @@ export default function RoundsInsights() {
             </div>
           </div>
 
+          {/* Correlations */}
           <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "14px 16px" }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 12px" }}>
               Factor Correlations
