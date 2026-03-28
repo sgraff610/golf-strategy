@@ -175,7 +175,7 @@ function AddCourseInner() {
   async function finish() {
     setSaving(true);
     const course: CourseRecord = {
-      id: `${courseName.trim().toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`,
+      id: `${courseName.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_-]/g, "")}_${Date.now()}`,
       name: courseName.trim(),
       tee_box: teeBox.trim(),
       city: city.trim(),

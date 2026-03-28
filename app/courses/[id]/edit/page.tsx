@@ -44,7 +44,7 @@ const APPROACH_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
 
 export default function EditCourse() {
   const params = useParams();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id as string;
+  const id = decodeURIComponent(Array.isArray(params.id) ? params.id[0] : params.id as string);
 
   const [course, setCourse] = useState<CourseRecord | null>(null);
   const [courseName, setCourseName] = useState<string>("");
