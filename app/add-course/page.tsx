@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { HoleData, CourseRecord, DoglegDirection } from "@/lib/types";
 import { saveCourse, getCourse } from "@/lib/storage";
@@ -76,7 +76,9 @@ function blankHole(n: number): HoleData {
 
 type Step = "info" | "holes" | "done";
 
-export default function AddCourse() {
+import { Suspense } from "react";
+
+function AddCourseInner() {
   const searchParams = useSearchParams();
   const copyFromId = searchParams.get("copyFrom");
 
@@ -302,5 +304,19 @@ export default function AddCourse() {
         </div>
       </div>
     </main>
+  );
+}
+
+function AddCourseInner() {
+  return (
+    <Suspense fallback={<main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}><p style={{ color: "#666" }}>Loading...</p></main>}>
+      <AddCourseInner />
+    </Suspense>
+  );
+export default function AddCourse() {
+  return (
+    <Suspense fallback={<main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}><p style={{ color: "#666" }}>Loading...</p></main>}>
+      <AddCourseInner />
+    </Suspense>
   );
 }
