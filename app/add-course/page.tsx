@@ -3,6 +3,12 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { HoleData, CourseRecord, DoglegDirection } from "@/lib/types";
 import { saveCourse, getCourse } from "@/lib/storage";
+import GreensideSelector, {
+  GreensideState,
+  defaultGreensideState,
+  flatToGreenside,
+  greensideToFlat,
+} from "@/app/components/GreensideSelector";
 
 const DOGLEG_OPTIONS: { value: DoglegDirection; label: string }[] = [
   { value: null, label: "None" },
@@ -25,6 +31,7 @@ const TEE_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
   { key: "tee_water_out_across", label: "Water / OB across" },
 ];
 
+// Approach checkboxes — bunker/green rows removed (handled by GreensideSelector)
 const APPROACH_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
   { key: "approach_tree_hazard_left", label: "Trees left" },
   { key: "approach_tree_hazard_right", label: "Trees right" },
@@ -33,22 +40,6 @@ const APPROACH_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
   { key: "approach_water_out_right", label: "Water / OB right" },
   { key: "approach_water_out_short", label: "Water short" },
   { key: "approach_water_out_long", label: "Water / OB long" },
-  { key: "approach_bunker_short_middle", label: "Bunker short middle" },
-  { key: "approach_bunker_short_left", label: "Bunker short left" },
-  { key: "approach_bunker_middle_left", label: "Bunker middle left" },
-  { key: "approach_bunker_long_left", label: "Bunker long left" },
-  { key: "approach_bunker_long_middle", label: "Bunker long middle" },
-  { key: "approach_bunker_long_right", label: "Bunker long right" },
-  { key: "approach_bunker_middle_right", label: "Bunker middle right" },
-  { key: "approach_bunker_short_right", label: "Bunker short right" },
-  { key: "approach_green_short_middle", label: "Approach green short middle" },
-  { key: "approach_green_short_left", label: "Approach green short left" },
-  { key: "approach_green_middle_left", label: "Approach green middle left" },
-  { key: "approach_green_long_left", label: "Approach green long left" },
-  { key: "approach_green_long_middle", label: "Approach green long middle" },
-  { key: "approach_green_long_right", label: "Approach green long right" },
-  { key: "approach_green_middle_right", label: "Approach green middle right" },
-  { key: "approach_green_short_right", label: "Approach green short right" },
 ];
 
 function blankHole(n: number): HoleData {
@@ -76,7 +67,6 @@ function blankHole(n: number): HoleData {
 
 type Step = "info" | "holes" | "done";
 
-
 function AddCourseInner() {
   const searchParams = useSearchParams();
   const copyFromId = searchParams.get("copyFrom");
@@ -93,6 +83,7 @@ function AddCourseInner() {
   const [holes, setHoles] = useState<HoleData[]>([]);
   const [saving, setSaving] = useState(false);
   const [copyingFrom, setCopyingFrom] = useState(false);
+  const [greenside, setGreenside] = useState<GreensideState>(defaultGreensideState());
 
   useEffect(() => {
     if (!copyFromId) return;
@@ -106,6 +97,9 @@ function AddCourseInner() {
         setSlope(course.slope != null ? String(course.slope) : "");
         setHoleCount(course.holes.length as 9 | 18);
         setHoles(course.holes.map(h => ({ ...h })));
+        if (course.holes.length > 0) {
+          setGreenside(flatToGreenside(course.holes[0] as Record<string, unknown>));
+        }
       }
       setCopyingFrom(false);
     });
@@ -133,6 +127,7 @@ function AddCourseInner() {
     if (!copyFromId || holes.length === 0) {
       setHoles(Array.from({ length: holeCount }, (_, i) => blankHole(i + 1)));
     }
+    setGreenside(defaultGreensideState());
     setCurrentHole(0);
     setStep("holes");
   }
@@ -156,6 +151,25 @@ function AddCourseInner() {
 
   function toggleCheck(field: keyof HoleData) {
     setHoles(prev => prev.map((h, i) => i === currentHole ? { ...h, [field]: !h[field] } : h));
+  }
+
+  // Called when the greenside selector changes — updates both local state and the holes array
+  function handleGreensideChange(next: GreensideState) {
+    setGreenside(next);
+    const flat = greensideToFlat(next);
+    setHoles(prev => prev.map((h, i) => i === currentHole ? { ...h, ...flat } : h));
+  }
+
+  function goToPrevHole() {
+    const prev = Math.max(0, currentHole - 1);
+    setCurrentHole(prev);
+    setGreenside(flatToGreenside(holes[prev] as Record<string, unknown>));
+  }
+
+  function goToNextHole() {
+    const next = currentHole + 1;
+    setCurrentHole(next);
+    setGreenside(flatToGreenside(holes[next] as Record<string, unknown>));
   }
 
   async function finish() {
@@ -275,7 +289,7 @@ function AddCourseInner() {
 
         <div>
           <span style={sectionLabel}>APPROACH HAZARDS</span>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
             {APPROACH_CHECKBOXES.map(({ key, label }) => (
               <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => toggleCheck(key)} />
@@ -283,6 +297,10 @@ function AddCourseInner() {
               </label>
             ))}
           </div>
+          <GreensideSelector
+            value={greenside}
+            onChange={handleGreensideChange}
+          />
         </div>
 
         <div>
@@ -291,11 +309,11 @@ function AddCourseInner() {
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, paddingTop: 16, borderTop: "1px solid #eee" }}>
-          <button style={btnStyle(false)} onClick={() => setCurrentHole(i => Math.max(0, i - 1))} disabled={currentHole === 0}>
+          <button style={btnStyle(false)} onClick={goToPrevHole} disabled={currentHole === 0}>
             Previous
           </button>
           {currentHole < holes.length - 1
-            ? <button style={btnStyle(true)} onClick={() => setCurrentHole(i => i + 1)}>Next hole</button>
+            ? <button style={btnStyle(true)} onClick={goToNextHole}>Next hole</button>
             : <button style={{ ...btnStyle(true), opacity: saving ? 0.6 : 1 }} onClick={finish} disabled={saving}>
                 {saving ? "Saving..." : "Save course"}
               </button>
@@ -308,7 +326,7 @@ function AddCourseInner() {
 
 export default function AddCourse() {
   return (
-    <Suspense fallback={<main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}><p style={{ color: "#666" }}>Loading...</p></main>}>
+    <Suspense fallback={<div style={{ padding: 40, fontFamily: "sans-serif" }}>Loading...</div>}>
       <AddCourseInner />
     </Suspense>
   );
