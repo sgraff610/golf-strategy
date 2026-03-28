@@ -8,10 +8,7 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadCourses().then((data) => {
-      setCourses(data);
-      setLoading(false);
-    });
+    loadCourses().then((data) => { setCourses(data); setLoading(false); });
   }, []);
 
   const btnStyle = (primary: boolean) => ({
@@ -26,11 +23,9 @@ export default function CoursesPage() {
   const totalYards = (course: CourseRecord) =>
     course.holes.reduce((s, h) => s + (h.yards || 0), 0).toLocaleString();
 
-  // Group courses by name
   const grouped = courses.reduce<Record<string, CourseRecord[]>>((acc, course) => {
-    const key = course.name;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(course);
+    if (!acc[course.name]) acc[course.name] = [];
+    acc[course.name].push(course);
     return acc;
   }, {});
 
@@ -46,7 +41,6 @@ export default function CoursesPage() {
         <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>My courses</h1>
         <a href="/add-course" style={btnStyle(true)}>+ Add course</a>
       </div>
-
       {Object.keys(grouped).length === 0 ? (
         <p style={{ color: "#666" }}>No courses yet. Add one to get started.</p>
       ) : (
@@ -54,31 +48,16 @@ export default function CoursesPage() {
           {Object.entries(grouped).map(([name, teeBoxes]) => {
             const first = teeBoxes[0];
             return (
-              <div key={name} style={{
-                background: "white", border: "1px solid #eee", borderRadius: 12,
-                padding: "16px 20px",
-              }}>
-                {/* Course header row */}
+              <div key={name} style={{ background: "white", border: "1px solid #eee", borderRadius: 12, padding: "16px 20px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{name}</p>
-                  <a href={"/add-course?copyFrom=" + first.id}
-                    style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }}>
-                    + Add Tees
-                  </a>
+                  <a href={"/add-course?copyFrom=" + first.id} style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }}>+ Tees</a>
                 </div>
-                <p style={{ fontSize: 13, color: "#666", margin: "0 0 10px" }}>
-                  {first.city}, {first.state}
-                </p>
-                {/* Tee box rows */}
+                <p style={{ fontSize: 13, color: "#666", margin: "0 0 10px" }}>{first.city}, {first.state}</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {teeBoxes.map(course => (
-                    <div key={course.id} style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "8px 12px", background: "#f9f9f9", borderRadius: 8,
-                    }}>
-                      <span style={{ fontSize: 14, color: "#1a1a1a" }}>
-                        {course.tee_box} tees — {totalYards(course)} yds
-                      </span>
+                    <div key={course.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#f9f9f9", borderRadius: 8 }}>
+                      <span style={{ fontSize: 14, color: "#1a1a1a" }}>{course.tee_box} tees — {totalYards(course)} yds</span>
                       <div style={{ display: "flex", gap: 6 }}>
                         <a href={`/courses/${course.id}/edit`} style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }}>Edit</a>
                         <a href={`/?course=${course.id}`} style={{ ...btnStyle(true), fontSize: 12, padding: "4px 10px" }}>Play</a>
@@ -91,7 +70,6 @@ export default function CoursesPage() {
           })}
         </div>
       )}
-
       <div style={{ marginTop: 24 }}>
         <a href="/" style={{ fontSize: 13, color: "#666" }}>← Back to strategy</a>
       </div>
