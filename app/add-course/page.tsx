@@ -76,7 +76,6 @@ function blankHole(n: number): HoleData {
 
 type Step = "info" | "holes" | "done";
 
-import { Suspense } from "react";
 
 function AddCourseInner() {
   const searchParams = useSearchParams();
