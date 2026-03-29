@@ -287,8 +287,8 @@ function generateStrategy(
   const warnings:string[]=[];
   if(targetSlope&&targetSlope>=125){const d=tendencies.avgScoreHardCourses-tendencies.avgScoreEasyCourses;if(d>0.4&&tendencies.sampleSize>4)warnings.push(`You average +${d.toFixed(1)} more on hard courses — play conservatively`);}
   if(hp.teeAcross&&targetHole.par===4)warnings.push("Carry hazard required off tee");
-  if(targetHole.tee_water_out_left&&missLeftPct>0.35)warnings.push(`Water left — ${Math.round(missLeftPct*100)}% left miss is a risk`);
-  if(targetHole.tee_water_out_right&&missRightPct>0.35)warnings.push(`Water right — ${Math.round(missRightPct*100)}% right miss is a risk`);
+  if(targetHole.tee_water_out_left&&missLeftPct>0.35)warnings.push(`OB left — ${Math.round(missLeftPct*100)}% left miss is a risk`);
+  if(targetHole.tee_water_out_right&&missRightPct>0.35)warnings.push(`OB right — ${Math.round(missRightPct*100)}% right miss is a risk`);
   if(tendencies.gsBunkerPct>0.2)warnings.push(`Frequent GS bunker (${Math.round(tendencies.gsBunkerPct*100)}%)`);
   if(tendencies.avgPutts>2.3)warnings.push(`Putting pressure — avg ${tendencies.avgPutts.toFixed(1)} putts`);
   return {
@@ -305,10 +305,82 @@ function generateStrategy(
   };
 }
 
+// ─── Approach distance helpers ────────────────────────────────────────────────
+
+function topClub(freq: Record<string,number>, fallback: string): string {
+  const entries = Object.entries(freq).sort((a,b) => {
+    if (b[1] !== a[1]) return b[1]-a[1];
+    return (CLUB_DISTANCES[b[0]]??0)-(CLUB_DISTANCES[a[0]]??0);
+  });
+  return entries[0]?.[0] ?? fallback;
+}
+
+function computeDefaultApproachDist(hole: HoleData, driveClubFreq: Record<string,number>): number {
+  if (hole.par === 3) return hole.yards;
+  const primaryClub = topClub(driveClubFreq, "Driver");
+  const primaryDist = CLUB_DISTANCES[primaryClub] ?? 230;
+  if (hole.par === 4) return Math.max(0, hole.yards - primaryDist);
+  const secondClub = primaryClub === "Driver" ? "3W" : primaryClub;
+  const secondDist = CLUB_DISTANCES[secondClub] ?? 210;
+  return Math.max(0, hole.yards - primaryDist - secondDist);
+}
+
+function slimCourseHole(h: HoleData): HoleData {
+  return {
+    hole: h.hole, par: h.par, stroke_index: h.stroke_index, yards: h.yards,
+    approach_green_depth: h.approach_green_depth,
+    tee_tree_hazard_left: h.tee_tree_hazard_left, tee_tree_hazard_right: h.tee_tree_hazard_right,
+    tee_bunkers_left: h.tee_bunkers_left, tee_bunkers_right: h.tee_bunkers_right,
+    tee_water_out_left: h.tee_water_out_left, tee_water_out_right: h.tee_water_out_right,
+    approach_bunker_short_left: h.approach_bunker_short_left, approach_bunker_short_middle: h.approach_bunker_short_middle, approach_bunker_short_right: h.approach_bunker_short_right,
+    approach_bunker_middle_left: h.approach_bunker_middle_left, approach_bunker_middle_right: h.approach_bunker_middle_right,
+    approach_bunker_long_left: h.approach_bunker_long_left, approach_bunker_long_middle: h.approach_bunker_long_middle, approach_bunker_long_right: h.approach_bunker_long_right,
+    approach_green_short_left: h.approach_green_short_left, approach_green_short_middle: h.approach_green_short_middle, approach_green_short_right: h.approach_green_short_right,
+    approach_green_middle_left: h.approach_green_middle_left, approach_green_middle_right: h.approach_green_middle_right,
+    approach_green_long_left: h.approach_green_long_left, approach_green_long_middle: h.approach_green_long_middle, approach_green_long_right: h.approach_green_long_right,
+  };
+}
+
+function computePar3ApproachSimilarity(
+  targetHole: HoleData, approachDist: number,
+  par3Hole: HoleData, par3RoundHole: RoundHole, driveToGreen: boolean
+): number {
+  let score = 0;
+  if (driveToGreen) {
+    if (par3RoundHole.club === "Driver" || par3RoundHole.club === "3W") score += 15;
+    else return 0;
+  }
+  const yardDiff = Math.abs((par3Hole.yards||0) - approachDist);
+  const yardSim = 12 * Math.exp(-yardDiff / 40);
+  if (yardSim < 2) return 0;
+  score += yardSim;
+  const tL = !!(targetHole.approach_tree_hazard_left  || targetHole.approach_water_out_left  || targetHole.approach_bunker_middle_left  || targetHole.approach_bunker_long_left);
+  const tR = !!(targetHole.approach_tree_hazard_right || targetHole.approach_water_out_right || targetHole.approach_bunker_middle_right || targetHole.approach_bunker_long_right);
+  const pL = !!(par3Hole.tee_tree_hazard_left  || par3Hole.tee_water_out_left  || par3Hole.tee_bunkers_left);
+  const pR = !!(par3Hole.tee_tree_hazard_right || par3Hole.tee_water_out_right || par3Hole.tee_bunkers_right);
+  if (tL === pL) score += 3;
+  if (tR === pR) score += 3;
+  const gsKeys: (keyof HoleData)[] = [
+    "approach_bunker_short_left","approach_bunker_short_middle","approach_bunker_short_right",
+    "approach_bunker_middle_left","approach_bunker_middle_right",
+    "approach_bunker_long_left","approach_bunker_long_middle","approach_bunker_long_right",
+    "approach_green_short_left","approach_green_short_middle","approach_green_short_right",
+    "approach_green_middle_left","approach_green_middle_right",
+    "approach_green_long_left","approach_green_long_middle","approach_green_long_right",
+  ];
+  let gsMatches = 0;
+  for (const k of gsKeys) if (!!targetHole[k] === !!par3Hole[k]) gsMatches++;
+  score += 5 * (gsMatches / gsKeys.length);
+  if (targetHole.approach_green_depth && par3Hole.approach_green_depth) {
+    score += 3 * Math.exp(-Math.abs(targetHole.approach_green_depth - par3Hole.approach_green_depth) / 8);
+  }
+  return score > 4 ? score : 0;
+}
+
 export async function POST(req: NextRequest) {
-  let body: { courseId?: string; hole?: number };
+  let body: { courseId?: string; hole?: number; approachDistance?: number };
   try { body = await req.json(); } catch { return NextResponse.json({error:"Invalid JSON body"},{status:400}); }
-  const { courseId, hole: holeNumber } = body;
+  const { courseId, hole: holeNumber, approachDistance: overrideApproachDist } = body;
   if (!courseId || !holeNumber) return NextResponse.json({error:"Missing courseId and hole"},{status:422});
   const { data: courseRow, error: courseErr } = await supabase.from("courses").select("*").eq("id",courseId).single();
   if (courseErr || !courseRow) return NextResponse.json({error:"Course not found"},{status:404});
@@ -319,14 +391,36 @@ export async function POST(req: NextRequest) {
   const totalHoles = courseRow.holes.length||18;
   const { data: rounds } = await supabase.from("rounds").select("*");
   if (!rounds||!rounds.length) {
+    const apprDist = overrideApproachDist ?? computeDefaultApproachDist(targetHole, {});
     const strategy = generateStrategy(targetHole,targetSlope,targetRating,emptyTendencies(),[]);
-    return NextResponse.json({hole:targetHole,strategy,course:{rating:targetRating,slope:targetSlope,name:courseRow.name},enrichedHoles:[]});
+    return NextResponse.json({hole:targetHole,strategy,course:{rating:targetRating,slope:targetSlope,name:courseRow.name},enrichedHoles:[],defaultApproachDist:apprDist});
   }
   const courseCache: Record<string,any> = {};
   const allEnriched: EnrichedRoundHole[] = [];
+  // First pass: collect all holes to compute drive club frequency for this target hole
+  const exactHoleRoundHoles: RoundHole[] = [];
   for (const round of rounds) {
     const cId = round.course_id;
     if (!courseCache[cId]) { const {data:c}=await supabase.from("courses").select("*").eq("id",cId).single(); courseCache[cId]=c??null; }
+    if (round.course_id===courseId) {
+      for (const rh of (round.holes??[])) {
+        if (rh.hole===holeNumber&&rh.score) exactHoleRoundHoles.push(rh);
+      }
+    }
+  }
+  // Compute drive club freq from exact hole history
+  const driveClubFreq: Record<string,number> = {};
+  for (const rh of exactHoleRoundHoles) if (rh.club) driveClubFreq[rh.club]=(driveClubFreq[rh.club]||0)+1;
+
+  // Compute default approach distance
+  const defaultApproachDist = overrideApproachDist ?? computeDefaultApproachDist(targetHole, driveClubFreq);
+  const effectiveApproachDist = defaultApproachDist;
+
+  // Whether to include par 3 approach comparisons
+  const driveToGreen = targetHole.par===4 && targetHole.yards - (CLUB_DISTANCES[topClub(driveClubFreq,"Driver")] ?? 230) < 30;
+
+  for (const round of rounds) {
+    const cId = round.course_id;
     const rc = courseCache[cId];
     const roundRating:number|null = rc?.rating??null;
     const roundSlope:number|null  = rc?.slope??null;
@@ -336,41 +430,26 @@ export async function POST(req: NextRequest) {
       const candidateCourseHole:HoleData|null = rc?.holes?.find((h:any)=>h.hole===rh.hole)??null;
       if (!candidateCourseHole) continue;
       const isExact = round.course_id===courseId&&rh.hole===holeNumber;
+
+      // Standard similarity (same-par holes)
       const sim = computeSimilarity(targetHole,targetRating,targetSlope,candidateCourseHole,roundRating,roundSlope,roundTotalHoles,isExact);
-      if (sim>2) allEnriched.push({
+
+      // Par 3 approach similarity — compare approach profile & greenside of par 3 to target hole's approach
+      let par3ApproachSim = 0;
+      if (candidateCourseHole.par===3 && targetHole.par!==3) {
+        par3ApproachSim = computePar3ApproachSimilarity(
+          targetHole, effectiveApproachDist,
+          candidateCourseHole, rh,
+          driveToGreen
+        );
+      }
+
+      const finalSim = Math.max(sim, par3ApproachSim);
+      if (finalSim>2) allEnriched.push({
         roundHole: rh,
-        // Only send fields from courseHole that client-side filters actually need
-        courseHole: candidateCourseHole ? {
-          hole: candidateCourseHole.hole,
-          par: candidateCourseHole.par,
-          stroke_index: candidateCourseHole.stroke_index,
-          yards: candidateCourseHole.yards,
-          approach_green_depth: candidateCourseHole.approach_green_depth,
-          tee_tree_hazard_left: candidateCourseHole.tee_tree_hazard_left,
-          tee_tree_hazard_right: candidateCourseHole.tee_tree_hazard_right,
-          tee_bunkers_left: candidateCourseHole.tee_bunkers_left,
-          tee_bunkers_right: candidateCourseHole.tee_bunkers_right,
-          tee_water_out_left: candidateCourseHole.tee_water_out_left,
-          tee_water_out_right: candidateCourseHole.tee_water_out_right,
-          approach_bunker_short_left: candidateCourseHole.approach_bunker_short_left,
-          approach_bunker_short_middle: candidateCourseHole.approach_bunker_short_middle,
-          approach_bunker_short_right: candidateCourseHole.approach_bunker_short_right,
-          approach_bunker_middle_left: candidateCourseHole.approach_bunker_middle_left,
-          approach_bunker_middle_right: candidateCourseHole.approach_bunker_middle_right,
-          approach_bunker_long_left: candidateCourseHole.approach_bunker_long_left,
-          approach_bunker_long_middle: candidateCourseHole.approach_bunker_long_middle,
-          approach_bunker_long_right: candidateCourseHole.approach_bunker_long_right,
-          approach_green_short_left: candidateCourseHole.approach_green_short_left,
-          approach_green_short_middle: candidateCourseHole.approach_green_short_middle,
-          approach_green_short_right: candidateCourseHole.approach_green_short_right,
-          approach_green_middle_left: candidateCourseHole.approach_green_middle_left,
-          approach_green_middle_right: candidateCourseHole.approach_green_middle_right,
-          approach_green_long_left: candidateCourseHole.approach_green_long_left,
-          approach_green_long_middle: candidateCourseHole.approach_green_long_middle,
-          approach_green_long_right: candidateCourseHole.approach_green_long_right,
-        } : null,
+        courseHole: slimCourseHole(candidateCourseHole),
         courseRating:roundRating, courseSlope:roundSlope,
-        similarityScore:sim, roundDate:round.date??"", courseId:round.course_id??"",
+        similarityScore:finalSim, roundDate:round.date??"", courseId:round.course_id??"",
       });
     }
   }
@@ -381,6 +460,7 @@ export async function POST(req: NextRequest) {
     hole:targetHole,
     strategy,
     course:{rating:targetRating,slope:targetSlope,name:courseRow.name},
-    enrichedHoles: allEnriched, // returned to client for filter recomputation
+    enrichedHoles: allEnriched,
+    defaultApproachDist,
   });
 }

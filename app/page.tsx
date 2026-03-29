@@ -136,10 +136,9 @@ const defaultGS=():GreensideState=>({long_left:0,long_middle:0,long_right:0,midd
 
 type StratFilters={
   useLastN:boolean; lastN:number;
-  years:Set<string>;
   pars:Set<string>;
-  siDelta:string; // "same"|"pm1"|"pm2"|""
-  yardsDelta:string; // "pm5"|"pm10"|"pm20"|""
+  siDelta:string; // "pm1"|"pm2"|"pm3"|""
+  yardsDelta:string; // "pm10"|"pm20"|"pm30"|""
   drivingClubs:Set<string>;
   teeHazards:{teeTreeLeft:boolean;teeTreeRight:boolean;teeBunkerLeft:boolean;teeBunkerRight:boolean;teeWaterLeft:boolean;teeWaterRight:boolean};
   apprClubs:Set<string>;
@@ -148,7 +147,7 @@ type StratFilters={
 };
 const DEFAULT_FILTERS=(totalRounds:number):StratFilters=>({
   useLastN:false,lastN:Math.min(10,totalRounds),
-  years:new Set(),pars:new Set(),siDelta:"",yardsDelta:"",
+  pars:new Set(),siDelta:"",yardsDelta:"",
   drivingClubs:new Set(),
   teeHazards:{teeTreeLeft:false,teeTreeRight:false,teeBunkerLeft:false,teeBunkerRight:false,teeWaterLeft:false,teeWaterRight:false},
   apprClubs:new Set(),greenDepth:"",greensideFilter:defaultGS(),
@@ -166,18 +165,17 @@ function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData
     const dateSet=new Set(dates);
     pool=pool.filter(e=>dateSet.has(e.roundDate));
   }
-  if(f.years.size>0) pool=pool.filter(e=>f.years.has(String(new Date(e.roundDate).getFullYear())));
   if(f.pars.size>0)  pool=pool.filter(e=>f.pars.has(String(e.roundHole.par)));
   // SI delta
   if(f.siDelta&&targetHole?.stroke_index){
     const si=targetHole.stroke_index;
-    const delta=f.siDelta==="same"?0:f.siDelta==="pm1"?1:2;
+    const delta=f.siDelta==="pm1"?1:f.siDelta==="pm2"?2:3;
     pool=pool.filter(e=>Math.abs((e.courseHole?.stroke_index??e.roundHole.stroke_index)-si)<=delta);
   }
   // Yards delta
   if(f.yardsDelta&&targetHole?.yards){
     const y=targetHole.yards;
-    const delta=f.yardsDelta==="pm5"?5:f.yardsDelta==="pm10"?10:20;
+    const delta=f.yardsDelta==="pm10"?10:f.yardsDelta==="pm20"?20:30;
     pool=pool.filter(e=>Math.abs((e.courseHole?.yards??e.roundHole.yards)-y)<=delta);
   }
   if(f.drivingClubs.size>0) pool=pool.filter(e=>f.drivingClubs.has(e.roundHole.club));
@@ -242,11 +240,12 @@ export default function Home(){
   const [courseId,setCourseId]=useState("");
   const [holeNumber,setHoleNumber]=useState(1);
   const [result,setResult]=useState<any>(null);
+  const [approachDist,setApproachDist]=useState<number|null>(null);
+  const [approachDistOverride,setApproachDistOverride]=useState<number|null>(null);
   const [loading,setLoading]=useState(false);
   const [loadingCourses,setLoadingCourses]=useState(true);
   const [error,setError]=useState("");
   const [filters,setFilters]=useState<StratFilters>(DEFAULT_FILTERS(0));
-  const [availableYears,setAvailableYears]=useState<number[]>([]);
   const [totalRounds,setTotalRounds]=useState(0);
 
   useEffect(()=>{
@@ -257,17 +256,23 @@ export default function Home(){
   const availableHoles=Array.from({length:selectedCourse?.holes.length??18},(_,i)=>i+1);
   const targetHole=selectedCourse?.holes.find((h:any)=>h.hole===holeNumber);
 
-  const handleSubmit=async()=>{
+  const handleSubmit=async(apprOverride?:number)=>{
     if(!selectedCourse)return;
     setLoading(true);setError("");setResult(null);
     try{
-      const res=await fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({courseId,hole:holeNumber})});
+      const body:any={courseId,hole:holeNumber};
+      if(apprOverride!=null)body.approachDistance=apprOverride;
+      const res=await fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       const data=await res.json();
       if(!res.ok)setError(data.error??"Something went wrong.");
       else{
         setResult(data);
-        const years=[...new Set((data.enrichedHoles as EnrichedHole[]).map((e:EnrichedHole)=>new Date(e.roundDate).getFullYear()))].sort().reverse() as number[];
-        setAvailableYears(years);
+        if(apprOverride==null){
+          setApproachDist(data.defaultApproachDist??null);
+          setApproachDistOverride(null);
+        }else{
+          setApproachDist(apprOverride);
+        }
         const rounds=new Set((data.enrichedHoles as EnrichedHole[]).map((e:EnrichedHole)=>e.roundDate));
         setTotalRounds(rounds.size);
         setFilters(DEFAULT_FILTERS(rounds.size));
@@ -286,7 +291,7 @@ export default function Home(){
 
   // Count active filters for badges
   const filterCount=
-    (filters.useLastN?1:0)+filters.years.size+filters.pars.size+
+    (filters.useLastN?1:0)+filters.pars.size+
     (filters.siDelta?1:0)+(filters.yardsDelta?1:0)+
     filters.drivingClubs.size+Object.values(filters.teeHazards).filter(Boolean).length+
     filters.apprClubs.size+(filters.greenDepth?1:0)+
@@ -324,7 +329,7 @@ export default function Home(){
         </div>
         <div>
           <label style={labelStyle}>Hole</label>
-          <select style={selectStyle} value={holeNumber} onChange={e=>{setHoleNumber(Number(e.target.value));setResult(null);}}>
+          <select style={selectStyle} value={holeNumber} onChange={e=>{setHoleNumber(Number(e.target.value));setResult(null);setApproachDist(null);setApproachDistOverride(null);}}>
             {availableHoles.map(n=>{const hd=selectedCourse?.holes.find((h:any)=>h.hole===n);return<option key={n} value={n}>Hole {n}{hd?` — Par ${hd.par}, ${hd.yards} yds, SI ${hd.stroke_index}`:""}</option>;})}
           </select>
         </div>
@@ -355,7 +360,7 @@ export default function Home(){
             {course?.rating&&<span style={{fontSize:14,color:"#666"}}>Rating {course.rating}</span>}
             {course?.slope&&<span style={{fontSize:14,color:"#666"}}>Slope {course.slope}</span>}
           </div>
-          {hole.dogleg_direction&&hole.dogleg_direction!=="straight"&&(
+          {hole.dogleg_direction&&(
             <p style={{fontSize:13,color:"#555",margin:"4px 0 0"}}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>
           )}
           {hole.approach_green_depth>0&&<p style={{fontSize:13,color:"#555",margin:"4px 0 0"}}>Green depth: {hole.approach_green_depth} yds</p>}
@@ -410,7 +415,37 @@ export default function Home(){
 
         {/* Approach strategy */}
         <div style={card("#f6f6f6")}>
-          <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 8px"}}>APPROACH</p>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+            <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:0}}>APPROACH</p>
+            {approachDist!=null&&(
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:11,color:"#aaa"}}>Distance (yds)</span>
+                <input
+                  type="number" min={0} max={700}
+                  value={approachDistOverride??approachDist}
+                  onChange={e=>{
+                    const v=Number(e.target.value);
+                    setApproachDistOverride(v);
+                  }}
+                  onBlur={e=>{
+                    const v=Number(e.target.value);
+                    if(v!==(approachDistOverride??approachDist)){
+                      setApproachDistOverride(v);
+                      handleSubmit(v);
+                    }
+                  }}
+                  onKeyDown={e=>{
+                    if(e.key==="Enter"){
+                      const v=Number((e.target as HTMLInputElement).value);
+                      setApproachDistOverride(v);
+                      handleSubmit(v);
+                    }
+                  }}
+                  style={{width:64,padding:"3px 6px",fontSize:13,border:"1px solid #0f6e56",borderRadius:6,color:"#0f6e56",fontWeight:600,textAlign:"center"}}
+                />
+              </div>
+            )}
+          </div>
           {/* GIR % as hero */}
           <div style={{fontSize:22,fontWeight:700,color:"#0f6e56",marginBottom:8}}>
             {t?pct(t.girPct):"—"} <span style={{fontSize:14,color:"#aaa",fontWeight:400}}>GIR</span>
@@ -531,7 +566,7 @@ export default function Home(){
             {filterCount>0&&<button onClick={()=>setFilters(DEFAULT_FILTERS(totalRounds))} style={{fontSize:12,color:"#666",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset</button>}
           </div>
 
-          {/* Rounds + Year */}
+          {/* Rounds + Par */}
           <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:12}}>
             <div style={{flex:"1 1 120px"}}>
               <p style={fl}>Rounds</p>
@@ -545,25 +580,13 @@ export default function Home(){
                 )}
               </div>
             </div>
-            <div style={{flex:"1 1 120px"}}>
-              <p style={fl}>Year</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {availableYears.map(y=>(
-                  <button key={y} style={pill(filters.years.has(String(y)))} onClick={()=>setFilters(f=>({...f,years:toggleSet(f.years,String(y))}))}>
-                    {y}
-                  </button>
+            <div style={{flex:"0 0 auto"}}>
+              <p style={fl}>Par</p>
+              <div style={{display:"flex",gap:4}}>
+                {["3","4","5"].map(p => (
+                  <button key={p} style={pill(filters.pars.has(p))} onClick={()=>setFilters(f=>({...f,pars:toggleSet(f.pars,p)}))}>Par {p}</button>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* Par */}
-          <div style={{marginTop:10}}>
-            <p style={fl}>Par</p>
-            <div style={{display:"flex",gap:4}}>
-              {["3","4","5"].map(p => (
-                <button key={p} style={pill(filters.pars.has(p))} onClick={()=>setFilters(f=>({...f,pars:toggleSet(f.pars,p)}))}>Par {p}</button>
-              ))}
             </div>
           </div>
 
@@ -572,7 +595,7 @@ export default function Home(){
             <div style={{marginBottom:10}}>
               <p style={fl}>Hole Handicap (vs SI {targetHole?.stroke_index})</p>
               <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                {[{label:"Same",val:"same"},{label:"±1",val:"pm1"},{label:"±2",val:"pm2"}].map(({label,val})=>(
+                {[{label:"±1",val:"pm1"},{label:"±2",val:"pm2"},{label:"±3",val:"pm3"}].map(({label,val})=>(
                   <button key={val} style={pill(filters.siDelta===val)} onClick={()=>setFilters(f=>({...f,siDelta:f.siDelta===val?"":val}))}>{label}</button>
                 ))}
               </div>
@@ -580,7 +603,7 @@ export default function Home(){
             <div>
               <p style={fl}>Hole Yards (vs {targetHole?.yards} yds)</p>
               <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                {[{label:"±5 yds",val:"pm5"},{label:"±10 yds",val:"pm10"},{label:"±20 yds",val:"pm20"}].map(({label,val})=>(
+                {[{label:"±10 yds",val:"pm10"},{label:"±20 yds",val:"pm20"},{label:"±30 yds",val:"pm30"}].map(({label,val})=>(
                   <button key={val} style={pill(filters.yardsDelta===val)} onClick={()=>setFilters(f=>({...f,yardsDelta:f.yardsDelta===val?"":val}))}>{label}</button>
                 ))}
               </div>
