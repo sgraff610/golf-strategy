@@ -561,7 +561,9 @@ export default function Home(){
           <div style={{marginTop:10}}>
             <p style={fl}>Par</p>
             <div style={{display:"flex",gap:4}}>
-              {["3","4","5"].map(p=><button key={p} style={pill(filters.pars.has(p))} onClick={()=>setFilters(f=>({...f,pars:toggleSet(f.pars,p)})}>Par {p}</button>)}
+              {["3","4","5"].map(p => (
+                <button key={p} style={pill(filters.pars.has(p))} onClick={()=>setFilters(f=>({...f,pars:toggleSet(f.pars,p)}))}>Par {p}</button>
+              ))}
             </div>
           </div>
 
@@ -590,7 +592,9 @@ export default function Home(){
             <div style={{marginBottom:10}}>
               <p style={fl}>Driving Club</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {DRIVE_CLUBS.map(c=><button key={c} style={pill(filters.drivingClubs.has(c))} onClick={()=>setFilters(f=>({...f,drivingClubs:toggleSet(f.drivingClubs,c)}))}>{c}</button>)}
+                {DRIVE_CLUBS.map(c => (
+                  <button key={c} style={pill(filters.drivingClubs.has(c))} onClick={()=>setFilters(f=>({...f,drivingClubs:toggleSet(f.drivingClubs,c)}))}>{c}</button>
+                ))}
               </div>
             </div>
             <div>
@@ -612,7 +616,9 @@ export default function Home(){
             <div style={{marginBottom:10}}>
               <p style={fl}>Approach Club</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {APPROACH_CLUBS.map(c=><button key={c} style={pill(filters.apprClubs.has(c))} onClick={()=>setFilters(f=>({...f,apprClubs:toggleSet(f.apprClubs,c)}))}>{c}</button>)}
+                {APPROACH_CLUBS.map(c => (
+                  <button key={c} style={pill(filters.apprClubs.has(c))} onClick={()=>setFilters(f=>({...f,apprClubs:toggleSet(f.apprClubs,c)}))}>{c}</button>
+                ))}
               </div>
             </div>
             <div style={{marginBottom:10}}>
