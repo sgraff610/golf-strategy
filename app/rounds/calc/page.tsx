@@ -34,7 +34,6 @@ const CLUB_DISTANCES: Record<string, number> = {
   "8i": 145, "9i": 130, PW: 120, SW: 100, LW: 80,
 };
 
-// Approach clubs only (no driver)
 const APPROACH_CLUBS = ["3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
 
 function getDriveDistance(club: string): number {
@@ -49,6 +48,18 @@ function getClosestApproachClub(yards: number): string {
     if (diff < bestDiff) { bestDiff = diff; best = club; }
   }
   return best;
+}
+
+/**
+ * Resolve chips for a hole:
+ * - If appr_accuracy is "Hit" → chips = 0 (on green in regulation, no chip needed)
+ * - If chips field has a value (including 0) → use that value
+ * - Otherwise → null (unknown, exclude from analysis)
+ */
+function resolveChips(hole: RoundHole): number | null {
+  if (hole.appr_accuracy === "Hit") return 0;
+  if (hole.chips !== "" && hole.chips !== undefined && hole.chips !== null) return Number(hole.chips);
+  return null;
 }
 
 function calculateDriveTreeLikelihood(hole: RoundHole, courseHole: HoleData | undefined): number {
@@ -73,7 +84,7 @@ function calculateDrivePenaltyLikelihood(hole: RoundHole, courseHole: HoleData |
   if (water === 0 || hole.tee_accuracy === "Hit") return 0;
   const score = Number(hole.score) || 0;
   const putts = Number(hole.putts) || 0;
-  const chips = Number(hole.chips) || 0;
+  const chips = resolveChips(hole) ?? 0;
   const otherStrokes = score - putts - chips - 1;
   const match =
     (hole.tee_accuracy === "Left"  && courseHole.tee_water_out_left) ||
@@ -117,6 +128,9 @@ export default function RoundsCalc() {
   };
   const warnStyle: React.CSSProperties = {
     ...calcStyle, background: "#fff3e0", border: "1px solid #ffcc80", color: "#e65100",
+  };
+  const dimStyle: React.CSSProperties = {
+    ...calcStyle, background: "#f5f5f5", color: "#aaa", border: "1px solid #e0e0e0", fontWeight: 400,
   };
   const selectStyle: React.CSSProperties = {
     width: "100%", padding: "6px 8px", fontSize: 14,
@@ -162,6 +176,8 @@ export default function RoundsCalc() {
             const approachClubEst = secondShotDist !== null && nonPuttStrokes === 2
               ? getClosestApproachClub(secondShotDist)
               : null;
+            const chipsResolved = resolveChips(hole);
+            const chipsKnown = chipsResolved !== null;
             const penaltyLikelihood = calculateDrivePenaltyLikelihood(hole, courseHole);
             const hasPenalty = ((Number(hole.water_penalty) || 0) + (Number(hole.drop_or_out) || 0)) > 0;
             const treeLikelihood = calculateDriveTreeLikelihood(hole, courseHole);
@@ -225,8 +241,14 @@ export default function RoundsCalc() {
                 {/* Row 5: Chips, Putts */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                   <div>
-                    <label style={labelStyle}>Chips</label>
-                    <div style={calcStyle}>{hole.chips !== "" && hole.chips !== undefined ? hole.chips : "—"}</div>
+                    <label style={labelStyle}>
+                      Chips
+                      {!chipsKnown && <span style={{ marginLeft: 4, fontSize: 10, color: "#aaa" }}>(unknown)</span>}
+                      {hole.appr_accuracy === "Hit" && <span style={{ marginLeft: 4, fontSize: 10, color: "#0f6e56" }}>(GIR)</span>}
+                    </label>
+                    <div style={chipsKnown ? calcStyle : dimStyle}>
+                      {chipsKnown ? chipsResolved : "—"}
+                    </div>
                   </div>
                   <div>
                     <label style={labelStyle}>Putts</label>
@@ -242,7 +264,7 @@ export default function RoundsCalc() {
                   </div>
                   <div>
                     <label style={labelStyle}>GS Bunker</label>
-                    <div style={calcStyle}>{hole.greenside_bunker !== "" && hole.greenside_bunker !== undefined && Number(hole.greenside_bunker) > 0 ? hole.greenside_bunker : "—"}</div>
+                    <div style={calcStyle}>{Number(hole.greenside_bunker) > 0 ? hole.greenside_bunker : "—"}</div>
                   </div>
                 </div>
 

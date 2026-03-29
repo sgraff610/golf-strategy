@@ -10,7 +10,8 @@ type EnrichedHole = {
   hole: number; par: number; score: number;
   tee_accuracy: TeeAccuracy; appr_accuracy: TeeAccuracy;
   appr_distance: string; club: string;
-  chips: number; putts: number; first_putt_distance: string;
+  chips: number | null;  // null = unknown (blank + not a GIR)
+  putts: number; first_putt_distance: string;
   greenside_bunker: number;
   water_penalty: number; drop_or_out: number; tree_haz: number; fairway_bunker: number;
   drive_water_ob_pct: number; drive_tree_pct: number; drive_bunker_pct: number;
@@ -25,7 +26,7 @@ type EnrichedHole = {
 
 type Filters = {
   driveAcc: { left: boolean; right: boolean; short: boolean; long: boolean; hit: boolean };
-  apprAcc: { left: boolean; right: boolean; short: boolean; long: boolean; hit: boolean };
+  apprAcc:  { left: boolean; right: boolean; short: boolean; long: boolean; hit: boolean };
   drivingClub: string; apprClub: string;
   highWater: boolean; highTree: boolean; highBunker: boolean;
   courseId: string; par: string;
@@ -36,8 +37,7 @@ type Filters = {
   ratingMin: string; ratingMax: string;
   slopeMin: string; slopeMax: string;
   year: string;
-  gsBunker: boolean;
-  girOnly: boolean; grintsOnly: boolean;
+  gsBunker: boolean; girOnly: boolean; grintsOnly: boolean;
   puttsMin: string; puttsMax: string;
   chipsMin: string; chipsMax: string;
   firstPutt: string;
@@ -57,15 +57,28 @@ const DEFAULT_FILTERS: Filters = {
   puttsMin: "", puttsMax: "", chipsMin: "", chipsMax: "", firstPutt: "",
 };
 
-const DRIVE_CLUBS   = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
+const DRIVE_CLUBS    = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
 const APPROACH_CLUBS = ["3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
 const PUTT_DISTANCES = ["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"];
+
+/**
+ * Resolve chips:
+ * - appr_accuracy "Hit" → 0 (GIR, no chip needed)
+ * - chips field has a value (including 0) → that value
+ * - blank + not a Hit → null (unknown)
+ */
+function resolveChips(hole: any): number | null {
+  if (hole.appr_accuracy === "Hit") return 0;
+  if (hole.chips !== "" && hole.chips !== undefined && hole.chips !== null) return Number(hole.chips);
+  return null;
+}
 
 function getDriveWaterPct(hole: any, ch: HoleData | undefined): number {
   if (!ch) return 0;
   const water = (Number(hole.water_penalty)||0) + (Number(hole.drop_or_out)||0);
   if (water === 0 || hole.tee_accuracy === "Hit") return 0;
-  const other = (Number(hole.score)||0) - (Number(hole.putts)||0) - (Number(hole.chips)||0) - 1;
+  const chips = resolveChips(hole) ?? 0;
+  const other = (Number(hole.score)||0) - (Number(hole.putts)||0) - chips - 1;
   const match = (hole.tee_accuracy==="Left" && ch.tee_water_out_left) || (hole.tee_accuracy==="Right" && ch.tee_water_out_right);
   if (!match) return 0;
   return other===1 ? 100 : other>1 ? 50 : 0;
@@ -103,12 +116,12 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
     if (f.highBunker && h.drive_bunker_pct <= 0) return false;
     if (f.courseId && h.courseId !== f.courseId) return false;
     if (f.par && h.par !== Number(f.par)) return false;
-    if (f.teeTreeLeft   && !h.tee_tree_left)   return false;
-    if (f.teeTreeRight  && !h.tee_tree_right)  return false;
-    if (f.teeBunkerLeft && !h.tee_bunker_left) return false;
-    if (f.teeBunkerRight&& !h.tee_bunker_right)return false;
-    if (f.teeWaterLeft  && !h.tee_water_left)  return false;
-    if (f.teeWaterRight && !h.tee_water_right) return false;
+    if (f.teeTreeLeft    && !h.tee_tree_left)    return false;
+    if (f.teeTreeRight   && !h.tee_tree_right)   return false;
+    if (f.teeBunkerLeft  && !h.tee_bunker_left)  return false;
+    if (f.teeBunkerRight && !h.tee_bunker_right) return false;
+    if (f.teeWaterLeft   && !h.tee_water_left)   return false;
+    if (f.teeWaterRight  && !h.tee_water_right)  return false;
     if (f.siMin && h.stroke_index < Number(f.siMin)) return false;
     if (f.siMax && h.stroke_index > Number(f.siMax)) return false;
     if (f.ratingMin && (h.rating??0)   < Number(f.ratingMin)) return false;
@@ -116,13 +129,15 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
     if (f.slopeMin  && (h.slope??0)    < Number(f.slopeMin))  return false;
     if (f.slopeMax  && (h.slope??999)  > Number(f.slopeMax))  return false;
     if (f.year && h.year !== Number(f.year)) return false;
-    if (f.gsBunker && h.greenside_bunker <= 0) return false;
-    if (f.girOnly   && !h.gir)    return false;
+    if (f.gsBunker   && h.greenside_bunker <= 0) return false;
+    if (f.girOnly    && !h.gir)    return false;
     if (f.grintsOnly && !h.grints) return false;
     if (f.puttsMin && h.putts < Number(f.puttsMin)) return false;
     if (f.puttsMax && h.putts > Number(f.puttsMax)) return false;
-    if (f.chipsMin && h.chips < Number(f.chipsMin)) return false;
-    if (f.chipsMax && h.chips > Number(f.chipsMax)) return false;
+    // Chips filters only apply to holes where chips is known
+    if ((f.chipsMin || f.chipsMax) && h.chips === null) return false;
+    if (f.chipsMin && h.chips !== null && h.chips < Number(f.chipsMin)) return false;
+    if (f.chipsMax && h.chips !== null && h.chips > Number(f.chipsMax)) return false;
     if (f.firstPutt && h.first_putt_distance !== f.firstPutt) return false;
     return true;
   });
@@ -155,14 +170,16 @@ export default function RoundsInsights() {
         for (const hole of round.holes ?? []) {
           if (!hole.score || !hole.par) continue;
           const ch = course?.holes.find((h: HoleData) => h.hole === hole.hole);
-          const score = Number(hole.score); const putts = Number(hole.putts)||0;
+          const score = Number(hole.score);
+          const putts = Number(hole.putts)||0;
+          const chipsResolved = resolveChips(hole);
           enriched.push({
             hole: hole.hole, par: hole.par, score,
             tee_accuracy: hole.tee_accuracy ?? "",
             appr_accuracy: hole.appr_accuracy ?? "",
             appr_distance: hole.appr_distance ?? "",
             club: hole.club ?? "",
-            chips: Number(hole.chips)||0,
+            chips: chipsResolved,
             putts,
             first_putt_distance: hole.first_putt_distance ?? "",
             greenside_bunker: Number(hole.greenside_bunker)||0,
@@ -174,16 +191,16 @@ export default function RoundsInsights() {
             drive_tree_pct:     getDriveTreePct(hole, ch),
             drive_bunker_pct:   getDriveBunkerPct(hole, ch),
             courseId: round.course_id ?? "", courseName: round.course_name ?? "",
-            tee_tree_left:   ch?.tee_tree_hazard_left  ?? false,
-            tee_tree_right:  ch?.tee_tree_hazard_right ?? false,
-            tee_bunker_left: ch?.tee_bunkers_left      ?? false,
-            tee_bunker_right:ch?.tee_bunkers_right     ?? false,
-            tee_water_left:  ch?.tee_water_out_left    ?? false,
-            tee_water_right: ch?.tee_water_out_right   ?? false,
+            tee_tree_left:    ch?.tee_tree_hazard_left  ?? false,
+            tee_tree_right:   ch?.tee_tree_hazard_right ?? false,
+            tee_bunker_left:  ch?.tee_bunkers_left      ?? false,
+            tee_bunker_right: ch?.tee_bunkers_right     ?? false,
+            tee_water_left:   ch?.tee_water_out_left    ?? false,
+            tee_water_right:  ch?.tee_water_out_right   ?? false,
             stroke_index: hole.stroke_index ?? 0,
             rating: course?.rating ?? null, slope: course?.slope ?? null,
             roundIndex: ri, year,
-            gir: typeof hole.gir === "boolean" ? hole.gir : (score - putts) <= (hole.par - 2),
+            gir:    typeof hole.gir    === "boolean" ? hole.gir    : (score - putts) <= (hole.par - 2),
             grints: typeof hole.grints === "boolean" ? hole.grints : score <= hole.par,
           });
         }
@@ -216,28 +233,32 @@ export default function RoundsInsights() {
     !!filters.puttsMin || !!filters.puttsMax ||
     !!filters.chipsMin || !!filters.chipsMax || !!filters.firstPutt;
 
+  // Chips correlations only use holes where chips is known
+  const holesWithKnownChips = roundFiltered.filter(h => h.chips !== null);
+
   const correlations = [
-    { label: "Drive Hit",         holes: roundFiltered.filter(h => h.tee_accuracy==="Hit") },
-    { label: "Drive Left",        holes: roundFiltered.filter(h => h.tee_accuracy==="Left") },
-    { label: "Drive Right",       holes: roundFiltered.filter(h => h.tee_accuracy==="Right") },
-    { label: "Drive Short",       holes: roundFiltered.filter(h => h.tee_accuracy==="Short") },
-    { label: "Drive Long",        holes: roundFiltered.filter(h => h.tee_accuracy==="Long") },
-    { label: "Approach Hit",      holes: roundFiltered.filter(h => h.appr_accuracy==="Hit") },
-    { label: "Approach Left",     holes: roundFiltered.filter(h => h.appr_accuracy==="Left") },
-    { label: "Approach Right",    holes: roundFiltered.filter(h => h.appr_accuracy==="Right") },
-    { label: "Approach Short",    holes: roundFiltered.filter(h => h.appr_accuracy==="Short") },
-    { label: "Approach Long",     holes: roundFiltered.filter(h => h.appr_accuracy==="Long") },
-    { label: "GIR",               holes: roundFiltered.filter(h => h.gir) },
-    { label: "GRINTS",            holes: roundFiltered.filter(h => h.grints) },
-    { label: "GS Bunker",         holes: roundFiltered.filter(h => h.greenside_bunker > 0) },
-    { label: "0 Chips",          holes: roundFiltered.filter(h => h.chips === 0) },
-    { label: "1+ Chips",         holes: roundFiltered.filter(h => h.chips >= 1) },
+    { label: "Drive Hit",        holes: roundFiltered.filter(h => h.tee_accuracy==="Hit") },
+    { label: "Drive Left",       holes: roundFiltered.filter(h => h.tee_accuracy==="Left") },
+    { label: "Drive Right",      holes: roundFiltered.filter(h => h.tee_accuracy==="Right") },
+    { label: "Drive Short",      holes: roundFiltered.filter(h => h.tee_accuracy==="Short") },
+    { label: "Drive Long",       holes: roundFiltered.filter(h => h.tee_accuracy==="Long") },
+    { label: "Approach Hit",     holes: roundFiltered.filter(h => h.appr_accuracy==="Hit") },
+    { label: "Approach Left",    holes: roundFiltered.filter(h => h.appr_accuracy==="Left") },
+    { label: "Approach Right",   holes: roundFiltered.filter(h => h.appr_accuracy==="Right") },
+    { label: "Approach Short",   holes: roundFiltered.filter(h => h.appr_accuracy==="Short") },
+    { label: "Approach Long",    holes: roundFiltered.filter(h => h.appr_accuracy==="Long") },
+    { label: "GIR",              holes: roundFiltered.filter(h => h.gir) },
+    { label: "GRINTS",           holes: roundFiltered.filter(h => h.grints) },
+    { label: "GS Bunker",        holes: roundFiltered.filter(h => h.greenside_bunker > 0) },
+    // Chips correlations scoped to holes where chips is known
+    { label: "0 Chips",          holes: holesWithKnownChips.filter(h => h.chips === 0) },
+    { label: "1+ Chips",         holes: holesWithKnownChips.filter(h => (h.chips ?? 0) >= 1) },
     { label: "1 Putt",           holes: roundFiltered.filter(h => h.putts === 1) },
     { label: "2 Putts",          holes: roundFiltered.filter(h => h.putts === 2) },
     { label: "3+ Putts",         holes: roundFiltered.filter(h => h.putts >= 3) },
-    { label: "High Water Risk",   holes: roundFiltered.filter(h => h.drive_water_ob_pct > 0) },
-    { label: "High Tree Risk",    holes: roundFiltered.filter(h => h.drive_tree_pct > 0) },
-    { label: "High Bunker Risk",  holes: roundFiltered.filter(h => h.drive_bunker_pct > 0) },
+    { label: "High Water Risk",  holes: roundFiltered.filter(h => h.drive_water_ob_pct > 0) },
+    { label: "High Tree Risk",   holes: roundFiltered.filter(h => h.drive_tree_pct > 0) },
+    { label: "High Bunker Risk", holes: roundFiltered.filter(h => h.drive_bunker_pct > 0) },
   ].map(({ label, holes }) => ({
     label, count: holes.length, avg: calcAvg(holes),
     impact: holes.length > 0 ? calcAvg(holes) - baseline : NaN,
@@ -258,7 +279,6 @@ export default function RoundsInsights() {
     fontSize: 12, color: "#0f6e56", width: 60,
   };
   const filterLabel: React.CSSProperties = { fontSize: 11, color: "#999", margin: "0 0 6px", fontWeight: 600 };
-  const filterSection: React.CSSProperties = { marginBottom: 14 };
 
   return (
     <main style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
@@ -281,7 +301,7 @@ export default function RoundsInsights() {
             )}
           </div>
 
-          {/* ── Row 1: Rounds + Year side by side ── */}
+          {/* Rounds + Year */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               <p style={filterLabel}>Rounds</p>
@@ -302,7 +322,7 @@ export default function RoundsInsights() {
                 <button style={pill(filters.year==="")} onClick={() => setFilters(f => ({ ...f, year: "" }))}>All</button>
                 {availableYears.map(y => (
                   <button key={y} style={pill(filters.year===String(y))}
-                    onClick={() => setFilters(f => ({ ...f, year: f.year===String(y) ? "" : String(y) }))}>
+                    onClick={() => setFilters(f => ({ ...f, year: f.year===String(y)?"":String(y) }))}>
                     {y}
                   </button>
                 ))}
@@ -310,7 +330,7 @@ export default function RoundsInsights() {
             </div>
           </div>
 
-          {/* ── Row 2: Course + Par side by side ── */}
+          {/* Course + Par */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               <p style={filterLabel}>Course</p>
@@ -331,7 +351,7 @@ export default function RoundsInsights() {
             </div>
           </div>
 
-          {/* ── Row 3: Drive Acc + Approach Acc side by side ── */}
+          {/* Drive Acc + Approach Acc */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               <p style={filterLabel}>Drive Accuracy</p>
@@ -357,7 +377,7 @@ export default function RoundsInsights() {
             </div>
           </div>
 
-          {/* ── Row 4: Driving Club + Approach Club side by side ── */}
+          {/* Driving Club + Approach Club */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               <p style={filterLabel}>Driving Club</p>
@@ -383,7 +403,7 @@ export default function RoundsInsights() {
             </div>
           </div>
 
-          {/* ── Row 5: Putts range + Chips range + 1st Putt ── */}
+          {/* Putts + Chips + 1st Putt */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               <p style={filterLabel}>Putts</p>
@@ -396,7 +416,7 @@ export default function RoundsInsights() {
               </div>
             </div>
             <div>
-              <p style={filterLabel}>Chips</p>
+              <p style={filterLabel}>Chips <span style={{ fontSize:10, color:"#bbb", fontWeight:400 }}>(known only)</span></p>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <input type="number" min={0} max={10} placeholder="Min" value={filters.chipsMin}
                   onChange={e => setFilters(f => ({ ...f, chipsMin: e.target.value }))} style={numInput} />
@@ -414,17 +434,17 @@ export default function RoundsInsights() {
             </div>
           </div>
 
-          {/* ── Row 6: GS Bunker + GIR + GRINTS ── */}
-          <div style={filterSection}>
+          {/* Scoring toggles */}
+          <div style={{ marginBottom: 14 }}>
             <p style={filterLabel}>Scoring</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-              <button style={pill(filters.girOnly)}   onClick={() => setFilters(f => ({ ...f, girOnly: !f.girOnly }))}>GIR</button>
+              <button style={pill(filters.girOnly)}    onClick={() => setFilters(f => ({ ...f, girOnly: !f.girOnly }))}>GIR</button>
               <button style={pill(filters.grintsOnly)} onClick={() => setFilters(f => ({ ...f, grintsOnly: !f.grintsOnly }))}>GRINTS</button>
-              <button style={pill(filters.gsBunker)}  onClick={() => setFilters(f => ({ ...f, gsBunker: !f.gsBunker }))}>GS Bunker</button>
+              <button style={pill(filters.gsBunker)}   onClick={() => setFilters(f => ({ ...f, gsBunker: !f.gsBunker }))}>GS Bunker</button>
             </div>
           </div>
 
-          {/* ── Row 7: Tee Risks + Tee Hazards ── */}
+          {/* Tee Risks + Tee Hazards */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               <p style={filterLabel}>Tee Risks</p>
@@ -438,9 +458,9 @@ export default function RoundsInsights() {
               <p style={filterLabel}>Tee Hazards</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                 {[
-                  { label: "Trees L",  key: "teeTreeLeft" },  { label: "Trees R",  key: "teeTreeRight" },
-                  { label: "Bkr L",    key: "teeBunkerLeft" },{ label: "Bkr R",    key: "teeBunkerRight" },
-                  { label: "Water L",  key: "teeWaterLeft" }, { label: "Water R",  key: "teeWaterRight" },
+                  { label: "Trees L", key: "teeTreeLeft" },   { label: "Trees R", key: "teeTreeRight" },
+                  { label: "Bkr L",   key: "teeBunkerLeft" }, { label: "Bkr R",   key: "teeBunkerRight" },
+                  { label: "Water L", key: "teeWaterLeft" },  { label: "Water R", key: "teeWaterRight" },
                 ].map(({ label, key }) => (
                   <button key={key} style={pill(!!filters[key as keyof Filters])}
                     onClick={() => setFilters(f => ({ ...f, [key]: !f[key as keyof Filters] }))}>{label}</button>
@@ -449,7 +469,7 @@ export default function RoundsInsights() {
             </div>
           </div>
 
-          {/* ── Row 8: Ranges (SI, Rating, Slope) ── */}
+          {/* Ranges */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             <div>
               <p style={filterLabel}>Hole Handicap</p>
@@ -458,7 +478,7 @@ export default function RoundsInsights() {
                   <option value="">Min</option>
                   {Array.from({length:18},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
-                <span style={{ fontSize:11,color:"#999" }}>–</span>
+                <span style={{ fontSize:11, color:"#999" }}>–</span>
                 <select value={filters.siMax} onChange={e => setFilters(f => ({ ...f, siMax: e.target.value }))} style={sel}>
                   <option value="">Max</option>
                   {Array.from({length:18},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
@@ -469,7 +489,7 @@ export default function RoundsInsights() {
               <p style={filterLabel}>Course Rating</p>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <input type="number" step="0.1" placeholder="Min" value={filters.ratingMin} onChange={e => setFilters(f => ({ ...f, ratingMin: e.target.value }))} style={numInput} />
-                <span style={{ fontSize:11,color:"#999" }}>–</span>
+                <span style={{ fontSize:11, color:"#999" }}>–</span>
                 <input type="number" step="0.1" placeholder="Max" value={filters.ratingMax} onChange={e => setFilters(f => ({ ...f, ratingMax: e.target.value }))} style={numInput} />
               </div>
             </div>
@@ -477,7 +497,7 @@ export default function RoundsInsights() {
               <p style={filterLabel}>Slope</p>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <input type="number" placeholder="Min" value={filters.slopeMin} onChange={e => setFilters(f => ({ ...f, slopeMin: e.target.value }))} style={numInput} />
-                <span style={{ fontSize:11,color:"#999" }}>–</span>
+                <span style={{ fontSize:11, color:"#999" }}>–</span>
                 <input type="number" placeholder="Max" value={filters.slopeMax} onChange={e => setFilters(f => ({ ...f, slopeMax: e.target.value }))} style={numInput} />
               </div>
             </div>
@@ -489,7 +509,7 @@ export default function RoundsInsights() {
           {[
             { label: "Baseline Avg", val: fmt(baseline), color: clr(baseline), sub: `${roundFiltered.length} holes` },
             { label: "Filtered Avg", val: filtered.length>0?fmt(filteredAvg):"—", color: filtered.length>0?clr(filteredAvg):"#666", sub: `${filtered.length} holes` },
-            { label: "Impact", val: filtered.length>0?fmt(impact):"—", color: clr(impact), sub: "vs baseline" },
+            { label: "Impact",       val: filtered.length>0?fmt(impact):"—",       color: clr(impact),       sub: "vs baseline" },
           ].map(({ label, val, color, sub }) => (
             <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: 12, textAlign: "center" }}>
               <p style={{ fontSize: 11, color: "#666", margin: "0 0 4px" }}>{label}</p>
