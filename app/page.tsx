@@ -333,7 +333,7 @@ export default function Home(){
             {availableHoles.map(n=>{const hd=selectedCourse?.holes.find((h:any)=>h.hole===n);return<option key={n} value={n}>Hole {n}{hd?` — Par ${hd.par}, ${hd.yards} yds, SI ${hd.stroke_index}`:""}</option>;})}
           </select>
         </div>
-        <button onClick={handleSubmit} disabled={loading} style={{padding:"12px",fontSize:15,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:8,cursor:loading?"not-allowed":"pointer",opacity:loading?0.6:1}}>
+        <button onClick={()=>handleSubmit()} disabled={loading} style={{padding:"12px",fontSize:15,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:8,cursor:loading?"not-allowed":"pointer",opacity:loading?0.6:1}}>
           {loading?"Analysing...":"Get Strategy"}
         </button>
       </div>
