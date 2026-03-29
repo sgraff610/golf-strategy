@@ -52,11 +52,11 @@ type Filters = {
   ratingMin: string; ratingMax: string;
   slopeMin: string; slopeMax: string;
   years: Set<string>;
-  gsBunker: boolean; girOnly: boolean;
+  gsBunker: boolean; girOnly: boolean; nonGirOnly: boolean;
   puttsMin: string; puttsMax: string;
   chipsMin: string; chipsMax: string;
   firstPutt: string;
-  greenDepth: string; // "lt20" | "gt40" | ""
+  greenDepth: string; // "lt20" | "20-24" | "25-29" | "30-34" | "35-39" | "gt40" | ""
   greensideFilter: GreensideFilter;
 };
 
@@ -69,7 +69,7 @@ const DEFAULT_FILTERS: Filters = {
   teeBunkerLeft: false, teeBunkerRight: false,
   teeWaterLeft: false, teeWaterRight: false,
   siMin: "", siMax: "", ratingMin: "", ratingMax: "", slopeMin: "", slopeMax: "",
-  years: new Set(), gsBunker: false, girOnly: false,
+  years: new Set(), gsBunker: false, girOnly: false, nonGirOnly: false,
   puttsMin: "", puttsMax: "", chipsMin: "", chipsMax: "", firstPutt: "",
   greenDepth: "", greensideFilter: defaultGreensideFilter(),
 };
@@ -225,15 +225,20 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
     if (f.slopeMax  && (h.slope??999)  > Number(f.slopeMax))  return false;
     if (f.years.size > 0 && !f.years.has(String(h.year))) return false;
     if (f.gsBunker  && h.greenside_bunker <= 0) return false;
-    if (f.girOnly   && !h.gir)   return false;
+    if (f.girOnly    && !h.gir)  return false;
+    if (f.nonGirOnly &&  h.gir)  return false;
     if (f.puttsMin && h.putts < Number(f.puttsMin)) return false;
     if (f.puttsMax && h.putts > Number(f.puttsMax)) return false;
     if ((f.chipsMin || f.chipsMax) && h.chips === null) return false;
     if (f.chipsMin && h.chips !== null && h.chips < Number(f.chipsMin)) return false;
     if (f.chipsMax && h.chips !== null && h.chips > Number(f.chipsMax)) return false;
     if (f.firstPutt && h.first_putt_distance !== f.firstPutt) return false;
-    if (f.greenDepth === "lt20" && h.green_depth >= 20) return false;
-    if (f.greenDepth === "gt40" && h.green_depth < 40)  return false;
+    if (f.greenDepth === "lt20"  && h.green_depth >= 20) return false;
+    if (f.greenDepth === "20-24" && (h.green_depth < 20 || h.green_depth > 24)) return false;
+    if (f.greenDepth === "25-29" && (h.green_depth < 25 || h.green_depth > 29)) return false;
+    if (f.greenDepth === "30-34" && (h.green_depth < 30 || h.green_depth > 34)) return false;
+    if (f.greenDepth === "35-39" && (h.green_depth < 35 || h.green_depth > 39)) return false;
+    if (f.greenDepth === "gt40"  && h.green_depth < 40) return false;
     const gsAny = Object.values(f.greensideFilter).some(v => v !== 0);
     if (gsAny) {
       const combined: GreensideFilter = defaultGreensideFilter();
@@ -357,7 +362,7 @@ export default function RoundsInsights() {
     filters.drivingClubs.size > 0 || filters.apprClubs.size > 0 ||
     filters.years.size > 0 || filters.pars.size > 0 ||
     filters.highWater || filters.highTree || filters.highBunker ||
-    filters.gsBunker || filters.girOnly ||
+    filters.gsBunker || filters.girOnly || filters.nonGirOnly ||
     filters.teeTreeLeft || filters.teeTreeRight ||
     filters.teeBunkerLeft || filters.teeBunkerRight ||
     filters.teeWaterLeft || filters.teeWaterRight ||
@@ -383,6 +388,7 @@ export default function RoundsInsights() {
     { label: "Approach Short",   holes: roundFiltered.filter(h => h.appr_accuracy==="Short") },
     { label: "Approach Long",    holes: roundFiltered.filter(h => h.appr_accuracy==="Long") },
     { label: "GIR",              holes: roundFiltered.filter(h => h.gir) },
+    { label: "Non-GIR",         holes: roundFiltered.filter(h => !h.gir) },
     { label: "GRINTS",           holes: roundFiltered.filter(h => h.grints) },
     { label: "GS Bunker",        holes: roundFiltered.filter(h => h.greenside_bunker > 0) },
     { label: "0 Chips",          holes: holesWithKnownChips.filter(h => h.chips === 0) },
@@ -393,8 +399,12 @@ export default function RoundsInsights() {
     { label: "High Water Risk",  holes: roundFiltered.filter(h => h.drive_water_ob_pct > 0) },
     { label: "High Tree Risk",   holes: roundFiltered.filter(h => h.drive_tree_pct > 0) },
     { label: "High Bunker Risk", holes: roundFiltered.filter(h => h.drive_bunker_pct > 0) },
-    { label: "Green Depth <20",  holes: roundFiltered.filter(h => h.green_depth > 0 && h.green_depth < 20) },
-    { label: "Green Depth 40+",  holes: roundFiltered.filter(h => h.green_depth >= 40) },
+    { label: "Green Depth <20",   holes: roundFiltered.filter(h => h.green_depth > 0 && h.green_depth < 20) },
+    { label: "Green Depth 20-24", holes: roundFiltered.filter(h => h.green_depth >= 20 && h.green_depth <= 24) },
+    { label: "Green Depth 25-29", holes: roundFiltered.filter(h => h.green_depth >= 25 && h.green_depth <= 29) },
+    { label: "Green Depth 30-34", holes: roundFiltered.filter(h => h.green_depth >= 30 && h.green_depth <= 34) },
+    { label: "Green Depth 35-39", holes: roundFiltered.filter(h => h.green_depth >= 35 && h.green_depth <= 39) },
+    { label: "Green Depth 40+",   holes: roundFiltered.filter(h => h.green_depth >= 40) },
   ].map(({ label, holes }) => ({
     label, count: holes.length, avg: calcAvg(holes),
     impact: holes.length > 0 ? calcAvg(holes) - baseline : NaN,
@@ -423,7 +433,7 @@ export default function RoundsInsights() {
     (filters.teeTreeLeft?1:0) + (filters.teeTreeRight?1:0) +
     (filters.teeBunkerLeft?1:0) + (filters.teeBunkerRight?1:0) +
     (filters.teeWaterLeft?1:0) + (filters.teeWaterRight?1:0);
-  const apprActive = filters.apprAcc.size + filters.apprClubs.size + (filters.girOnly?1:0);
+  const apprActive = filters.apprAcc.size + filters.apprClubs.size + (filters.girOnly?1:0) + (filters.nonGirOnly?1:0);
   const greensideActive = (filters.gsBunker?1:0) +
     (filters.puttsMin||filters.puttsMax?1:0) +
     (filters.chipsMin||filters.chipsMax?1:0) +
@@ -606,7 +616,8 @@ export default function RoundsInsights() {
             <div>
               <p style={fl}>Scoring</p>
               <div style={{ display: "flex", gap: 4 }}>
-                <button style={pill(filters.girOnly)} onClick={() => setFilters(f => ({ ...f, girOnly: !f.girOnly }))}>GIR</button>
+                <button style={pill(filters.girOnly)}    onClick={() => setFilters(f => ({ ...f, girOnly: !f.girOnly, nonGirOnly: false }))}>GIR</button>
+                <button style={pill(filters.nonGirOnly)} onClick={() => setFilters(f => ({ ...f, nonGirOnly: !f.nonGirOnly, girOnly: false }))}>Non-GIR</button>
               </div>
             </div>
           </CollapsibleSection>
@@ -644,10 +655,21 @@ export default function RoundsInsights() {
               <button style={pill(filters.gsBunker)} onClick={() => setFilters(f => ({ ...f, gsBunker: !f.gsBunker }))}>In GS Bunker</button>
             </div>
             <div style={{ marginBottom: 10 }}>
-              <p style={fl}>Green Depth</p>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button style={pill(filters.greenDepth==="lt20")} onClick={() => setFilters(f => ({ ...f, greenDepth: f.greenDepth==="lt20"?"":"lt20" }))}>{"< 20 yds"}</button>
-                <button style={pill(filters.greenDepth==="gt40")} onClick={() => setFilters(f => ({ ...f, greenDepth: f.greenDepth==="gt40"?"":"gt40" }))}>{"40+ yds"}</button>
+              <p style={fl}>Green Depth (yards)</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {([
+                  { label: "< 20",  val: "lt20"  },
+                  { label: "20-24", val: "20-24" },
+                  { label: "25-29", val: "25-29" },
+                  { label: "30-34", val: "30-34" },
+                  { label: "35-39", val: "35-39" },
+                  { label: "40+",   val: "gt40"  },
+                ] as const).map(({ label, val }) => (
+                  <button key={val} style={pill(filters.greenDepth === val)}
+                    onClick={() => setFilters(f => ({ ...f, greenDepth: f.greenDepth === val ? "" : val }))}>
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
             <div>
