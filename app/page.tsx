@@ -223,7 +223,7 @@ function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData
     if(!poolKeys.has(key)){pool=[...pool,e];poolKeys.add(key);}
   }
   return pool;
-} ────────────────────────────────────────────────────────────
+} 
 const DOGLEG_LABELS:Record<string,string>={
   severe_left:"Severe Left",moderate_left:"Moderate Left",slight_left:"Slight Left",straight:"Straight",
   slight_right:"Slight Right",moderate_right:"Moderate Right",severe_right:"Severe Right",
