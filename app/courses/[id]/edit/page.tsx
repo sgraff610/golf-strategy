@@ -19,28 +19,39 @@ const DOGLEG_OPTIONS: { value: DoglegDirection; label: string }[] = [
 ];
 
 const TEE_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
-  { key: "tee_tree_hazard_left",  label: "Trees / Hazard left" },
-  { key: "tee_tree_hazard_right", label: "Trees / Hazard right" },
-  { key: "tee_bunkers_left",      label: "Bunkers left" },
-  { key: "tee_bunkers_right",     label: "Bunkers right" },
-  { key: "tee_water_out_left",    label: "Water / OB left" },
-  { key: "tee_water_out_right",   label: "Water / OB right" },
-  { key: "tee_water_out_across",  label: "Water / OB across" },
+  { key: "tee_tree_hazard_left",   label: "Trees / Hazard left" },
+  { key: "tee_tree_hazard_right",  label: "Trees / Hazard right" },
+  { key: "tee_tree_hazard_across", label: "Trees / Hazard across/middle" },
+  { key: "tee_bunkers_left",       label: "Bunkers left" },
+  { key: "tee_bunkers_right",      label: "Bunkers right" },
+  { key: "tee_water_out_left",     label: "Water / OB left" },
+  { key: "tee_water_out_right",    label: "Water / OB right" },
+  { key: "tee_water_out_across",   label: "Water / OB across/middle" },
 ];
 
 const APPROACH_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
-  { key: "approach_tree_hazard_left",  label: "Trees left" },
-  { key: "approach_tree_hazard_right", label: "Trees right" },
-  { key: "approach_tree_hazard_long",  label: "Trees long" },
-  { key: "approach_water_out_left",    label: "Water / OB left" },
-  { key: "approach_water_out_right",   label: "Water / OB right" },
-  { key: "approach_water_out_short",   label: "Water short" },
-  { key: "approach_water_out_long",    label: "Water / OB long" },
+  { key: "approach_tree_hazard_left",   label: "Trees / Hazard left" },
+  { key: "approach_tree_hazard_right",  label: "Trees / Hazard right" },
+  { key: "approach_tree_hazard_long",   label: "Trees / Hazard long" },
+  { key: "approach_tree_hazard_across", label: "Trees / Hazard across/middle" },
+  { key: "approach_water_out_left",     label: "Water / OB left" },
+  { key: "approach_water_out_right",    label: "Water / OB right" },
+  { key: "approach_water_out_short",    label: "Water / OB short" },
+  { key: "approach_water_out_long",     label: "Water / OB long" },
 ];
+
+// Shared light-grey label/section styles
+const LABEL: React.CSSProperties   = { fontSize: 13, color: "#aaa", display: "block", marginBottom: 4 };
+const SECTION: React.CSSProperties = { fontSize: 11, color: "#bbb", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
+const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#bbb" };
 
 // ─── Scorecard ────────────────────────────────────────────────────────────────
 
-function Scorecard({ savedCourse, allVersions }: { savedCourse: CourseRecord; allVersions: CourseRecord[] }) {
+function Scorecard({ savedCourse, allVersions, onEditCourse }: {
+  savedCourse: CourseRecord;
+  allVersions: CourseRecord[];
+  onEditCourse: () => void;
+}) {
   const holes = savedCourse.holes;
   const is18 = holes.length === 18;
 
@@ -50,7 +61,6 @@ function Scorecard({ savedCourse, allVersions }: { savedCourse: CourseRecord; al
 
   type Col = { type: "hole"; hole: HoleData } | { type: "spacer"; label: string; parSum: number; yardsMap: Record<string, number> };
   const cols: Col[] = [];
-
   const makeSpacerYards = (sliceHoles: HoleData[]) => {
     const nums = new Set(sliceHoles.map(h => h.hole));
     return Object.fromEntries(sortedTees.map(t => [t.tee_box, t.holes.filter(h => nums.has(h.hole)).reduce((s, h) => s + (h.yards||0), 0)]));
@@ -66,16 +76,16 @@ function Scorecard({ savedCourse, allVersions }: { savedCourse: CourseRecord; al
   }
   cols.push({ type:"spacer", label:"Total", parSum:holes.reduce((s,h)=>s+h.par,0), yardsMap:makeSpacerYards(holes) });
 
-  const c: React.CSSProperties = { padding:"6px 4px", textAlign:"center", fontSize:12, borderRight:"1px solid #e0e0e0", whiteSpace:"nowrap" };
+  const c: React.CSSProperties  = { padding:"6px 4px", textAlign:"center", fontSize:12, borderRight:"1px solid #e0e0e0", whiteSpace:"nowrap" };
   const hdr: React.CSSProperties = { ...c, background:"#1a3a2a", color:"white", fontWeight:600 };
   const lbl: React.CSSProperties = { ...c, background:"#f0f0f0", fontWeight:600, color:"#333", textAlign:"left", paddingLeft:8, minWidth:64 };
-  const sp: React.CSSProperties = { ...c, background:"#e8f5f0", fontWeight:700, color:"#0f6e56" };
+  const sp: React.CSSProperties  = { ...c, background:"#e8f5f0", fontWeight:700, color:"#0f6e56" };
 
   const btn = (primary: boolean): React.CSSProperties => ({
     padding:"10px 20px", fontSize:14, fontWeight:600,
     background: primary ? "#0f6e56" : "white",
     color: primary ? "white" : "#0f6e56",
-    border:`1px solid ${primary ? "#0f6e56" : "#0f6e56"}`,
+    border:"1px solid #0f6e56",
     borderRadius:8, cursor:"pointer", textDecoration:"none", display:"inline-block",
   });
 
@@ -127,7 +137,8 @@ function Scorecard({ savedCourse, allVersions }: { savedCourse: CourseRecord; al
         </table>
       </div>
       <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
-        <a href={`/rounds/add?course=${savedCourse.id}`} style={btn(true)}>+ Add a round with this course</a>
+        <a href={`/rounds/add?course=${savedCourse.id}`} style={btn(true)}>+ Add a round</a>
+        <button onClick={onEditCourse} style={btn(false)}>← Edit this course</button>
         <a href="/courses" style={btn(false)}>Back to courses</a>
         <a href="/" style={{ ...btn(false), color:"#666", borderColor:"#ccc" }}>Go to strategy</a>
       </div>
@@ -174,15 +185,13 @@ export default function EditCourse() {
     }).catch(() => setLoading(false));
   }, [id]);
 
-  const inputStyle: React.CSSProperties = { width:"100%", padding:"8px 12px", fontSize:15, border:"1px solid #ddd", borderRadius:8, boxSizing:"border-box" };
+  const inputStyle: React.CSSProperties  = { width:"100%", padding:"8px 12px", fontSize:15, border:"1px solid #ddd", borderRadius:8, boxSizing:"border-box" };
   const selectStyle: React.CSSProperties = { ...inputStyle, background:"white", color:"#0f6e56" };
-  const labelStyle: React.CSSProperties = { fontSize:13, color:"#666", display:"block", marginBottom:4 };
-  const sectionLabel: React.CSSProperties = { fontSize:12, color:"#666", fontWeight:600, letterSpacing:1, marginBottom:8, marginTop:20, display:"block" };
-  const primaryBtn: React.CSSProperties = { padding:"10px 20px", fontSize:15, fontWeight:600, background:"#1a1a1a", color:"white", border:"1px solid #1a1a1a", borderRadius:8, cursor:"pointer" };
+  const primaryBtn: React.CSSProperties  = { padding:"10px 20px", fontSize:15, fontWeight:600, background:"#1a1a1a", color:"white", border:"1px solid #1a1a1a", borderRadius:8, cursor:"pointer" };
   const navBtn = (disabled: boolean): React.CSSProperties => ({
     padding:"8px 16px", fontSize:14, fontWeight:600, background:"white",
-    color: disabled ? "#bbb" : "#1a1a1a",
-    border:`1px solid ${disabled ? "#ddd" : "#1a1a1a"}`,
+    color: disabled ? "#ddd" : "#bbb",
+    border:`1px solid ${disabled ? "#eee" : "#ddd"}`,
     borderRadius:8, cursor: disabled ? "not-allowed" : "pointer",
   });
 
@@ -192,6 +201,7 @@ export default function EditCourse() {
       const u = { ...h, [field]: value };
       if (field === "par" && value === 3) {
         u.tee_tree_hazard_left=false; u.tee_tree_hazard_right=false;
+        u.tee_tree_hazard_across=false;
         u.tee_bunkers_left=false; u.tee_bunkers_right=false;
         u.tee_water_out_left=false; u.tee_water_out_right=false; u.tee_water_out_across=false;
       }
@@ -224,8 +234,13 @@ export default function EditCourse() {
   async function handleSave() {
     if (!course) return;
     setSaving(true);
-    const updated = { ...course, name:courseName.trim(), tee_box:teeBox.trim(), city:city.trim(), state:state.trim(),
-      rating: rating!==""?parseFloat(rating):null, slope: slope!==""?parseInt(slope):null, holes };
+    const updated = {
+      ...course, name:courseName.trim(), tee_box:teeBox.trim(),
+      city:city.trim(), state:state.trim(),
+      rating: rating!==""?parseFloat(rating):null,
+      slope: slope!==""?parseInt(slope):null,
+      holes,
+    };
     await saveCourse(updated);
     const allCourses = await loadCourses();
     const versions = allCourses.filter(c => c.name === updated.name);
@@ -239,7 +254,13 @@ export default function EditCourse() {
   if (!course) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"red" }}>Course not found.</p><a href="/courses" style={{ fontSize:13, color:"#666" }}>← Back to courses</a></main>;
 
   if (showScorecard && course) {
-    return <Scorecard savedCourse={{ ...course, name:courseName, tee_box:teeBox, city, state, rating:rating?parseFloat(rating):null, slope:slope?parseInt(slope):null, holes }} allVersions={allTeeVersions} />;
+    return (
+      <Scorecard
+        savedCourse={{ ...course, name:courseName, tee_box:teeBox, city, state, rating:rating?parseFloat(rating):null, slope:slope?parseInt(slope):null, holes }}
+        allVersions={allTeeVersions}
+        onEditCourse={() => setShowScorecard(false)}
+      />
+    );
   }
 
   const hole = holes[currentHole];
@@ -247,93 +268,97 @@ export default function EditCourse() {
   return (
     <main style={{ maxWidth:520, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
       <div style={{ marginBottom:16 }}>
-        <a href="/courses" style={{ fontSize:13, color:"#666" }}>← Back to courses</a>
+        <a href="/courses" style={{ fontSize:13, color:"#bbb" }}>← Back to courses</a>
       </div>
-      <h1 style={{ fontSize:20, fontWeight:600, marginBottom:20 }}>Edit course</h1>
+      <h1 style={{ fontSize:20, fontWeight:600, marginBottom:20, color:"#bbb" }}>Edit course</h1>
 
       {/* Course details */}
       <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:28, padding:20, background:"#f6f6f6", borderRadius:12 }}>
-        <p style={{ fontSize:12, color:"#666", margin:"0 0 4px", fontWeight:600, letterSpacing:1 }}>COURSE DETAILS</p>
-        <div><label style={labelStyle}>Course name</label><input style={inputStyle} value={courseName} onChange={e => setCourseName(e.target.value)} /></div>
-        <div><label style={labelStyle}>Tee box</label><input style={inputStyle} value={teeBox} onChange={e => setTeeBox(e.target.value)} /></div>
-        <div><label style={labelStyle}>Course Rating</label><input style={inputStyle} value={rating} type="number" step="0.1" min="60" max="80" onChange={e => setRating(e.target.value)} placeholder="e.g. 71.4" /></div>
-        <div><label style={labelStyle}>Slope</label><input style={inputStyle} value={slope} type="number" min="55" max="155" onChange={e => setSlope(e.target.value)} placeholder="e.g. 128" /></div>
+        <p style={{ fontSize:12, color:"#bbb", margin:"0 0 4px", fontWeight:600, letterSpacing:1 }}>COURSE DETAILS</p>
+        <div><label style={LABEL}>Course name</label><input style={inputStyle} value={courseName} onChange={e => setCourseName(e.target.value)} /></div>
+        <div><label style={LABEL}>Tee box</label><input style={inputStyle} value={teeBox} onChange={e => setTeeBox(e.target.value)} /></div>
+        <div><label style={LABEL}>Course Rating</label><input style={inputStyle} value={rating} type="number" step="0.1" min="60" max="80" onChange={e => setRating(e.target.value)} placeholder="e.g. 71.4" /></div>
+        <div><label style={LABEL}>Slope</label><input style={inputStyle} value={slope} type="number" min="55" max="155" onChange={e => setSlope(e.target.value)} placeholder="e.g. 128" /></div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <div><label style={labelStyle}>City</label><input style={inputStyle} value={city} onChange={e => setCity(e.target.value)} /></div>
-          <div><label style={labelStyle}>State</label><input style={inputStyle} value={state} onChange={e => setState(e.target.value)} /></div>
+          <div><label style={LABEL}>City</label><input style={inputStyle} value={city} onChange={e => setCity(e.target.value)} /></div>
+          <div><label style={LABEL}>State</label><input style={inputStyle} value={state} onChange={e => setState(e.target.value)} /></div>
         </div>
       </div>
 
-      {/* Hole navigation header — centered */}
+      {/* Hole navigation — centered */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, gap:12 }}>
         <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
         <div style={{ textAlign:"center", flex:1 }}>
-          <div style={{ fontSize:18, fontWeight:700, color:"#0f6e56" }}>Hole {hole.hole}</div>
-          <div style={{ fontSize:13, color:"#666", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
+          <div style={HOLE_NAME}>Hole {hole.hole}</div>
+          <div style={{ fontSize:13, color:"#bbb", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
         </div>
         <button style={navBtn(currentHole>=holes.length-1)} onClick={goToNextHole} disabled={currentHole>=holes.length-1}>Next →</button>
       </div>
 
       <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-          <div><label style={labelStyle}>Par</label>
+          <div><label style={LABEL}>Par</label>
             <select style={selectStyle} value={hole.par} onChange={e => updateHole("par", Number(e.target.value))}>
               {[3,4,5].map(p => <option key={p} value={p}>Par {p}</option>)}
             </select>
           </div>
-          <div><label style={labelStyle}>Yards</label>
+          <div><label style={LABEL}>Yards</label>
             <input style={inputStyle} type="number" min={1} max={700} value={hole.yards||""} onChange={e => updateHole("yards", Number(e.target.value))} />
           </div>
-          <div><label style={labelStyle}>Stroke index</label>
+          <div><label style={LABEL}>Stroke Index</label>
             <input style={inputStyle} type="number" min={1} max={18} value={hole.stroke_index||""} onChange={e => updateHole("stroke_index", Number(e.target.value))} />
           </div>
         </div>
 
         <div>
-          <label style={labelStyle}>Dogleg direction</label>
+          <label style={LABEL}>Dogleg direction</label>
           <select style={selectStyle} value={hole.dogleg_direction??""} onChange={e => updateHole("dogleg_direction", e.target.value===""?null:e.target.value as DoglegDirection)} disabled={hole.par===3}>
             {DOGLEG_OPTIONS.map(o => <option key={String(o.value)} value={o.value??""}>{o.label}</option>)}
           </select>
-          {hole.par===3 && <p style={{ fontSize:12, color:"#666", margin:"4px 0 0" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"#bbb", margin:"4px 0 0" }}>Disabled for par 3</p>}
         </div>
 
+        {/* Tee Shot Hazards — 2 columns */}
         <div>
-          <span style={sectionLabel}>TEE SHOT HAZARDS</span>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            {hole.par===3 && <p style={{ fontSize:12, color:"#aaa", margin:"4px 0 8px" }}>Disabled for par 3</p>}
-            <div style={{ opacity:hole.par===3?0.3:1 }}>
-              {TEE_CHECKBOXES.map(({ key, label }) => (
-                <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, cursor:hole.par===3?"not-allowed":"pointer" }}>
-                  <input type="checkbox" checked={!!hole[key]} onChange={() => hole.par!==3&&toggleCheck(key)} disabled={hole.par===3} />
-                  {label}
-                </label>
-              ))}
-            </div>
+          <span style={SECTION}>Tee Shot Hazards</span>
+          {hole.par===3 && <p style={{ fontSize:12, color:"#bbb", margin:"4px 0 8px" }}>Disabled for par 3</p>}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, opacity:hole.par===3?0.3:1 }}>
+            {TEE_CHECKBOXES.map(({ key, label }) => (
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#bbb", cursor:hole.par===3?"not-allowed":"pointer" }}>
+                <input type="checkbox" checked={!!hole[key]} onChange={() => hole.par!==3&&toggleCheck(key)} disabled={hole.par===3} />
+                {label}
+              </label>
+            ))}
           </div>
         </div>
 
+        {/* Approach Hazards */}
         <div>
-          <span style={sectionLabel}>APPROACH HAZARDS</span>
+          <span style={SECTION}>Approach Hazards</span>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
             {APPROACH_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, cursor:"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#bbb", cursor:"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => toggleCheck(key)} />
                 {label}
               </label>
             ))}
           </div>
+        </div>
+
+        {/* Greenside */}
+        <div>
+          <span style={SECTION}>Greenside</span>
+          <div style={{ marginBottom:12 }}>
+            <label style={LABEL}>Green depth (yards)</label>
+            <input style={{ ...inputStyle, maxWidth:120 }} type="number" min={0} value={hole.approach_green_depth||""} onChange={e => updateHole("approach_green_depth", Number(e.target.value))} />
+          </div>
           <GreensideSelector value={greenside} onChange={handleGreensideChange} />
         </div>
 
-        <div>
-          <label style={labelStyle}>Green depth (yards)</label>
-          <input style={{ ...inputStyle, maxWidth:120 }} type="number" min={0} value={hole.approach_green_depth||""} onChange={e => updateHole("approach_green_depth", Number(e.target.value))} />
-        </div>
-
-        {/* Bottom navigation */}
+        {/* Bottom nav */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:8, paddingTop:16, borderTop:"1px solid #eee", gap:12 }}>
           <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
-          <span style={{ fontSize:14, fontWeight:600, color:"#0f6e56" }}>Hole {hole.hole}</span>
+          <span style={{ fontSize:14, fontWeight:600, color:"#bbb" }}>Hole {hole.hole}</span>
           <button style={navBtn(currentHole>=holes.length-1)} onClick={goToNextHole} disabled={currentHole>=holes.length-1}>Next →</button>
         </div>
 
