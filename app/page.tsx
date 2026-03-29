@@ -364,8 +364,8 @@ export default function Home(){
         {/* Avg score */}
         <div style={{...card("#f0f0f0"),display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px"}}>
           <span style={{fontSize:13,color:"#aaa"}}>Avg on {filterCount>0?"filtered":"similar"} holes</span>
-          <span style={{fontSize:20,fontWeight:700,color:t?.avgScoreToPar>0?"#c0392b":"#27ae60"}}>
-            {t?fmtSTP(t.avgScoreToPar):ds?.avg_score_to_par}
+          <span style={{fontSize:20,fontWeight:700,color:(t?.avgScoreToPar??0)>0?"#c0392b":"#27ae60"}}>
+            {t?fmtSTP(t.avgScoreToPar??0):ds?.avg_score_to_par}
           </span>
         </div>
 
