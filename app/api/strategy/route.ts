@@ -341,6 +341,8 @@ export async function POST(req: NextRequest) {
         roundHole: rh,
         // Only send fields from courseHole that client-side filters actually need
         courseHole: candidateCourseHole ? {
+          hole: candidateCourseHole.hole,
+          par: candidateCourseHole.par,
           stroke_index: candidateCourseHole.stroke_index,
           yards: candidateCourseHole.yards,
           approach_green_depth: candidateCourseHole.approach_green_depth,
