@@ -298,7 +298,7 @@ export default function Home(){
   const pct=(n:number)=>`${Math.round(n*100)}%`;
   const fmtSTP=(s:number)=>s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
 
-  const t=filteredTendencies??result?.strategy?.tendencies;
+  const t=filteredTendencies;
   const hole=result?.hole;
   const strategy=result?.strategy;
   const course=result?.course;
@@ -341,7 +341,7 @@ export default function Home(){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{fontSize:11,fontWeight:700,letterSpacing:1,color:confidenceColor[conf]??"#666",textTransform:"uppercase"}}>{conf} confidence</span>
           <span style={{fontSize:11,color:"#aaa"}}>
-            {filteredTendencies?`${filteredEnriched.length} holes (filtered)`:(ds?.exact_hole_history>0?`${ds.exact_hole_history}× this hole · ${ds.similar_holes_used} similar`:`${ds?.similar_holes_used} similar holes`)}
+            {filterCount>0?`${filteredEnriched.length} holes (filtered)`:(ds?.exact_hole_history>0?`${ds.exact_hole_history}× this hole · ${ds.similar_holes_used} similar`:`${ds?.similar_holes_used} similar holes`)}
           </span>
         </div>
 
@@ -363,7 +363,7 @@ export default function Home(){
 
         {/* Avg score */}
         <div style={{...card("#f0f0f0"),display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px"}}>
-          <span style={{fontSize:13,color:"#aaa"}}>Avg on {filteredTendencies?"filtered":"similar"} holes</span>
+          <span style={{fontSize:13,color:"#aaa"}}>Avg on {filterCount>0?"filtered":"similar"} holes</span>
           <span style={{fontSize:20,fontWeight:700,color:t?.avgScoreToPar>0?"#c0392b":"#27ae60"}}>
             {t?fmtSTP(t.avgScoreToPar):ds?.avg_score_to_par}
           </span>
