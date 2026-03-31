@@ -485,7 +485,7 @@ export async function POST(req: NextRequest) {
   const{data:courseRow,error:courseErr}=await supabase.from("courses").select("*").eq("id",courseId).single();
   if(courseErr||!courseRow)return NextResponse.json({error:"Course not found"},{status:404});
 
-  const targetHole:HoleData=courseRow.holes.find((h:any)=>h.hole===holeNumber);
+  const targetHole:HoleData=courseRow.holes.find((h:any)=>h.hole===Number(holeNumber));
   if(!targetHole)return NextResponse.json({error:"Hole not found"},{status:404});
 
   const targetRating:number|null=courseRow.rating??null;
@@ -525,7 +525,7 @@ export async function POST(req: NextRequest) {
         greensideProfile:encodeGreensideProfile(ch),
         courseSlope:rc?.slope??null,
       });
-      if(round.course_id===courseId&&rh.hole===holeNumber&&rh.score)
+      if(round.course_id===courseId&&Number(rh.hole)===Number(holeNumber)&&rh.score)
         exactHoleRoundHoles.push({rh,date:round.date??""});
     }
   }
@@ -555,7 +555,7 @@ export async function POST(req: NextRequest) {
       if(!rh.score||!rh.par)continue;
       const candidateCourseHole:HoleData|null=rc?.holes?.find((h:any)=>h.hole===rh.hole)??null;
       if(!candidateCourseHole)continue;
-      const isExact=round.course_id===courseId&&rh.hole===holeNumber;
+      const isExact=round.course_id===courseId&&Number(rh.hole)===Number(holeNumber);
       const sim=computeSimilarity(targetHole,targetRating,targetSlope,candidateCourseHole,roundRating,roundSlope,roundTotalHoles,isExact,weights);
       let par3Sim=0;
       if(candidateCourseHole.par===3&&targetHole.par!==3){
