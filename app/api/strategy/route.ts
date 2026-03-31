@@ -251,13 +251,24 @@ function computeSimilarity(
   return score;
 }
 
-function getMinSimilarityThreshold(totalDataHoles: number, weights: FactorWeights): number {
-  const avgSens = (weights.yardsSensitivity+weights.difficultySensitivity+weights.teeHazardSensitivity+weights.apprHazardSensitivity)/4;
-  if (totalDataHoles >= 300) return 10 + avgSens * 10;
-  if (totalDataHoles >= 150) return 8  + avgSens * 8;
-  if (totalDataHoles >= 75)  return 6  + avgSens * 6;
-  if (totalDataHoles >= 40)  return 4  + avgSens * 4;
-  return 3;
+function getAdaptiveThreshold(scores: number[], targetMin: number, targetMax: number): number {
+  if (scores.length === 0) return 3;
+  const sorted = [...scores].sort((a,b) => b - a);
+  // Try to land in targetMin–targetMax range
+  // Walk through candidate thresholds from high to low
+  // Start at the score that gives targetMax matches, but never go below a floor
+  const floor = 3;
+  if (sorted.length <= targetMin) return floor; // not enough data — include everything above floor
+  // Threshold that gives exactly targetMax matches
+  const atMax = sorted[Math.min(targetMax - 1, sorted.length - 1)];
+  // Threshold that gives exactly targetMin matches
+  const atMin = sorted[Math.min(targetMin - 1, sorted.length - 1)];
+  // Use the higher of the two (more selective), but ensure at least targetMin qualify
+  const threshold = Math.max(atMax, floor);
+  // Verify we get at least targetMin matches at this threshold
+  const countAtThreshold = sorted.filter(s => s > threshold).length;
+  if (countAtThreshold < targetMin) return Math.max(atMin, floor);
+  return threshold;
 }
 
 // ─── Tendencies ───────────────────────────────────────────────────────────────
@@ -524,9 +535,10 @@ export async function POST(req: NextRequest) {
 
   const defaultApproachDist=overrideApproachDist??computeDefaultApproachDist(targetHole,driveClubFreq);
   const driveToGreen=targetHole.par===4&&targetHole.yards-(CLUB_DISTANCES[topClub(driveClubFreq,"Driver")]??230)<30;
-  const minThreshold=getMinSimilarityThreshold(allSimpleHoles.length,weights);
 
-  const allEnriched:EnrichedRoundHole[]=[];
+  // First pass: compute all similarity scores
+  type ScoredHole = { roundHole:RoundHole; candidateCourseHole:HoleData; roundRating:number|null; roundSlope:number|null; roundDate:string; roundCourseId:string; isExact:boolean; sim:number; };
+  const scoredHoles:ScoredHole[]=[];
   for(const round of rounds){
     const rc=courseCache[round.course_id];
     const roundRating:number|null=rc?.rating??null;
@@ -542,15 +554,25 @@ export async function POST(req: NextRequest) {
       if(candidateCourseHole.par===3&&targetHole.par!==3)
         par3Sim=computePar3ApproachSimilarity(targetHole,defaultApproachDist,candidateCourseHole,rh,driveToGreen,weights);
       const finalSim=Math.max(sim,par3Sim);
-      if(finalSim>minThreshold){
-        allEnriched.push({
-          roundHole:rh,courseHole:slimCourseHole(candidateCourseHole),
-          courseRating:roundRating,courseSlope:roundSlope,
-          similarityScore:finalSim,roundDate:round.date??"",courseId:round.course_id??"",
-          isExactHole:isExact,
-        });
-      }
+      if(finalSim>0)scoredHoles.push({roundHole:rh,candidateCourseHole,roundRating,roundSlope,roundDate:round.date??"",roundCourseId:round.course_id??"",isExact,sim:finalSim});
     }
+  }
+
+  // Adaptive threshold: target 60-90 matches, minimum 30
+  const allScores = scoredHoles.map(s=>s.sim);
+  const minThreshold = getAdaptiveThreshold(allScores, 30, 90);
+
+  const allEnriched:EnrichedRoundHole[]=[];
+  for(const sh of scoredHoles){
+    if(sh.sim<=minThreshold)continue;
+    allEnriched.push({
+      roundHole:sh.roundHole,
+      courseHole:slimCourseHole(sh.candidateCourseHole),
+      courseRating:sh.roundRating, courseSlope:sh.roundSlope,
+      similarityScore:sh.sim,
+      roundDate:sh.roundDate, courseId:sh.roundCourseId,
+      isExactHole:sh.isExact,
+    });
   }
 
   allEnriched.sort((a,b)=>b.similarityScore-a.similarityScore);
