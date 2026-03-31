@@ -507,7 +507,7 @@ export async function POST(req: NextRequest) {
 
   // Build simple holes + exact history
   const allSimpleHoles:SimpleHole[]=[];
-  const exactHoleRoundHoles:RoundHole[]=[];
+  const exactHoleRoundHoles:{rh:RoundHole;date:string}[]=[];
   for(const round of rounds){
     const rc=courseCache[round.course_id];
     for(const rh of(round.holes??[])){
@@ -525,13 +525,20 @@ export async function POST(req: NextRequest) {
         greensideProfile:encodeGreensideProfile(ch),
         courseSlope:rc?.slope??null,
       });
-      if(round.course_id===courseId&&rh.hole===holeNumber&&rh.score)exactHoleRoundHoles.push(rh);
+      if(round.course_id===courseId&&rh.hole===holeNumber&&rh.score)
+        exactHoleRoundHoles.push({rh,date:round.date??""});
     }
   }
 
   const weights=computeFactorWeights(allSimpleHoles);
   const driveClubFreq:Record<string,number>={};
-  for(const rh of exactHoleRoundHoles)if(rh.club)driveClubFreq[rh.club]=(driveClubFreq[rh.club]||0)+1;
+  for(const {rh} of exactHoleRoundHoles)if(rh.club)driveClubFreq[rh.club]=(driveClubFreq[rh.club]||0)+1;
+
+  // Build hole history for display (most recent first, up to 10)
+  const holeHistory = exactHoleRoundHoles
+    .sort((a,b)=>b.date.localeCompare(a.date))
+    .slice(0,10)
+    .map(({rh,date})=>({...rh,date}));
 
   const defaultApproachDist=overrideApproachDist??computeDefaultApproachDist(targetHole,driveClubFreq);
   const driveToGreen=targetHole.par===4&&targetHole.yards-(CLUB_DISTANCES[topClub(driveClubFreq,"Driver")]??230)<30;
@@ -551,8 +558,13 @@ export async function POST(req: NextRequest) {
       const isExact=round.course_id===courseId&&rh.hole===holeNumber;
       const sim=computeSimilarity(targetHole,targetRating,targetSlope,candidateCourseHole,roundRating,roundSlope,roundTotalHoles,isExact,weights);
       let par3Sim=0;
-      if(candidateCourseHole.par===3&&targetHole.par!==3)
-        par3Sim=computePar3ApproachSimilarity(targetHole,defaultApproachDist,candidateCourseHole,rh,driveToGreen,weights);
+      if(candidateCourseHole.par===3&&targetHole.par!==3){
+        // Only use 2023+ rounds for par3 approach comparison; weight at 50%
+        const roundYear = round.date ? new Date(round.date).getFullYear() : 0;
+        if(roundYear >= 2023){
+          par3Sim=computePar3ApproachSimilarity(targetHole,defaultApproachDist,candidateCourseHole,rh,driveToGreen,weights) * 0.5;
+        }
+      }
       const finalSim=Math.max(sim,par3Sim);
       if(finalSim>0)scoredHoles.push({roundHole:rh,candidateCourseHole,roundRating,roundSlope,roundDate:round.date??"",roundCourseId:round.course_id??"",isExact,sim:finalSim});
     }
@@ -585,5 +597,6 @@ export async function POST(req: NextRequest) {
     enrichedHoles:allEnriched,
     defaultApproachDist,
     factorWeights:weights,
+    holeHistory,
   });
 }

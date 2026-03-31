@@ -500,6 +500,60 @@ export default function Home(){
           </div>
         )}
 
+        {/* ── Hole History ── */}
+        {result.holeHistory&&result.holeHistory.length>0&&(()=>{
+          const history = result.holeHistory as Array<any>;
+          const avgScore = history.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/history.length;
+          const fmt0=(n:number)=>n>=0?`+${n.toFixed(1)}`:n.toFixed(1);
+          const scoreColor=(s:number,par:number)=>{
+            const d=s-par; if(d<=-2)return"#1a6fd4"; if(d===-1)return"#27ae60"; if(d===0)return"#333"; if(d===1)return"#e67e22"; return"#c0392b";
+          };
+          const hazardCode=(h:any)=>{
+            const parts:string[]=[];
+            const ob=(Number(h.water_penalty)||0)+(Number(h.drop_or_out)||0);
+            const th=Number(h.tree_haz)||0;
+            const fb=Number(h.fairway_bunker)||0;
+            const gb=Number(h.greenside_bunker)||0;
+            if(ob>0)parts.push(ob>1?`${ob}O`:"O");
+            if(th>0)parts.push(th>1?`${th}H`:"H");
+            if(fb>0)parts.push(fb>1?`${fb}F`:"F");
+            if(gb>0)parts.push(gb>1?`${gb}S`:"S");
+            return parts.join(" ")||"—";
+          };
+          return(
+            <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <p style={{fontSize:12,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:0}}>
+                  My History — This Hole
+                </p>
+                <span style={{fontSize:13,fontWeight:700,color:avgScore>0?"#c0392b":avgScore<0?"#27ae60":"#333"}}>
+                  avg {fmt0(avgScore)} · {history.length} rounds
+                </span>
+              </div>
+              {/* Header row */}
+              <div style={{display:"grid",gridTemplateColumns:"60px 28px 32px 30px 26px 26px 28px 1fr",gap:"0 4px",marginBottom:4}}>
+                {["Date","Sc","Club","Tee","Ap","Pu","Haz","Appr Club"].map(h=>(
+                  <span key={h} style={{fontSize:9,color:"#aaa",fontWeight:600,textTransform:"uppercase"}}>{h}</span>
+                ))}
+              </div>
+              {history.map((h:any,i:number)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"60px 28px 32px 30px 26px 26px 28px 1fr",gap:"0 4px",alignItems:"center",padding:"3px 0",borderTop:i>0?"1px solid #f0f0f0":"none"}}>
+                  <span style={{fontSize:10,color:"#888"}}>{h.date?.slice(2,10)||"—"}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:scoreColor(Number(h.score),h.par)}}>
+                    {Number(h.score)-h.par===0?"E":Number(h.score)-h.par>0?`+${Number(h.score)-h.par}`:Number(h.score)-h.par}
+                  </span>
+                  <span style={{fontSize:10,color:"#555"}}>{h.club||"—"}</span>
+                  <span style={{fontSize:10,color:"#555"}}>{h.tee_accuracy?.slice(0,3)||"—"}</span>
+                  <span style={{fontSize:10,color:"#555"}}>{h.appr_accuracy?.slice(0,3)||"—"}</span>
+                  <span style={{fontSize:10,color:"#555"}}>{h.putts||"—"}</span>
+                  <span style={{fontSize:10,color:"#e67e22",fontWeight:500}}>{hazardCode(h)}</span>
+                  <span style={{fontSize:10,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.appr_distance||"—"}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* ── Hole Summary (collapsible, not affected by filters) ── */}
         <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
           <Section title="Hole Summary">
