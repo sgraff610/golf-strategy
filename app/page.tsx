@@ -16,7 +16,7 @@ type HoleData = any;
 type EnrichedHole = {
   roundHole: RoundHole; courseHole: HoleData|null;
   courseRating: number|null; courseSlope: number|null;
-  similarityScore: number; roundDate: string; courseId: string;
+  similarityScore: number; roundDate: string; courseId: string; isExactHole: boolean;
 };
 type CellValue = 0|1|2;
 type GreensideState = { long_left:CellValue; long_middle:CellValue; long_right:CellValue; middle_left:CellValue; middle_right:CellValue; short_left:CellValue; short_middle:CellValue; short_right:CellValue; };
@@ -157,7 +157,7 @@ function toggleSet(s:Set<string>,v:string):Set<string>{const n=new Set(s);n.has(
 
 function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData,totalRounds:number):EnrichedHole[]{
   // Exact matches (this specific hole on this course) always included regardless of filters
-  const isExact=(e:EnrichedHole)=>e.similarityScore>=40;
+  const isExact=(e:EnrichedHole)=>e.isExactHole===true;
   let pool=enriched;
   // Last N rounds — get most recent N round dates
   if(f.useLastN&&f.lastN>0){
@@ -670,4 +670,3 @@ export default function Home(){
     </main>
   );
 }
-export const dynamic = 'force-dynamic';

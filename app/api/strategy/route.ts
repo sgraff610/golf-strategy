@@ -70,6 +70,7 @@ export type EnrichedRoundHole = {
   similarityScore: number;
   roundDate: string;
   courseId: string;
+  isExactHole: boolean;
 };
 
 const CLUB_DISTANCES: Record<string, number> = {
@@ -257,7 +258,7 @@ function generateStrategy(
   tendencies: WeightedTendencies, allEnriched: EnrichedRoundHole[]
 ) {
   const hp = hazardProfile(targetHole);
-  const exactCount = allEnriched.filter(e=>e.similarityScore>=40).length;
+  const exactCount = allEnriched.filter(e=>e.isExactHole).length;
   const confidence = exactCount>=3?"high":tendencies.sampleSize>=8?"medium":"low";
   const missLeftPct=tendencies.driveMissLeftPct, missRightPct=tendencies.driveMissRightPct;
   const leftHazardSeverity=(hp.teeLeft?2:0)+(targetHole.tee_water_out_left?2:0)+(targetHole.tee_tree_hazard_left?1:0)+(targetHole.tee_bunkers_left?1:0);
@@ -450,6 +451,7 @@ export async function POST(req: NextRequest) {
         courseHole: slimCourseHole(candidateCourseHole),
         courseRating:roundRating, courseSlope:roundSlope,
         similarityScore:finalSim, roundDate:round.date??"", courseId:round.course_id??"",
+        isExactHole: isExact,
       });
     }
   }
