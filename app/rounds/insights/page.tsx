@@ -50,9 +50,11 @@ type Filters = {
   drivingClubs: Set<string>; apprClubs: Set<string>;
   highWater: boolean; highTree: boolean; highBunker: boolean;
   courseId: string; pars: Set<string>;
-  teeTreeLeft: boolean; teeTreeRight: boolean;
+  teeTreeLeft: boolean; teeTreeRight: boolean; teeTreeAcross: boolean;
   teeBunkerLeft: boolean; teeBunkerRight: boolean;
-  teeWaterLeft: boolean; teeWaterRight: boolean;
+  teeWaterLeft: boolean; teeWaterRight: boolean; teeWaterAcross: boolean;
+  apprTreeLeft: boolean; apprTreeRight: boolean; apprTreeLong: boolean; apprTreeAcross: boolean;
+  apprWaterLeft: boolean; apprWaterRight: boolean; apprWaterShort: boolean; apprWaterLong: boolean;
   siMin: string; siMax: string;
   ratingMin: string; ratingMax: string;
   slopeMin: string; slopeMax: string;
@@ -63,6 +65,11 @@ type Filters = {
   firstPutt: string;
   greenDepth: string;
   greensideFilter: GreensideFilter;
+  yardsBucket: string;
+  siTierFilter: string;
+  doglegFilter: string;
+  apprDistBucket: string;
+  impactDir: "all" | "positive" | "negative";
 };
 
 const DEFAULT_FILTERS: Filters = {
@@ -70,13 +77,17 @@ const DEFAULT_FILTERS: Filters = {
   drivingClubs: new Set(), apprClubs: new Set(),
   highWater: false, highTree: false, highBunker: false,
   courseId: "", pars: new Set(),
-  teeTreeLeft: false, teeTreeRight: false,
+  teeTreeLeft: false, teeTreeRight: false, teeTreeAcross: false,
   teeBunkerLeft: false, teeBunkerRight: false,
-  teeWaterLeft: false, teeWaterRight: false,
+  teeWaterLeft: false, teeWaterRight: false, teeWaterAcross: false,
+  apprTreeLeft: false, apprTreeRight: false, apprTreeLong: false, apprTreeAcross: false,
+  apprWaterLeft: false, apprWaterRight: false, apprWaterShort: false, apprWaterLong: false,
   siMin: "", siMax: "", ratingMin: "", ratingMax: "", slopeMin: "", slopeMax: "",
   years: new Set(), gsBunker: false, girOnly: false, nonGirOnly: false,
   puttsMin: "", puttsMax: "", chipsMin: "", chipsMax: "", firstPutt: "",
   greenDepth: "", greensideFilter: defaultGreensideFilter(),
+  yardsBucket: "", siTierFilter: "", doglegFilter: "", apprDistBucket: "",
+  impactDir: "all",
 };
 
 const DRIVE_CLUBS    = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
@@ -234,10 +245,24 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
     if (f.pars.size > 0 && !f.pars.has(String(h.par))) return false;
     if (f.teeTreeLeft    && !h.tee_tree_left)    return false;
     if (f.teeTreeRight   && !h.tee_tree_right)   return false;
+    if (f.teeTreeAcross  && !h.tee_tree_across)  return false;
     if (f.teeBunkerLeft  && !h.tee_bunker_left)  return false;
     if (f.teeBunkerRight && !h.tee_bunker_right) return false;
     if (f.teeWaterLeft   && !h.tee_water_left)   return false;
     if (f.teeWaterRight  && !h.tee_water_right)  return false;
+    if (f.teeWaterAcross && !h.tee_water_across) return false;
+    if (f.apprTreeLeft   && !h.appr_tree_left)   return false;
+    if (f.apprTreeRight  && !h.appr_tree_right)  return false;
+    if (f.apprTreeLong   && !h.appr_tree_long)   return false;
+    if (f.apprTreeAcross && !h.appr_tree_across) return false;
+    if (f.apprWaterLeft  && !h.appr_water_left)  return false;
+    if (f.apprWaterRight && !h.appr_water_right) return false;
+    if (f.apprWaterShort && !h.appr_water_short) return false;
+    if (f.apprWaterLong  && !h.appr_water_long)  return false;
+    if (f.yardsBucket && yardsBucket(h.yards) !== f.yardsBucket) return false;
+    if (f.siTierFilter && siTier(h.stroke_index) !== f.siTierFilter) return false;
+    if (f.doglegFilter && (h.dogleg || "None") !== f.doglegFilter) return false;
+    if (f.apprDistBucket && h.appr_dist_num > 0 && apprDistBucket(h.appr_dist_num) !== f.apprDistBucket) return false;
     if (f.siMin && h.stroke_index < Number(f.siMin)) return false;
     if (f.siMax && h.stroke_index > Number(f.siMax)) return false;
     if (f.ratingMin && (h.rating??0)   < Number(f.ratingMin)) return false;
@@ -393,15 +418,18 @@ export default function RoundsInsights() {
     filters.years.size > 0 || filters.pars.size > 0 ||
     filters.highWater || filters.highTree || filters.highBunker ||
     filters.gsBunker || filters.girOnly || filters.nonGirOnly ||
-    filters.teeTreeLeft || filters.teeTreeRight ||
+    filters.teeTreeLeft || filters.teeTreeRight || filters.teeTreeAcross ||
     filters.teeBunkerLeft || filters.teeBunkerRight ||
-    filters.teeWaterLeft || filters.teeWaterRight ||
+    filters.teeWaterLeft || filters.teeWaterRight || filters.teeWaterAcross ||
+    filters.apprTreeLeft || filters.apprTreeRight || filters.apprTreeLong || filters.apprTreeAcross ||
+    filters.apprWaterLeft || filters.apprWaterRight || filters.apprWaterShort || filters.apprWaterLong ||
     !!filters.courseId || !!filters.siMin || !!filters.siMax ||
     !!filters.ratingMin || !!filters.ratingMax ||
     !!filters.slopeMin || !!filters.slopeMax ||
     !!filters.puttsMin || !!filters.puttsMax ||
     !!filters.chipsMin || !!filters.chipsMax || !!filters.firstPutt ||
-    !!filters.greenDepth ||
+    !!filters.greenDepth || !!filters.yardsBucket || !!filters.siTierFilter ||
+    !!filters.doglegFilter || !!filters.apprDistBucket ||
     Object.values(filters.greensideFilter).some(v => v !== 0);
 
   const holesWithKnownChips = roundFiltered.filter(h => h.chips !== null);
@@ -438,9 +466,7 @@ export default function RoundsInsights() {
     { label: "Approach Long",    holes: roundFiltered.filter(h => h.appr_accuracy==="Long") },
     { label: "GIR",              holes: roundFiltered.filter(h => h.gir) },
     { label: "Non-GIR",          holes: roundFiltered.filter(h => !h.gir) },
-    { label: "GRINTS",           holes: roundFiltered.filter(h => h.grints) },
     { label: "GS Bunker",        holes: roundFiltered.filter(h => h.greenside_bunker > 0) },
-    { label: "0 Chips",          holes: holesWithKnownChips.filter(h => h.chips === 0) },
     { label: "1+ Chips",         holes: holesWithKnownChips.filter(h => (h.chips ?? 0) >= 1) },
     { label: "1 Putt",           holes: roundFiltered.filter(h => h.putts === 1) },
     { label: "2 Putts",          holes: roundFiltered.filter(h => h.putts === 2) },
@@ -502,8 +528,13 @@ export default function RoundsInsights() {
     ...doglegBuckets,
     ...apprBuckets,
   ]
-    .filter(c => c.count >= MIN_HOLES) // only statistically significant
-    .sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact)); // sort by absolute impact
+    .filter(c => c.count >= MIN_HOLES)
+    .filter(c => {
+      if (filters.impactDir === "positive") return c.impact > 0;
+      if (filters.impactDir === "negative") return c.impact < 0;
+      return true;
+    })
+    .sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact));
 
   const pill = (active: boolean): React.CSSProperties => ({
     padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500,
@@ -524,10 +555,12 @@ export default function RoundsInsights() {
 
   const driveActive = filters.driveAcc.size + filters.drivingClubs.size +
     (filters.highWater?1:0) + (filters.highTree?1:0) + (filters.highBunker?1:0) +
-    (filters.teeTreeLeft?1:0) + (filters.teeTreeRight?1:0) +
+    (filters.teeTreeLeft?1:0) + (filters.teeTreeRight?1:0) + (filters.teeTreeAcross?1:0) +
     (filters.teeBunkerLeft?1:0) + (filters.teeBunkerRight?1:0) +
-    (filters.teeWaterLeft?1:0) + (filters.teeWaterRight?1:0);
-  const apprActive = filters.apprAcc.size + filters.apprClubs.size + (filters.girOnly?1:0) + (filters.nonGirOnly?1:0);
+    (filters.teeWaterLeft?1:0) + (filters.teeWaterRight?1:0) + (filters.teeWaterAcross?1:0);
+  const apprActive = filters.apprAcc.size + filters.apprClubs.size + (filters.girOnly?1:0) + (filters.nonGirOnly?1:0) +
+    (filters.apprTreeLeft?1:0) + (filters.apprTreeRight?1:0) + (filters.apprTreeLong?1:0) + (filters.apprTreeAcross?1:0) +
+    (filters.apprWaterLeft?1:0) + (filters.apprWaterRight?1:0) + (filters.apprWaterShort?1:0) + (filters.apprWaterLong?1:0);
   const greensideActive = (filters.gsBunker?1:0) +
     (filters.puttsMin||filters.puttsMax?1:0) +
     (filters.chipsMin||filters.chipsMax?1:0) +
@@ -536,7 +569,9 @@ export default function RoundsInsights() {
   const courseActive = (filters.courseId?1:0) + filters.pars.size +
     (filters.siMin||filters.siMax?1:0) +
     (filters.ratingMin||filters.ratingMax?1:0) +
-    (filters.slopeMin||filters.slopeMax?1:0);
+    (filters.slopeMin||filters.slopeMax?1:0) +
+    (filters.yardsBucket?1:0) + (filters.siTierFilter?1:0) +
+    (filters.doglegFilter?1:0) + (filters.apprDistBucket?1:0);
 
   return (
     <main style={{ maxWidth: 520, margin: "40px auto", fontFamily: "sans-serif", padding: "0 16px" }}>
@@ -605,7 +640,22 @@ export default function RoundsInsights() {
 
           <CollapsibleSection title="Hole / Course" activeCount={courseActive}>
             <div style={{ marginBottom: 10 }}>
-              <p style={fl}>Hole Handicap</p>
+              <p style={fl}>Hole Yards Bucket</p>
+              <select value={filters.yardsBucket} onChange={e => setFilters(f => ({ ...f, yardsBucket: e.target.value }))} style={{ ...sel, width: "100%", maxWidth: 160 }}>
+                <option value="">Any</option>
+                {Array.from(new Set(allHoles.map(h => yardsBucket(h.yards)))).filter(Boolean).sort().map(b => <option key={b} value={b}>{b} yds</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Hole Handicap Tier</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {["SI 1-4","SI 5-9","SI 10-14","SI 15-18"].map(t => (
+                  <button key={t} style={pill(filters.siTierFilter===t)} onClick={() => setFilters(f => ({ ...f, siTierFilter: f.siTierFilter===t?"":t }))}>{t}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Hole Handicap (range)</p>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <select value={filters.siMin} onChange={e => setFilters(f => ({ ...f, siMin: e.target.value }))} style={sel}>
                   <option value="">Min</option>
@@ -616,6 +666,14 @@ export default function RoundsInsights() {
                   <option value="">Max</option>
                   {Array.from({length:18},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
                 </select>
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Dogleg</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {Array.from(new Set(allHoles.map(h => h.dogleg || "None"))).sort().map(d => (
+                  <button key={d} style={pill(filters.doglegFilter===d)} onClick={() => setFilters(f => ({ ...f, doglegFilter: f.doglegFilter===d?"":d }))}>{d}</button>
+                ))}
               </div>
             </div>
             <div style={{ marginBottom: 10 }}>
@@ -665,9 +723,11 @@ export default function RoundsInsights() {
               <p style={fl}>Tee Hazards</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {[
-                  { label: "Trees L", key: "teeTreeLeft" }, { label: "Trees R", key: "teeTreeRight" },
-                  { label: "Bkr L",   key: "teeBunkerLeft" }, { label: "Bkr R", key: "teeBunkerRight" },
-                  { label: "Water L", key: "teeWaterLeft" }, { label: "Water R", key: "teeWaterRight" },
+                  { label: "Trees L",   key: "teeTreeLeft" },   { label: "Trees R",   key: "teeTreeRight" },
+                  { label: "Trees Across", key: "teeTreeAcross" },
+                  { label: "Bkr L",    key: "teeBunkerLeft" },  { label: "Bkr R",    key: "teeBunkerRight" },
+                  { label: "Water L",  key: "teeWaterLeft" },   { label: "Water R",  key: "teeWaterRight" },
+                  { label: "Water Across", key: "teeWaterAcross" },
                 ].map(({ label, key }) => (
                   <button key={key} style={pill(!!(filters as any)[key])} onClick={() => setFilters(f => ({ ...f, [key]: !(f as any)[key] }))}>{label}</button>
                 ))}
@@ -689,6 +749,26 @@ export default function RoundsInsights() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {APPROACH_CLUBS.map(club => (
                   <button key={club} style={pill(filters.apprClubs.has(club))} onClick={() => setFilters(f => ({ ...f, apprClubs: toggleSet(f.apprClubs, club) }))}>{club}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Approach Distance Bucket</p>
+              <select value={filters.apprDistBucket} onChange={e => setFilters(f => ({ ...f, apprDistBucket: e.target.value }))} style={{ ...sel, width: "100%", maxWidth: 160 }}>
+                <option value="">Any</option>
+                {Array.from(new Set(allHoles.filter(h=>h.appr_dist_num>0).map(h => apprDistBucket(h.appr_dist_num)))).sort().map(b => <option key={b} value={b}>{b} yds</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Approach Hazards</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {[
+                  { label: "Tree L",   key: "apprTreeLeft" },   { label: "Tree R",   key: "apprTreeRight" },
+                  { label: "Tree Long",key: "apprTreeLong" },   { label: "Tree Across",key: "apprTreeAcross" },
+                  { label: "Water L",  key: "apprWaterLeft" },  { label: "Water R",  key: "apprWaterRight" },
+                  { label: "Water Short",key:"apprWaterShort"}, { label: "Water Long",key:"apprWaterLong" },
+                ].map(({ label, key }) => (
+                  <button key={key} style={pill(!!(filters as any)[key])} onClick={() => setFilters(f => ({ ...f, [key]: !(f as any)[key] }))}>{label}</button>
                 ))}
               </div>
             </div>
@@ -772,6 +852,17 @@ export default function RoundsInsights() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Factor Correlations</p>
             <p style={{ fontSize: 10, color: "#aaa", margin: 0 }}>≥{MIN_HOLES} holes only · sorted by impact</p>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            {(["all","positive","negative"] as const).map(dir => (
+              <button key={dir} style={{
+                padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500, cursor: "pointer", border: "1px solid",
+                background: filters.impactDir === dir ? "#0f6e56" : "white",
+                color: filters.impactDir === dir ? "white" : "#0f6e56", borderColor: "#0f6e56",
+              }} onClick={() => setFilters(f => ({ ...f, impactDir: dir }))}>
+                {dir === "all" ? "All" : dir === "positive" ? "↑ Costs strokes" : "↓ Saves strokes"}
+              </button>
+            ))}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 280 }}>
