@@ -257,7 +257,7 @@ function getAdaptiveThreshold(scores: number[], targetMin: number, targetMax: nu
   // Try to land in targetMin–targetMax range
   // Walk through candidate thresholds from high to low
   // Start at the score that gives targetMax matches, but never go below a floor
-  const floor = 3;
+  const floor = 1;
   if (sorted.length <= targetMin) return floor; // not enough data — include everything above floor
   // Threshold that gives exactly targetMax matches
   const atMax = sorted[Math.min(targetMax - 1, sorted.length - 1)];
@@ -336,11 +336,11 @@ function aggregateTendencies(enriched: EnrichedRoundHole[]): WeightedTendencies 
     driveTreePct:wPct(e=>(Number(e.roundHole.tree_haz)||0)>0,drv),
     driveBunkerPct:wPct(e=>(Number(e.roundHole.fairway_bunker)||0)>0,drv),
     driveClubFreq,
-    apprHitPct:wPct(e=>e.roundHole.appr_accuracy==="Hit"),
-    apprMissLeftPct:wPct(e=>e.roundHole.appr_accuracy==="Left"),
-    apprMissRightPct:wPct(e=>e.roundHole.appr_accuracy==="Right"),
-    apprMissShortPct:wPct(e=>e.roundHole.appr_accuracy==="Short"),
-    apprMissLongPct:wPct(e=>e.roundHole.appr_accuracy==="Long"),
+    apprHitPct:wPct(e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)==="Hit",e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)!==""),
+    apprMissLeftPct:wPct(e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)==="Left",e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)!==""),
+    apprMissRightPct:wPct(e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)==="Right",e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)!==""),
+    apprMissShortPct:wPct(e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)==="Short",e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)!==""),
+    apprMissLongPct:wPct(e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)==="Long",e=>(e.roundHole.appr_accuracy!==""?e.roundHole.appr_accuracy:e.roundHole.tee_accuracy)!==""),
     girPct,avgPutts,avgChips,
     gsBunkerPct:wPct(e=>(Number(e.roundHole.greenside_bunker)||0)>0),
     avgFirstPuttCategory:Object.entries(puttBuckets).sort((a,b)=>b[1]-a[1])[0]?.[0]??"",
@@ -450,8 +450,8 @@ function computePar3ApproachSimilarity(
 ): number {
   let score=0;
   if(driveToGreen){if(par3RoundHole.club==="Driver"||par3RoundHole.club==="3W")score+=15;else return 0;}
-  const yardSim=weights.yardsSensitivity*14*Math.exp(-Math.abs((par3Hole.yards||0)-approachDist)/35);
-  if(yardSim<2)return 0;
+  const yardSim=weights.yardsSensitivity*14*Math.exp(-Math.abs((par3Hole.yards||0)-approachDist)/50);
+  if(yardSim<0.5)return 0;
   score+=yardSim;
   const tL=!!(targetHole.approach_tree_hazard_left||targetHole.approach_water_out_left||targetHole.approach_bunker_middle_left||targetHole.approach_bunker_long_left);
   const tR=!!(targetHole.approach_tree_hazard_right||targetHole.approach_water_out_right||targetHole.approach_bunker_middle_right||targetHole.approach_bunker_long_right);
@@ -471,7 +471,7 @@ function computePar3ApproachSimilarity(
   score+=weights.greensideSensitivity*5*(gsM/gsKeys.length);
   if(targetHole.approach_green_depth&&par3Hole.approach_green_depth)
     score+=weights.greenDepthSensitivity*4*Math.exp(-Math.abs(targetHole.approach_green_depth-par3Hole.approach_green_depth)/8);
-  return score>4?score:0;
+  return score>1?score:0;
 }
 
 // ─── POST ─────────────────────────────────────────────────────────────────────
@@ -544,7 +544,7 @@ export async function POST(req: NextRequest) {
   const driveToGreen=targetHole.par===4&&targetHole.yards-(CLUB_DISTANCES[topClub(driveClubFreq,"Driver")]??230)<30;
 
   // First pass: compute all similarity scores
-  type ScoredHole = { roundHole:RoundHole; candidateCourseHole:HoleData; roundRating:number|null; roundSlope:number|null; roundDate:string; roundCourseId:string; isExact:boolean; sim:number; };
+  type ScoredHole = { roundHole:RoundHole; candidateCourseHole:HoleData; roundRating:number|null; roundSlope:number|null; roundDate:string; roundCourseId:string; isExact:boolean; sim:number; isPar3:boolean; };
   const scoredHoles:ScoredHole[]=[];
   for(const round of rounds){
     const rc=courseCache[round.course_id];
@@ -559,20 +559,33 @@ export async function POST(req: NextRequest) {
       const sim=computeSimilarity(targetHole,targetRating,targetSlope,candidateCourseHole,roundRating,roundSlope,roundTotalHoles,isExact,weights);
       let par3Sim=0;
       if(candidateCourseHole.par===3&&targetHole.par!==3){
-        par3Sim=computePar3ApproachSimilarity(targetHole,defaultApproachDist,candidateCourseHole,rh,driveToGreen,weights) * 0.5;
+        // Score par 3s based on greenside profile match only
+        const gsKeys:(keyof HoleData)[]=[
+          "approach_bunker_short_left","approach_bunker_short_middle","approach_bunker_short_right",
+          "approach_bunker_middle_left","approach_bunker_middle_right",
+          "approach_bunker_long_left","approach_bunker_long_middle","approach_bunker_long_right",
+          "approach_green_short_left","approach_green_short_middle","approach_green_short_right",
+          "approach_green_middle_left","approach_green_middle_right",
+          "approach_green_long_left","approach_green_long_middle","approach_green_long_right",
+        ];
+        let gsMatch=0;
+        for(const k of gsKeys) if(!!targetHole[k]===!!candidateCourseHole[k]) gsMatch++;
+        par3Sim = 2 + (gsMatch/gsKeys.length) * 6;
       }
       const finalSim=Math.max(sim,par3Sim);
-      if(finalSim>0)scoredHoles.push({roundHole:rh,candidateCourseHole,roundRating,roundSlope,roundDate:round.date??"",roundCourseId:round.course_id??"",isExact,sim:finalSim});
+      const isPar3Candidate = candidateCourseHole.par===3 && targetHole.par!==3;
+      if(finalSim>0)scoredHoles.push({roundHole:rh,candidateCourseHole,roundRating,roundSlope,roundDate:round.date??"",roundCourseId:round.course_id??"",isExact,sim:finalSim,isPar3:isPar3Candidate});
     }
   }
 
   // Adaptive threshold: target 60-90 matches, minimum 30
   const allScores = scoredHoles.map(s=>s.sim);
-  const minThreshold = getAdaptiveThreshold(allScores, 30, 90);
+  const minThreshold = getAdaptiveThreshold(allScores, 40, 100);
 
   const allEnriched:EnrichedRoundHole[]=[];
   for(const sh of scoredHoles){
-    if(sh.sim<=minThreshold)continue;
+    if(sh.isPar3 && sh.sim<3)continue;
+    if(!sh.isPar3 && sh.sim<=minThreshold)continue;
     allEnriched.push({
       roundHole:sh.roundHole,
       courseHole:slimCourseHole(sh.candidateCourseHole),
@@ -583,6 +596,11 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Keep top 50 par 3s by similarity, unlimited non-par-3s
+  const par3Enriched = allEnriched.filter(e=>e.roundHole.par===3).sort((a,b)=>b.similarityScore-a.similarityScore).slice(0,50);
+  const nonPar3Enriched = allEnriched.filter(e=>e.roundHole.par!==3);
+  allEnriched.length = 0;
+  allEnriched.push(...nonPar3Enriched, ...par3Enriched);
   allEnriched.sort((a,b)=>b.similarityScore-a.similarityScore);
   const tendencies=aggregateTendencies(allEnriched);
   const strategy=generateStrategy(targetHole,targetSlope,targetRating,tendencies,allEnriched);
