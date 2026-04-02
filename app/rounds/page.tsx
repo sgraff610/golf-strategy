@@ -14,6 +14,8 @@ type Round = {
 export default function RoundsPage() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
+  const [courseFilter, setCourseFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
 
   useEffect(() => {
     supabase
@@ -35,26 +37,40 @@ export default function RoundsPage() {
     display: "inline-block" as const,
   });
 
+  const selectStyle = {
+    padding: "6px 10px", fontSize: 13, borderRadius: 8,
+    border: "1px solid #ddd", background: "white",
+    color: "#0f6e56", cursor: "pointer" as const,
+  };
+
   function totalScore(holes: any[]) {
     return holes.reduce((sum, h) => sum + (h.score || 0), 0);
   }
-
   function totalPutts(holes: any[]) {
     return holes.reduce((sum, h) => sum + (h.putts || 0), 0);
   }
-
   function fairwaysHit(holes: any[]) {
-    const drivingHoles = holes.filter(h => h.par === 4 || h.par === 5);
-    return drivingHoles.filter(h => h.tee_accuracy === "Hit").length;
+    return holes.filter(h => (h.par === 4 || h.par === 5) && h.tee_accuracy === "Hit").length;
   }
-
   function drivingTotal(holes: any[]) {
     return holes.filter(h => h.par === 4 || h.par === 5).length;
   }
-
   function girsHit(holes: any[]) {
     return holes.filter(h => h.gir).length;
   }
+
+  // Unique courses and years for filters
+  const uniqueCourses = Array.from(new Set(rounds.map(r => r.course_name))).sort();
+  const uniqueYears = Array.from(new Set(rounds.map(r => r.date?.substring(0, 4)).filter(Boolean))).sort((a, b) => b.localeCompare(a));
+
+  // Apply filters
+  const filtered = rounds.filter(r => {
+    if (courseFilter && r.course_name !== courseFilter) return false;
+    if (yearFilter && !r.date?.startsWith(yearFilter)) return false;
+    return true;
+  });
+
+  const anyFilter = !!courseFilter || !!yearFilter;
 
   if (loading) return (
     <main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
@@ -63,17 +79,40 @@ export default function RoundsPage() {
   );
 
   return (
-    <main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+    <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>My rounds</h1>
         <a href="/rounds/add" style={btnStyle(true)}>+ Add round</a>
       </div>
 
-      {rounds.length === 0 ? (
-        <p style={{ color: "#666" }}>No rounds yet. Add one to get started.</p>
+      {/* Filters */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 6 }}>
+          <select style={selectStyle} value={courseFilter} onChange={e => setCourseFilter(e.target.value)}>
+            <option value="">All courses</option>
+            {uniqueCourses.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select style={selectStyle} value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
+            <option value="">All years</option>
+            {uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          {anyFilter && (
+            <button onClick={() => { setCourseFilter(""); setYearFilter(""); }}
+              style={{ fontSize: 12, color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+              Reset
+            </button>
+          )}
+        </div>
+        <p style={{ fontSize: 13, color: "#666", margin: 0 }}>
+          {anyFilter ? `${filtered.length} of ${rounds.length} rounds` : `${rounds.length} rounds`}
+        </p>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p style={{ color: "#666" }}>No rounds match your filters.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {rounds.map((round) => (
+          {filtered.map((round) => (
             <div key={round.id} style={{
               background: "white", border: "1px solid #eee", borderRadius: 12,
               padding: "16px 20px",

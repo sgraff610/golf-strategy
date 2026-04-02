@@ -262,7 +262,10 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
     if (f.yardsBucket && yardsBucket(h.yards) !== f.yardsBucket) return false;
     if (f.siTierFilter && siTier(h.stroke_index) !== f.siTierFilter) return false;
     if (f.doglegFilter && (h.dogleg || "None") !== f.doglegFilter) return false;
-    if (f.apprDistBucket && h.appr_dist_num > 0 && apprDistBucket(h.appr_dist_num) !== f.apprDistBucket) return false;
+    if (f.apprDistBucket) {
+      if (h.appr_dist_num <= 0) return false;
+      if (apprDistBucket(h.appr_dist_num) !== f.apprDistBucket) return false;
+    }
     if (f.siMin && h.stroke_index < Number(f.siMin)) return false;
     if (f.siMax && h.stroke_index > Number(f.siMax)) return false;
     if (f.ratingMin && (h.rating??0)   < Number(f.ratingMin)) return false;
@@ -450,7 +453,7 @@ export default function RoundsInsights() {
     }));
   }
 
-  const MIN_HOLES = 20; // statistical significance threshold
+  const MIN_HOLES = 5; // statistical significance threshold
 
   const correlations = [
     // ── Outcome / scoring ──

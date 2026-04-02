@@ -64,17 +64,16 @@ function blankHole(n: number): HoleData {
   };
 }
 
-// Shared styles (light grey labels/headers globally)
 const LABEL: React.CSSProperties  = { fontSize: 13, color: "#aaa", display: "block", marginBottom: 4 };
 const SECTION: React.CSSProperties = { fontSize: 11, color: "#bbb", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
 const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#bbb" };
 
 // ─── Scorecard ────────────────────────────────────────────────────────────────
 
-function Scorecard({ savedCourse, allVersions, onEditCourse }: {
+function Scorecard({ savedCourse, allVersions, savedCourseId }: {
   savedCourse: CourseRecord;
   allVersions: CourseRecord[];
-  onEditCourse?: () => void;
+  savedCourseId: string | null;
 }) {
   const holes = savedCourse.holes;
   const is18 = holes.length === 18;
@@ -165,8 +164,8 @@ function Scorecard({ savedCourse, allVersions, onEditCourse }: {
 
       <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
         <a href={`/rounds/add?course=${savedCourse.id}`} style={btn(true)}>+ Add a round</a>
-        {onEditCourse && (
-          <button onClick={onEditCourse} style={{ ...btn(false) }}>← Edit this course</button>
+        {savedCourseId && (
+          <a href={`/courses/${savedCourseId}/edit`} style={{ ...btn(false) }}>← Edit this course</a>
         )}
         <a href="/add-course" style={btn(false)}>Add another course</a>
         <a href="/" style={{ ...btn(false), color:"#666", borderColor:"#ccc" }}>Go to strategy</a>
@@ -185,6 +184,7 @@ function AddCourseInner() {
 
   const [step, setStep] = useState<Step>("info");
   const [savedCourse, setSavedCourse] = useState<CourseRecord | null>(null);
+  const [savedCourseId, setSavedCourseId] = useState<string | null>(null);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const [courseName, setCourseName] = useState("");
   const [teeBox, setTeeBox] = useState("");
@@ -268,8 +268,9 @@ function AddCourseInner() {
 
   async function finish() {
     setSaving(true);
+    const newId = `${courseName.trim().toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_-]/g,"")}_${Date.now()}`;
     const course: CourseRecord = {
-      id: `${courseName.trim().toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_-]/g,"")}_${Date.now()}`,
+      id: newId,
       name: courseName.trim(), tee_box: teeBox.trim(), city: city.trim(), state: state.trim(),
       rating: rating !== "" ? parseFloat(rating) : null,
       slope: slope !== "" ? parseInt(slope) : null,
@@ -279,13 +280,14 @@ function AddCourseInner() {
     const allCourses = await loadCourses();
     const versions = allCourses.filter(c => c.name === course.name);
     setSavedCourse(course);
+    setSavedCourseId(newId);
     setAllTeeVersions(versions.length > 0 ? versions : [course]);
     setSaving(false);
     setStep("scorecard");
   }
 
   if (step === "scorecard" && savedCourse) {
-    return <Scorecard savedCourse={savedCourse} allVersions={allTeeVersions} onEditCourse={() => setStep("holes")} />;
+    return <Scorecard savedCourse={savedCourse} allVersions={allTeeVersions} savedCourseId={savedCourseId} />;
   }
 
   if (step === "info") return (
