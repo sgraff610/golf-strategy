@@ -389,6 +389,10 @@ export default function Home(){
         <button onClick={()=>handleSubmit()} disabled={loading} style={{padding:"12px",fontSize:15,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:8,cursor:loading?"not-allowed":"pointer",opacity:loading?0.6:1}}>
           {loading?"Analysing...":"Get Strategy"}
         </button>
+        <a href={courseId?`/rounds/play?courseId=${courseId}`:"#"}
+          style={{padding:"12px",fontSize:15,fontWeight:600,background:"white",color:"#0f6e56",border:"2px solid #0f6e56",borderRadius:8,cursor:"pointer",textAlign:"center",textDecoration:"none",display:"block"}}>
+          ⛳ Play Course
+        </a>
       </div>
 
       {error&&<p style={{color:"red",marginTop:20}}>{error}</p>}
