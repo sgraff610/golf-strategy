@@ -597,8 +597,11 @@ export default function RoundsInsights() {
             )}
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
-            <div style={{ flex: "1 1 120px" }}>
+          <CollapsibleSection title="Course / Rounds" activeCount={
+            (useLastN?1:0) + filters.years.size + (filters.courseId?1:0) +
+            (filters.ratingMin||filters.ratingMax?1:0) + (filters.slopeMin||filters.slopeMax?1:0)
+          }>
+            <div style={{ marginBottom: 10 }}>
               <p style={fl}>Rounds</p>
               <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                 <button style={pill(!useLastN)} onClick={() => setUseLastN(false)}>All</button>
@@ -611,7 +614,7 @@ export default function RoundsInsights() {
                 </>)}
               </div>
             </div>
-            <div style={{ flex: "1 1 120px" }}>
+            <div style={{ marginBottom: 10 }}>
               <p style={fl}>Year</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {availableYears.map(y => (
@@ -619,10 +622,7 @@ export default function RoundsInsights() {
                 ))}
               </div>
             </div>
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
-            <div style={{ flex: "1 1 140px" }}>
+            <div style={{ marginBottom: 10 }}>
               <p style={fl}>Course</p>
               <select value={filters.courseId} onChange={e => setFilters(f => ({ ...f, courseId: e.target.value }))} style={{ ...sel, width: "100%" }}>
                 <option value="">All courses</option>
@@ -631,7 +631,29 @@ export default function RoundsInsights() {
                 ))}
               </select>
             </div>
-            <div style={{ flex: "0 0 auto" }}>
+            <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Course Rating</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <input type="number" step="0.1" placeholder="Min" value={filters.ratingMin} onChange={e => setFilters(f => ({ ...f, ratingMin: e.target.value }))} style={numInput} />
+                <span style={{ fontSize:10, color:"#999" }}>–</span>
+                <input type="number" step="0.1" placeholder="Max" value={filters.ratingMax} onChange={e => setFilters(f => ({ ...f, ratingMax: e.target.value }))} style={numInput} />
+              </div>
+            </div>
+            <div>
+              <p style={fl}>Slope</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <input type="number" placeholder="Min" value={filters.slopeMin} onChange={e => setFilters(f => ({ ...f, slopeMin: e.target.value }))} style={numInput} />
+                <span style={{ fontSize:10, color:"#999" }}>–</span>
+                <input type="number" placeholder="Max" value={filters.slopeMax} onChange={e => setFilters(f => ({ ...f, slopeMax: e.target.value }))} style={numInput} />
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Hole" activeCount={
+            filters.pars.size + (filters.yardsBucket?1:0) + (filters.siTierFilter?1:0) +
+            (filters.siMin||filters.siMax?1:0) + (filters.doglegFilter?1:0)
+          }>
+            <div style={{ marginBottom: 10 }}>
               <p style={fl}>Par</p>
               <div style={{ display: "flex", gap: 4 }}>
                 {["3","4","5"].map(p => (
@@ -639,9 +661,6 @@ export default function RoundsInsights() {
                 ))}
               </div>
             </div>
-          </div>
-
-          <CollapsibleSection title="Hole / Course" activeCount={courseActive}>
             <div style={{ marginBottom: 10 }}>
               <p style={fl}>Hole Yards Bucket</p>
               <select value={filters.yardsBucket} onChange={e => setFilters(f => ({ ...f, yardsBucket: e.target.value }))} style={{ ...sel, width: "100%", maxWidth: 160 }}>
@@ -658,7 +677,7 @@ export default function RoundsInsights() {
               </div>
             </div>
             <div style={{ marginBottom: 10 }}>
-              <p style={fl}>Hole Handicap (range)</p>
+              <p style={fl}>Hole Handicap Range</p>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <select value={filters.siMin} onChange={e => setFilters(f => ({ ...f, siMin: e.target.value }))} style={sel}>
                   <option value="">Min</option>
@@ -671,28 +690,12 @@ export default function RoundsInsights() {
                 </select>
               </div>
             </div>
-            <div style={{ marginBottom: 10 }}>
+            <div>
               <p style={fl}>Dogleg</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {Array.from(new Set(allHoles.map(h => h.dogleg || "None"))).sort().map(d => (
                   <button key={d} style={pill(filters.doglegFilter===d)} onClick={() => setFilters(f => ({ ...f, doglegFilter: f.doglegFilter===d?"":d }))}>{d}</button>
                 ))}
-              </div>
-            </div>
-            <div style={{ marginBottom: 10 }}>
-              <p style={fl}>Course Rating</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <input type="number" step="0.1" placeholder="Min" value={filters.ratingMin} onChange={e => setFilters(f => ({ ...f, ratingMin: e.target.value }))} style={numInput} />
-                <span style={{ fontSize:10, color:"#999" }}>–</span>
-                <input type="number" step="0.1" placeholder="Max" value={filters.ratingMax} onChange={e => setFilters(f => ({ ...f, ratingMax: e.target.value }))} style={numInput} />
-              </div>
-            </div>
-            <div>
-              <p style={fl}>Slope</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <input type="number" placeholder="Min" value={filters.slopeMin} onChange={e => setFilters(f => ({ ...f, slopeMin: e.target.value }))} style={numInput} />
-                <span style={{ fontSize:10, color:"#999" }}>–</span>
-                <input type="number" placeholder="Max" value={filters.slopeMax} onChange={e => setFilters(f => ({ ...f, slopeMax: e.target.value }))} style={numInput} />
               </div>
             </div>
           </CollapsibleSection>
