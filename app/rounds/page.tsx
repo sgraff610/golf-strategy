@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 type Round = {
   id: string;
+  course_id: string;
   course_name: string;
   date: string;
   holes_played: number;
@@ -12,8 +13,37 @@ type Round = {
   holes: any[];
 };
 
+type CourseInfo = {
+  rating: number | null;
+  slope: number | null;
+};
+
+function adjustedGrossScore(holes: any[]): number {
+  return holes.reduce((sum, h) => {
+    const score = Number(h.score) || 0;
+    const maxScore = h.par + 2;
+    return sum + Math.min(score, maxScore);
+  }, 0);
+}
+
+function handicapDifferential(round: Round, courseInfo: CourseInfo | undefined): string {
+  if (!courseInfo?.rating || !courseInfo?.slope) return "—";
+  const scoredHoles = round.holes.filter(h => h.score !== "" && h.score != null && Number(h.score) > 0);
+  if (scoredHoles.length === 0) return "—";
+  const ags = adjustedGrossScore(scoredHoles);
+  const is9 = round.holes_played === 9 || scoredHoles.length <= 9;
+  let diff: number;
+  if (is9) {
+    diff = (113 / courseInfo.slope) * (ags - courseInfo.rating);
+  } else {
+    diff = (ags - courseInfo.rating) * 113 / courseInfo.slope;
+  }
+  return diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
+}
+
 export default function RoundsPage() {
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [courseInfoMap, setCourseInfoMap] = useState<Record<string, CourseInfo>>({});
   const [loading, setLoading] = useState(true);
   const [courseFilter, setCourseFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
@@ -25,8 +55,23 @@ export default function RoundsPage() {
       .from("rounds")
       .select("*")
       .order("date", { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data) setRounds(data);
+      .then(async ({ data, error }) => {
+        if (!error && data) {
+          setRounds(data);
+          // Fetch course info for all unique course_ids
+          const uniqueCourseIds = [...new Set(data.map((r: any) => r.course_id).filter(Boolean))];
+          if (uniqueCourseIds.length > 0) {
+            const { data: courses } = await supabase
+              .from("courses")
+              .select("id, rating, slope")
+              .in("id", uniqueCourseIds);
+            if (courses) {
+              const map: Record<string, CourseInfo> = {};
+              courses.forEach((c: any) => { map[c.id] = { rating: c.rating, slope: c.slope }; });
+              setCourseInfoMap(map);
+            }
+          }
+        }
         setLoading(false);
       });
   }, []);
@@ -47,10 +92,10 @@ export default function RoundsPage() {
   });
 
   function totalScore(holes: any[]) {
-    return holes.reduce((sum, h) => sum + (h.score || 0), 0);
+    return holes.reduce((sum, h) => sum + (Number(h.score) || 0), 0);
   }
   function totalPutts(holes: any[]) {
-    return holes.reduce((sum, h) => sum + (h.putts || 0), 0);
+    return holes.reduce((sum, h) => sum + (Number(h.putts) || 0), 0);
   }
   function fairwaysHit(holes: any[]) {
     return holes.filter(h => (h.par === 4 || h.par === 5) && h.tee_accuracy === "Hit").length;
@@ -120,56 +165,64 @@ export default function RoundsPage() {
         <p style={{ color: "#666" }}>No rounds match your filters.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {filtered.map((round) => (
-            <div key={round.id} style={{ background: "white", border: "1px solid #eee", borderRadius: 12, padding: "16px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div>
-                  <p style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#0f6e56" }}>{round.course_name}</p>
-                  <p style={{ fontSize: 13, color: "#666", margin: 0 }}>
-                    {round.date} · {round.holes_played} holes · Starting hole {round.starting_hole}
-                  </p>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: "#1a1a1a" }}>
-                    {totalScore(round.holes)}
+          {filtered.map((round) => {
+            const diff = handicapDifferential(round, courseInfoMap[round.course_id]);
+            return (
+              <div key={round.id} style={{ background: "white", border: "1px solid #eee", borderRadius: 12, padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <p style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#0f6e56" }}>{round.course_name}</p>
+                    <p style={{ fontSize: 13, color: "#666", margin: 0 }}>
+                      {round.date} · {round.holes_played} holes · Starting hole {round.starting_hole}
+                    </p>
                   </div>
-                  {/* Edit pencil */}
-                  <a
-                    href={`/rounds/${round.id}/edit`}
-                    title="Edit"
-                    style={iconBtn("#1a1a1a", `edit-${round.id}`)}
-                    onMouseEnter={() => setHoveredBtn(`edit-${round.id}`)}
-                    onMouseLeave={() => setHoveredBtn(null)}
-                  >
-                    <Pencil size={15} />
-                  </a>
-                  {/* Delete */}
-                  <button
-                    title="Delete"
-                    onClick={() => setDeleteTarget(round)}
-                    style={iconBtn("#c0392b", `delete-${round.id}`)}
-                    onMouseEnter={() => setHoveredBtn(`delete-${round.id}`)}
-                    onMouseLeave={() => setHoveredBtn(null)}
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 28, fontWeight: 700, color: "#1a1a1a" }}>
+                        {totalScore(round.holes)}
+                      </div>
+                      {diff !== "—" && (
+                        <div style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
+                          Diff: <span style={{ color: "#0f6e56", fontWeight: 700 }}>{diff}</span>
+                        </div>
+                      )}
+                    </div>
+                    <a
+                      href={`/rounds/${round.id}/edit`}
+                      title="Edit"
+                      style={iconBtn("#1a1a1a", `edit-${round.id}`)}
+                      onMouseEnter={() => setHoveredBtn(`edit-${round.id}`)}
+                      onMouseLeave={() => setHoveredBtn(null)}
+                    >
+                      <Pencil size={15} />
+                    </a>
+                    <button
+                      title="Delete"
+                      onClick={() => setDeleteTarget(round)}
+                      style={iconBtn("#c0392b", `delete-${round.id}`)}
+                      onMouseEnter={() => setHoveredBtn(`delete-${round.id}`)}
+                      onMouseLeave={() => setHoveredBtn(null)}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+                  {[
+                    { label: "Putts", value: totalPutts(round.holes) },
+                    { label: "Driving", value: `${fairwaysHit(round.holes)}/${drivingTotal(round.holes)}` },
+                    { label: "GIR", value: `${girsHit(round.holes)}/${round.holes.length}` },
+                    { label: "GRINTS", value: `${round.holes.filter((h: any) => h.grints).length}/${round.holes.length}` },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: "8px 12px", textAlign: "center" as const }}>
+                      <p style={{ fontSize: 11, color: "#666", margin: "0 0 2px" }}>{label}</p>
+                      <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{value}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
-                {[
-                  { label: "Putts", value: totalPutts(round.holes) },
-                  { label: "Driving", value: `${fairwaysHit(round.holes)}/${drivingTotal(round.holes)}` },
-                  { label: "GIR", value: `${girsHit(round.holes)}/${round.holes.length}` },
-                  { label: "GRINTS", value: `${round.holes.filter((h: any) => h.grints).length}/${round.holes.length}` },
-                ].map(({ label, value }) => (
-                  <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: "8px 12px", textAlign: "center" as const }}>
-                    <p style={{ fontSize: 11, color: "#666", margin: "0 0 2px" }}>{label}</p>
-                    <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -177,7 +230,6 @@ export default function RoundsPage() {
         <a href="/" style={{ fontSize: 13, color: "#666" }}>← Back to strategy</a>
       </div>
 
-      {/* Delete confirmation modal */}
       {deleteTarget && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: 28, maxWidth: 400, width: "90%", boxShadow: "0 4px 24px rgba(0,0,0,0.15)", fontFamily: "sans-serif" }}>
