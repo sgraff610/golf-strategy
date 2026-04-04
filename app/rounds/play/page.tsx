@@ -147,8 +147,8 @@ function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; im
   return (
     <div style={{ background:colors.bg, borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40, display:"flex", flexDirection:"column", justifyContent:"center" }}>
       {count>0 ? <>
-        <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{pct(likelihood)}</p>
-        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
+        <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
+<p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{pct(likelihood)}</p>
       </> : <p style={{ fontSize:9, color:"#bbb", margin:0 }}>—</p>}
     </div>
   );
@@ -526,7 +526,6 @@ function PlayCourseInner() {
             <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE STRATEGY</p>
             {/* Tee Shot Grid */}
             <div style={{ marginTop:14 }}>
-              <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE SHOT GRID</p>
 
               {/* Hazard row */}
               {hazardImpacts.length>0&&(
