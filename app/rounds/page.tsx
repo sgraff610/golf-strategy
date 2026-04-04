@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type Round = {
@@ -16,6 +17,8 @@ export default function RoundsPage() {
   const [loading, setLoading] = useState(true);
   const [courseFilter, setCourseFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Round | null>(null);
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -28,20 +31,20 @@ export default function RoundsPage() {
       });
   }, []);
 
-  const btnStyle = (primary: boolean) => ({
-    padding: "8px 16px", fontSize: 14, fontWeight: 600 as const,
-    background: primary ? "#1a1a1a" : "white",
-    color: primary ? "white" : "#1a1a1a",
-    border: "1px solid #1a1a1a", borderRadius: 8,
-    cursor: "pointer" as const, textDecoration: "none" as const,
-    display: "inline-block" as const,
-  });
-
   const selectStyle = {
     padding: "6px 10px", fontSize: 13, borderRadius: 8,
     border: "1px solid #ddd", background: "white",
     color: "#0f6e56", cursor: "pointer" as const,
   };
+
+  const iconBtn = (color: string, id: string): React.CSSProperties => ({
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    width: 32, height: 32, borderRadius: 8,
+    border: `1px solid ${hoveredBtn === id ? color : "#e0e0e0"}`,
+    background: hoveredBtn === id ? `${color}15` : "white",
+    color: hoveredBtn === id ? color : "#888",
+    cursor: "pointer", transition: "all 0.15s ease",
+  });
 
   function totalScore(holes: any[]) {
     return holes.reduce((sum, h) => sum + (h.score || 0), 0);
@@ -59,11 +62,16 @@ export default function RoundsPage() {
     return holes.filter(h => h.gir).length;
   }
 
-  // Unique courses and years for filters
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    await supabase.from("rounds").delete().eq("id", deleteTarget.id);
+    setRounds(prev => prev.filter(r => r.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  }
+
   const uniqueCourses = Array.from(new Set(rounds.map(r => r.course_name))).sort();
   const uniqueYears = Array.from(new Set(rounds.map(r => r.date?.substring(0, 4)).filter(Boolean))).sort((a, b) => b.localeCompare(a));
 
-  // Apply filters
   const filtered = rounds.filter(r => {
     if (courseFilter && r.course_name !== courseFilter) return false;
     if (yearFilter && !r.date?.startsWith(yearFilter)) return false;
@@ -82,7 +90,7 @@ export default function RoundsPage() {
     <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>My rounds</h1>
-        <a href="/rounds/add" style={btnStyle(true)}>+ Add round</a>
+        <a href="/rounds/add" style={{ padding: "8px 16px", fontSize: 14, fontWeight: 600, background: "#1a1a1a", color: "white", border: "1px solid #1a1a1a", borderRadius: 8, cursor: "pointer", textDecoration: "none", display: "inline-block" }}>+ Add round</a>
       </div>
 
       {/* Filters */}
@@ -113,10 +121,7 @@ export default function RoundsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {filtered.map((round) => (
-            <div key={round.id} style={{
-              background: "white", border: "1px solid #eee", borderRadius: 12,
-              padding: "16px 20px",
-            }}>
+            <div key={round.id} style={{ background: "white", border: "1px solid #eee", borderRadius: 12, padding: "16px 20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                 <div>
                   <p style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#0f6e56" }}>{round.course_name}</p>
@@ -124,16 +129,30 @@ export default function RoundsPage() {
                     {round.date} · {round.holes_played} holes · Starting hole {round.starting_hole}
                   </p>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ fontSize: 28, fontWeight: 700, color: "#1a1a1a" }}>
                     {totalScore(round.holes)}
                   </div>
-                  <a href={`/rounds/${round.id}/edit`} style={{
-                    padding: "6px 12px", fontSize: 13, fontWeight: 600,
-                    background: "white", color: "#1a1a1a",
-                    border: "1px solid #1a1a1a", borderRadius: 8,
-                    textDecoration: "none",
-                  }}>Edit</a>
+                  {/* Edit pencil */}
+                  <a
+                    href={`/rounds/${round.id}/edit`}
+                    title="Edit"
+                    style={iconBtn("#1a1a1a", `edit-${round.id}`)}
+                    onMouseEnter={() => setHoveredBtn(`edit-${round.id}`)}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                  >
+                    <Pencil size={15} />
+                  </a>
+                  {/* Delete */}
+                  <button
+                    title="Delete"
+                    onClick={() => setDeleteTarget(round)}
+                    style={iconBtn("#c0392b", `delete-${round.id}`)}
+                    onMouseEnter={() => setHoveredBtn(`delete-${round.id}`)}
+                    onMouseLeave={() => setHoveredBtn(null)}
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
@@ -157,6 +176,26 @@ export default function RoundsPage() {
       <div style={{ marginTop: 24 }}>
         <a href="/" style={{ fontSize: 13, color: "#666" }}>← Back to strategy</a>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 28, maxWidth: 400, width: "90%", boxShadow: "0 4px 24px rgba(0,0,0,0.15)", fontFamily: "sans-serif" }}>
+            <p style={{ fontWeight: 600, fontSize: 15, marginBottom: 8, color: "#1a1a1a" }}>Delete this round?</p>
+            <p style={{ fontSize: 14, color: "#666", marginBottom: 20 }}>
+              {deleteTarget.date} — {deleteTarget.course_name}. This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={confirmDelete} style={{ padding: "8px 18px", fontSize: 14, fontWeight: 600, background: "#c0392b", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
+                Yes, delete
+              </button>
+              <button onClick={() => setDeleteTarget(null)} style={{ padding: "8px 18px", fontSize: 14, fontWeight: 600, background: "#eee", color: "#333", border: "none", borderRadius: 8, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -3,29 +3,17 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
+import { CourseRecord } from "@/lib/types";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
 
 type RoundHole = {
-  hole: number;
-  par: number;
-  yards: number;
-  stroke_index: number;
-  score: number | "";
-  chips: number | "";
-  putts: number | "";
-  tee_accuracy: TeeAccuracy;
-  appr_accuracy: TeeAccuracy;
-  appr_distance: string;
-  water_penalty: number | "";
-  drop_or_out: number | "";
-  tree_haz: number | "";
-  fairway_bunker: number | "";
-  greenside_bunker: number | "";
-  gir: boolean;
-  grints: boolean;
-  club: string;
-  first_putt_distance: string;
+  hole: number; par: number; yards: number; stroke_index: number;
+  score: number | ""; chips: number | ""; putts: number | "";
+  tee_accuracy: TeeAccuracy; appr_accuracy: TeeAccuracy;
+  appr_distance: string; water_penalty: number | ""; drop_or_out: number | "";
+  tree_haz: number | ""; fairway_bunker: number | ""; greenside_bunker: number | "";
+  gir: boolean; grints: boolean; club: string; first_putt_distance: string;
 };
 
 function calcGir(score: number | "", par: number, putts: number | ""): boolean {
@@ -91,21 +79,11 @@ export default function EditRound() {
     if (!courseId) return;
     setSyncing(true);
     const course = await getCourse(courseId);
-    if (!course) {
-      alert("Could not find course data.");
-      setSyncing(false);
-      return;
-    }
+    if (!course) { alert("Could not find course data."); setSyncing(false); return; }
     setRoundHoles(prev => prev.map(roundHole => {
       const courseHole = course.holes.find(h => h.hole === roundHole.hole);
       if (!courseHole) return roundHole;
-      const synced = {
-        ...roundHole,
-        par: courseHole.par,
-        yards: courseHole.yards,
-        stroke_index: courseHole.stroke_index,
-        grints: calcGrints(roundHole.score, courseHole.par),
-      };
+      const synced = { ...roundHole, par: courseHole.par, yards: courseHole.yards, stroke_index: courseHole.stroke_index, grints: calcGrints(roundHole.score, courseHole.par) };
       synced.gir = calcGir(synced.score, synced.par, synced.putts);
       return synced;
     }));
@@ -115,31 +93,21 @@ export default function EditRound() {
   async function handleSave() {
     setSaving(true);
     const { error } = await supabase.from("rounds").update({
-      date,
-      holes_played: holesPlayed,
-      starting_hole: startingHole,
-      holes: roundHoles,
+      date, holes_played: holesPlayed, starting_hole: startingHole, holes: roundHoles,
     }).eq("id", id);
     setSaving(false);
-    if (!error) {
-      setSaved(true);
-      setTimeout(() => window.location.href = "/rounds", 1000);
-    }
+    if (!error) { setSaved(true); setTimeout(() => window.location.href = "/rounds", 1000); }
   }
 
-  const inputStyle = {
-    width: "100%", padding: "6px 8px", fontSize: 14,
-    border: "1px solid #ddd", borderRadius: 6,
-    boxSizing: "border-box" as const,
-  };
+  const inputStyle = { width: "100%", padding: "6px 8px", fontSize: 14, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" as const };
   const selectStyle = { ...inputStyle, background: "white", color: "#0f6e56" };
   const labelStyle = { fontSize: 12, color: "#666", display: "block" as const, marginBottom: 3 };
   const sectionLabel = { fontSize: 11, fontWeight: 600 as const, color: "#0f6e56", textTransform: "uppercase" as const, letterSpacing: 1, margin: "0 0 6px" };
   const btnStyle = (primary: boolean) => ({
     padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,
-    background: primary ? "#1a1a1a" : "white",
-    color: primary ? "white" : "#1a1a1a",
+    background: primary ? "#1a1a1a" : "white", color: primary ? "white" : "#1a1a1a",
     border: "1px solid #1a1a1a", borderRadius: 8, cursor: "pointer" as const,
+    textDecoration: "none" as const, display: "block" as const, textAlign: "center" as const,
   });
 
   const totalScore = roundHoles.reduce((s, h) => s + (Number(h.score) || 0), 0);
@@ -216,20 +184,17 @@ export default function EditRound() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                   <div>
                     <label style={labelStyle}>Score</label>
-                    <input style={inputStyle} type="number" min={1} max={20}
-                      value={hole.score}
+                    <input style={inputStyle} type="number" min={1} max={20} value={hole.score}
                       onChange={e => updateHole(i, "score", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                   <div>
                     <label style={labelStyle}>Putts</label>
-                    <input style={inputStyle} type="number" min={0} max={10}
-                      value={hole.putts}
+                    <input style={inputStyle} type="number" min={0} max={10} value={hole.putts}
                       onChange={e => updateHole(i, "putts", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                   <div>
                     <label style={labelStyle}>Chips</label>
-                    <input min={0} max={10} type="number" style={inputStyle}
-                      value={hole.chips ?? ""}
+                    <input min={0} max={10} type="number" style={inputStyle} value={hole.chips ?? ""}
                       onChange={e => updateHole(i, "chips", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                   <div>
@@ -260,11 +225,7 @@ export default function EditRound() {
                     <label style={labelStyle}>DRIV Acc</label>
                     <select style={selectStyle} value={hole.tee_accuracy} onChange={e => updateHole(i, "tee_accuracy", e.target.value)}>
                       <option value="">—</option>
-                      <option value="Hit">Hit</option>
-                      <option value="Left">Left</option>
-                      <option value="Right">Right</option>
-                      <option value="Short">Short</option>
-                      <option value="Long">Long</option>
+                      {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
                     </select>
                   </div>
                   <div>
@@ -280,11 +241,7 @@ export default function EditRound() {
                     <label style={labelStyle}>APPR Acc</label>
                     <select style={selectStyle} value={hole.appr_accuracy ?? ""} onChange={e => updateHole(i, "appr_accuracy", e.target.value)}>
                       <option value="">—</option>
-                      <option value="Hit">Hit</option>
-                      <option value="Left">Left</option>
-                      <option value="Right">Right</option>
-                      <option value="Short">Short</option>
-                      <option value="Long">Long</option>
+                      {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
                     </select>
                   </div>
                 </div>
@@ -295,32 +252,27 @@ export default function EditRound() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
                   <div>
                     <label style={labelStyle}>Water</label>
-                    <input style={inputStyle} type="number" min={0} max={10}
-                      value={hole.water_penalty}
+                    <input style={inputStyle} type="number" min={0} max={10} value={hole.water_penalty}
                       onChange={e => updateHole(i, "water_penalty", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                   <div>
                     <label style={labelStyle}>Drop/OB</label>
-                    <input style={inputStyle} type="number" min={0} max={10}
-                      value={hole.drop_or_out}
+                    <input style={inputStyle} type="number" min={0} max={10} value={hole.drop_or_out}
                       onChange={e => updateHole(i, "drop_or_out", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                   <div>
                     <label style={labelStyle}>Tree/Haz</label>
-                    <input min={0} max={10} type="number" style={inputStyle}
-                      value={hole.tree_haz ?? ""}
+                    <input min={0} max={10} type="number" style={inputStyle} value={hole.tree_haz ?? ""}
                       onChange={e => updateHole(i, "tree_haz", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                   <div>
                     <label style={labelStyle}>FWY Bkr</label>
-                    <input style={inputStyle} type="number" min={0} max={10}
-                      value={hole.fairway_bunker}
+                    <input style={inputStyle} type="number" min={0} max={10} value={hole.fairway_bunker}
                       onChange={e => updateHole(i, "fairway_bunker", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                   <div>
                     <label style={labelStyle}>GS Bkr</label>
-                    <input style={inputStyle} type="number" min={0} max={10}
-                      value={hole.greenside_bunker}
+                    <input style={inputStyle} type="number" min={0} max={10} value={hole.greenside_bunker}
                       onChange={e => updateHole(i, "greenside_bunker", e.target.value === "" ? "" : Number(e.target.value))} />
                   </div>
                 </div>
@@ -331,20 +283,17 @@ export default function EditRound() {
       </div>
 
       <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #eee", display: "flex", flexDirection: "column", gap: 10 }}>
-        <button
-          style={{ ...btnStyle(false), opacity: syncing ? 0.6 : 1, width: "100%" }}
-          onClick={handleSync}
-          disabled={syncing}
-        >
+        <button style={{ ...btnStyle(false), opacity: syncing ? 0.6 : 1 }} onClick={handleSync} disabled={syncing}>
           {syncing ? "Syncing..." : "Sync with course"}
         </button>
-        <button
-          style={{ ...btnStyle(true), opacity: saving ? 0.6 : 1, width: "100%" }}
-          onClick={handleSave}
-          disabled={saving}
-        >
+        <button style={{ ...btnStyle(true), opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : saved ? "Saved! Redirecting..." : "Save changes"}
         </button>
+        {courseId && (
+          <a href={`/rounds/play?courseId=${courseId}`} style={{ ...btnStyle(false), color: "#0f6e56", borderColor: "#0f6e56" }}>
+            ⛳ Play this course
+          </a>
+        )}
       </div>
     </main>
   );
