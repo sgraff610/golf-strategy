@@ -17,7 +17,6 @@ type RoundHole = {
 };
 
 const CLUBS = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
-const WOODS = ["Driver","3W","5W","7W"];
 const IRONS = ["4i","5i","6i","7i","8i","9i","PW","SW","LW"];
 const DOGLEG_LABELS: Record<string,string> = {
   severe_left:"Severe Left",moderate_left:"Moderate Left",slight_left:"Slight Left",
@@ -60,7 +59,7 @@ function scoreColor(score:number,par:number):string{
 }
 function fmt0(n:number){return n>=0?`+${n.toFixed(1)}`:n.toFixed(1);}
 
-// ── Tee Shot Grid helpers ──────────────────────────────────────────────────────
+// ── Tee Shot Grid helpers ─────────────────────────────────────────────────────
 type EnrichedHole = { roundHole: any; courseHole: any; similarityScore: number; isExactHole: boolean };
 
 function impactColor(impact: number): { bg: string; color: string } {
@@ -76,9 +75,7 @@ function wAvg(holes: EnrichedHole[], fn: (e: EnrichedHole)=>number|null): number
   for (const e of holes) { const v=fn(e); if(v!==null&&!isNaN(v)){n+=v*e.similarityScore;d+=e.similarityScore;} }
   return d>0?n/d:0;
 }
-
 function scoreToPar(e: EnrichedHole) { return Number(e.roundHole.score)-e.roundHole.par; }
-
 function clubGroup(club: string): string {
   if (!club) return "Unknown";
   if (club==="Driver") return "Driver";
@@ -88,23 +85,17 @@ function clubGroup(club: string): string {
   if (IRONS.includes(club)) return "Irons";
   return "Unknown";
 }
-
 function computeGridData(enriched: EnrichedHole[], baseline: number) {
   const rows = ["Driver","3W","5W","7W","Irons","Unknown"];
   const dirs = ["Left","Hit","Right","Unknown"] as const;
-
   return rows.map(rowClub => {
     const clubHoles = enriched.filter(e => clubGroup(e.roundHole.club||"")=== rowClub);
     const count = clubHoles.length;
     const cols = dirs.map(dir => {
-      let dirHoles: EnrichedHole[];
-      if (dir==="Unknown") {
-        dirHoles = clubHoles.filter(e => !e.roundHole.tee_accuracy);
-      } else {
-        dirHoles = clubHoles.filter(e => e.roundHole.tee_accuracy===dir);
-      }
-      const total = clubHoles.length;
-      const likelihood = total>0 ? dirHoles.length/total : 0;
+      const dirHoles = dir==="Unknown"
+        ? clubHoles.filter(e => !e.roundHole.tee_accuracy)
+        : clubHoles.filter(e => e.roundHole.tee_accuracy===dir);
+      const likelihood = count>0 ? dirHoles.length/count : 0;
       const avg = dirHoles.length>0 ? wAvg(dirHoles, scoreToPar) : NaN;
       const impact = !isNaN(avg) ? avg-baseline : NaN;
       return { likelihood, impact, count: dirHoles.length };
@@ -112,19 +103,18 @@ function computeGridData(enriched: EnrichedHole[], baseline: number) {
     return { club: rowClub, count, cols };
   });
 }
-
 function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: number) {
   const hazards = [
-    { label:"OB/Water Left", key:"tee_water_out_left", filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Left" },
-    { label:"OB/Water Right", key:"tee_water_out_right", filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Right" },
+    { label:"OB/Water Left",   key:"tee_water_out_left",   filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Left" },
+    { label:"OB/Water Right",  key:"tee_water_out_right",  filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Right" },
     { label:"OB/Water Across", key:"tee_water_out_across", filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 },
-    { label:"Trees Left", key:"tee_tree_hazard_left", filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Left" },
-    { label:"Trees Right", key:"tee_tree_hazard_right", filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Right" },
-    { label:"Bunker Left", key:"tee_bunkers_left", filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Left" },
-    { label:"Bunker Right", key:"tee_bunkers_right", filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Right" },
+    { label:"Trees Left",      key:"tee_tree_hazard_left", filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Left" },
+    { label:"Trees Right",     key:"tee_tree_hazard_right",filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Right" },
+    { label:"Bunker Left",     key:"tee_bunkers_left",     filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Left" },
+    { label:"Bunker Right",    key:"tee_bunkers_right",    filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Right" },
   ];
   return hazards
-    .filter(h => hole?.[h.key])
+    .filter(h => true)
     .map(h => {
       const matching = enriched.filter(h.filterFn);
       const avg = matching.length>0 ? wAvg(matching, scoreToPar) : NaN;
@@ -133,10 +123,9 @@ function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: num
     })
     .filter(h => !isNaN(h.impact))
     .sort((a,b)=>b.impact-a.impact)
-    .slice(0,5);
+    .slice(0,4);
 }
 
-// ── Grid cell component ────────────────────────────────────────────────────────
 function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; impact:number; count:number; greyed?:boolean }) {
   if (greyed) return (
     <div style={{ background:"#f0f0f0", borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40 }}>
@@ -148,19 +137,194 @@ function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; im
     <div style={{ background:colors.bg, borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40, display:"flex", flexDirection:"column", justifyContent:"center" }}>
       {count>0 ? <>
         <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
-<p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{pct(likelihood)}</p>
+        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{pct(likelihood)}</p>
       </> : <p style={{ fontSize:9, color:"#bbb", margin:0 }}>—</p>}
     </div>
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
+// ── Scorecard component ───────────────────────────────────────────────────────
+function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, roundId }: {
+  roundHoles: RoundHole[];
+  courseName: string;
+  teeBox: string;
+  date: string;
+  allVersions: CourseRecord[];
+  roundId: string;
+}) {
+  const is18 = roundHoles.length === 18;
+
+  const sortedTees = [...allVersions].sort((a, b) =>
+    b.holes.reduce((s:number, h:any) => s + (h.yards||0), 0) - a.holes.reduce((s:number, h:any) => s + (h.yards||0), 0)
+  );
+
+  type Col =
+    | { type: "hole"; rh: RoundHole }
+    | { type: "spacer"; label: string; parSum: number; scoreSum: number; yardsMap: Record<string,number> };
+
+  const cols: Col[] = [];
+  const makeSpacerYards = (sliceHoles: RoundHole[]) => {
+    const nums = new Set(sliceHoles.map(h => h.hole));
+    return Object.fromEntries(sortedTees.map(t => [t.tee_box, t.holes.filter((h:any) => nums.has(h.hole)).reduce((s:number,h:any) => s+(h.yards||0), 0)]));
+  };
+
+  if (is18) {
+    roundHoles.slice(0,9).forEach(h => cols.push({ type:"hole", rh:h }));
+    cols.push({ type:"spacer", label:"Out", parSum:roundHoles.slice(0,9).reduce((s,h)=>s+h.par,0), scoreSum:roundHoles.slice(0,9).reduce((s,h)=>s+(Number(h.score)||0),0), yardsMap:makeSpacerYards(roundHoles.slice(0,9)) });
+    roundHoles.slice(9).forEach(h => cols.push({ type:"hole", rh:h }));
+    cols.push({ type:"spacer", label:"In", parSum:roundHoles.slice(9).reduce((s,h)=>s+h.par,0), scoreSum:roundHoles.slice(9).reduce((s,h)=>s+(Number(h.score)||0),0), yardsMap:makeSpacerYards(roundHoles.slice(9)) });
+  } else {
+    roundHoles.forEach(h => cols.push({ type:"hole", rh:h }));
+  }
+  cols.push({ type:"spacer", label:"Total", parSum:roundHoles.reduce((s,h)=>s+h.par,0), scoreSum:roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0), yardsMap:makeSpacerYards(roundHoles) });
+
+  const c: React.CSSProperties  = { padding:"5px 3px", textAlign:"center", fontSize:11, borderRight:"1px solid #e0e0e0", whiteSpace:"nowrap", color:"#1a1a1a" };
+  const hdr: React.CSSProperties = { ...c, background:"#1a3a2a", color:"white", fontWeight:600 };
+  const lbl: React.CSSProperties = { ...c, background:"#f0f0f0", fontWeight:600, color:"#333", textAlign:"left", paddingLeft:8, minWidth:72, fontSize:10 };
+  const sp: React.CSSProperties  = { ...c, background:"#e8f5f0", fontWeight:700, color:"#0f6e56" };
+
+  const totalScore = roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0);
+  const totalPar = roundHoles.reduce((s,h)=>s+h.par,0);
+  const toPar = totalScore - totalPar;
+
+  return (
+    <main style={{ maxWidth:960, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
+      <div style={{ marginBottom:20 }}>
+        <h1 style={{ fontSize:22, fontWeight:700, color:"#1a1a1a", margin:"0 0 2px" }}>{courseName}</h1>
+        <p style={{ fontSize:14, color:"#666", margin:0 }}>{teeBox} tees · {date}</p>
+        <p style={{ fontSize:20, fontWeight:700, color:toPar>0?"#c0392b":toPar<0?"#27ae60":"#333", margin:"8px 0 0" }}>
+          {totalScore} ({toPar===0?"E":toPar>0?`+${toPar}`:toPar})
+        </p>
+      </div>
+
+      <div style={{ overflowX:"auto", marginBottom:28, borderRadius:10, border:"1px solid #ddd", boxShadow:"0 2px 8px #0001" }}>
+        <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"auto" }}>
+          <tbody>
+            {/* Hole row */}
+            <tr>
+              <td style={lbl}>Hole</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={hdr}>{col.rh.hole}</td>
+                : <td key={ci} style={sp}>{col.label}</td>)}
+            </tr>
+            {/* Index */}
+            <tr>
+              <td style={lbl}>Index</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={{ ...c, background:"#fafafa", color:"#555" }}>{col.rh.stroke_index}</td>
+                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+            </tr>
+            {/* Par */}
+            <tr>
+              <td style={lbl}>Par</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={{ ...c, fontWeight:600 }}>{col.rh.par}</td>
+                : <td key={ci} style={sp}>{col.parSum}</td>)}
+            </tr>
+            {/* Yards per tee */}
+            {sortedTees.map((tee,ti) => (
+              <tr key={tee.id} style={{ background: ti%2===0?"#fff":"#f9f9f9" }}>
+                <td style={{ ...lbl, background: ti%2===0?"#fff":"#f9f9f9" }}>
+                  <span style={{ fontSize:10, color:"#0f6e56", fontWeight:600 }}>{tee.tee_box}</span>
+                </td>
+                {cols.map((col,ci) => {
+                  if (col.type==="hole") {
+                    const th = tee.holes.find((h:any) => h.hole===col.rh.hole);
+                    return <td key={ci} style={c}>{th?.yards||"—"}</td>;
+                  }
+                  return <td key={ci} style={{ ...sp, fontSize:12 }}>{col.yardsMap[tee.tee_box]||"—"}</td>;
+                })}
+              </tr>
+            ))}
+            {/* Score */}
+            <tr style={{ borderTop:"2px solid #0f6e56" }}>
+              <td style={{ ...lbl, background:"#f0f9f6" }}>Score</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={{ ...c, fontWeight:700, color: col.rh.score!==""?scoreColor(Number(col.rh.score),col.rh.par):"#aaa" }}>
+                    {col.rh.score!==""?col.rh.score:"—"}
+                  </td>
+                : <td key={ci} style={{ ...sp }}>{col.scoreSum||"—"}</td>)}
+            </tr>
+            {/* DRIV Club */}
+            <tr>
+              <td style={lbl}>Driv Club</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={c}>{col.rh.club||"—"}</td>
+                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+            </tr>
+            {/* DRIV Acc */}
+            <tr style={{ background:"#f9f9f9" }}>
+              <td style={{ ...lbl, background:"#f9f9f9" }}>Driv Acc</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={{ ...c, background:"#f9f9f9", color: col.rh.tee_accuracy==="Hit"?"#27ae60":col.rh.tee_accuracy?"#c0392b":"#aaa" }}>
+                    {col.rh.tee_accuracy||"—"}
+                  </td>
+                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+            </tr>
+            {/* APPR Club */}
+            <tr>
+              <td style={lbl}>Appr Club</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={c}>{col.rh.appr_distance||"—"}</td>
+                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+            </tr>
+            {/* APPR Acc */}
+            <tr style={{ background:"#f9f9f9" }}>
+              <td style={{ ...lbl, background:"#f9f9f9" }}>Appr Acc</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={{ ...c, background:"#f9f9f9", color: col.rh.appr_accuracy==="Hit"?"#27ae60":col.rh.appr_accuracy?"#c0392b":"#aaa" }}>
+                    {col.rh.appr_accuracy||"—"}
+                  </td>
+                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+            </tr>
+            {/* Chips */}
+            <tr>
+              <td style={lbl}>Chips</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={c}>{col.rh.chips!==""?col.rh.chips:"—"}</td>
+                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+            </tr>
+            {/* Putts */}
+            <tr style={{ background:"#f9f9f9" }}>
+              <td style={{ ...lbl, background:"#f9f9f9" }}>Putts</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={{ ...c, background:"#f9f9f9" }}>{col.rh.putts!==""?col.rh.putts:"—"}</td>
+                : <td key={ci} style={{ ...sp }}>{col.type==="spacer"?roundHoles.filter(h=>is18?(col.label==="Out"?h.hole<=9:col.label==="In"?h.hole>9:true):true).reduce((s,h)=>s+(Number(h.putts)||0),0)||"—":"—"}</td>)}
+            </tr>
+            {/* 1st Putt */}
+            <tr>
+              <td style={lbl}>1st Putt</td>
+              {cols.map((col,ci) => col.type==="hole"
+                ? <td key={ci} style={c}>{col.rh.first_putt_distance||"—"}</td>
+                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
+        <a href={`/rounds/${roundId}/edit`} style={{ padding:"10px 20px", fontSize:14, fontWeight:600, background:"#0f6e56", color:"white", border:"1px solid #0f6e56", borderRadius:8, textDecoration:"none" }}>
+          Edit this round
+        </a>
+        <a href="/rounds" style={{ padding:"10px 20px", fontSize:14, fontWeight:600, background:"white", color:"#1a1a1a", border:"1px solid #1a1a1a", borderRadius:8, textDecoration:"none" }}>
+          All rounds
+        </a>
+        <a href="/" style={{ padding:"10px 20px", fontSize:14, fontWeight:600, background:"white", color:"#666", border:"1px solid #ccc", borderRadius:8, textDecoration:"none" }}>
+          Strategy
+        </a>
+      </div>
+    </main>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 function PlayCourseInner() {
   const searchParams = useSearchParams();
   const initCourseId = searchParams.get("courseId")??"";
 
   const [courses, setCourses] = useState<CourseRecord[]>([]);
   const [courseId, setCourseId] = useState(initCourseId);
+  const [roundDate, setRoundDate] = useState(new Date().toISOString().split("T")[0]);
   const [holesPlayed, setHolesPlayed] = useState<9|18>(18);
   const [startingHole, setStartingHole] = useState(1);
   const [started, setStarted] = useState(false);
@@ -173,6 +337,8 @@ function PlayCourseInner() {
   const [saving, setSaving] = useState(false);
   const [showThisHoleOnly, setShowThisHoleOnly] = useState(false);
   const [approachDist, setApproachDist] = useState<number|null>(null);
+  const [showScorecard, setShowScorecard] = useState(false);
+  const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
 
   useEffect(() => { loadCourses().then(data=>{ setCourses(data); }); }, []);
 
@@ -196,13 +362,25 @@ function PlayCourseInner() {
       id, course_id:courseId,
       course_name:selectedCourse.name,
       tee_box:selectedCourse.tee_box??"",
-      date:new Date().toISOString().split("T")[0],
+      date:roundDate,
       holes_played:holesPlayed,
       starting_hole:startingHole,
       holes,
     });
+    // Load all tee versions for scorecard
+    const allCourses = await loadCourses();
+    setAllTeeVersions(allCourses.filter(c=>c.name===selectedCourse.name));
     setStarted(true);
     fetchStrategy(holes[0].hole);
+  }
+
+  async function cancelRound() {
+    if (!roundId) { setStarted(false); return; }
+    if (!confirm("Cancel this round? It will be deleted.")) return;
+    await supabase.from("rounds").delete().eq("id", roundId);
+    setStarted(false);
+    setRoundId(null);
+    setRoundHoles([]);
   }
 
   async function fetchStrategy(holeNum: number) {
@@ -223,6 +401,11 @@ function PlayCourseInner() {
     setSaving(false);
   }
 
+  async function postScore() {
+    await saveCurrentHole();
+    setShowScorecard(true);
+  }
+
   function updateHoleField(field: keyof RoundHole, value: any) {
     setRoundHoles(prev => prev.map((h,i) => {
       if (i!==currentHoleIdx) return h;
@@ -240,14 +423,30 @@ function PlayCourseInner() {
     if (roundHoles[idx]) fetchStrategy(roundHoles[idx].hole);
   }
 
+  // Show scorecard view
+  if (showScorecard && roundId && selectedCourse) {
+    return (
+      <RoundScorecard
+        roundHoles={roundHoles}
+        courseName={selectedCourse.name}
+        teeBox={selectedCourse.tee_box??""}
+        date={roundDate}
+        allVersions={allTeeVersions.length>0?allTeeVersions:[selectedCourse]}
+        roundId={roundId}
+      />
+    );
+  }
+
   // Derived
   const currentHole = roundHoles[currentHoleIdx];
+  const isLastHole = currentHoleIdx === roundHoles.length - 1;
   const strat = strategy?.strategy;
   const hole = strategy?.hole;
   const course = strategy?.course;
   const enriched: EnrichedHole[] = strategy?.enrichedHoles??[];
   const holeHistory = strategy?.holeHistory??[];
   const ds = strategy?.data_summary;
+  const isPar3 = currentHole?.par === 3;
 
   const displayEnriched = useMemo(()=> {
     if (!showThisHoleOnly) return enriched;
@@ -270,7 +469,6 @@ function PlayCourseInner() {
       let n=0,d=0; for(const e of valid){const ok=denom?denom(e):true;if(ok){d+=e.similarityScore;if(pred(e))n+=e.similarityScore;}} return d>0?n/d:0;
     };
     const drv = (e:EnrichedHole)=>e.roundHole.par>=4;
-    const apprAcc = (e:EnrichedHole)=>e.roundHole.par===3?e.roundHole.tee_accuracy:e.roundHole.appr_accuracy;
     return {
       avgScoreToPar: wAvg(valid, scoreToPar),
       driveHitPct: wp(e=>e.roundHole.tee_accuracy==="Hit",drv),
@@ -292,9 +490,9 @@ function PlayCourseInner() {
     };
   }, [displayEnriched]);
 
-  // Styles
   const inputStyle: React.CSSProperties = { width:"100%", padding:"6px 8px", fontSize:14, border:"1px solid #ddd", borderRadius:6, boxSizing:"border-box" };
   const selectStyle: React.CSSProperties = { ...inputStyle, background:"white", color:"#0f6e56" };
+  const disabledSelectStyle: React.CSSProperties = { ...inputStyle, background:"#f0f0f0", color:"#bbb" };
   const labelStyle: React.CSSProperties = { fontSize:12, color:"#666", display:"block", marginBottom:3 };
   const sl: React.CSSProperties = { fontSize:11, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1, margin:"0 0 6px" };
   const card = (bg:string): React.CSSProperties => ({ background:bg, borderRadius:12, padding:"12px 16px" });
@@ -303,7 +501,6 @@ function PlayCourseInner() {
     background:primary?"#1a1a1a":"white", color:primary?"white":"#1a1a1a",
     border:"1px solid #1a1a1a", borderRadius:8, cursor:"pointer", textDecoration:"none", display:"inline-block",
   });
-  const aimColors: Record<string,string> = { left:"#2980b9", right:"#8e44ad", center:"#27ae60", short:"#e67e22", long:"#c0392b" };
   const conf = strat?.confidence;
   const confidenceColor: Record<string,string> = { high:"#0f6e56", medium:"#e67e22", low:"#c0392b" };
 
@@ -322,6 +519,11 @@ function PlayCourseInner() {
             <select style={selectStyle} value={courseId} onChange={e=>setCourseId(e.target.value)}>
               {courses.map(c=><option key={c.id} value={c.id}>{c.name} — {c.tee_box} tees</option>)}
             </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Date</label>
+            <input type="date" value={roundDate} onChange={e=>setRoundDate(e.target.value)}
+              style={{ ...inputStyle, maxWidth:160 }} />
           </div>
           <div>
             <label style={labelStyle}>Holes</label>
@@ -364,9 +566,15 @@ function PlayCourseInner() {
           <p style={{ fontSize:18, fontWeight:700, color:"#0f6e56", margin:0 }}>Hole {currentHole?.hole}</p>
           <p style={{ fontSize:13, color:"#666", margin:0 }}>Par {currentHole?.par} · {currentHole?.yards} yds · SI {currentHole?.stroke_index}</p>
         </div>
-        <button onClick={()=>{ if(currentHoleIdx<roundHoles.length-1) goToHole(currentHoleIdx+1); }}
-          disabled={currentHoleIdx===roundHoles.length-1}
-          style={{ ...btnStyle(true,true), opacity:currentHoleIdx===roundHoles.length-1?0.4:1 }}>Next →</button>
+        {isLastHole ? (
+          <button onClick={postScore}
+            style={{ padding:"6px 12px", fontSize:13, fontWeight:600, background:"#0f6e56", color:"white", border:"1px solid #0f6e56", borderRadius:8, cursor:"pointer" }}>
+            Post Score ✓
+          </button>
+        ) : (
+          <button onClick={()=>goToHole(currentHoleIdx+1)}
+            style={{ ...btnStyle(true,true) }}>Next →</button>
+        )}
       </div>
 
       {/* Score toggle */}
@@ -399,15 +607,17 @@ function PlayCourseInner() {
           <p style={sl}>Tee & Approach</p>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
             <div>
-              <label style={labelStyle}>DRIV Club</label>
-              <select style={selectStyle} value={currentHole.club} onChange={e=>updateHoleField("club",e.target.value)}>
+              <label style={{ ...labelStyle, color: isPar3?"#bbb":"#666" }}>DRIV Club</label>
+              <select style={isPar3?disabledSelectStyle:selectStyle} value={isPar3?"":currentHole.club}
+                onChange={e=>!isPar3&&updateHoleField("club",e.target.value)} disabled={isPar3}>
                 <option value="">—</option>
                 {CLUBS.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label style={labelStyle}>DRIV Acc</label>
-              <select style={selectStyle} value={currentHole.tee_accuracy} onChange={e=>updateHoleField("tee_accuracy",e.target.value)}>
+              <label style={{ ...labelStyle, color: isPar3?"#bbb":"#666" }}>DRIV Acc</label>
+              <select style={isPar3?disabledSelectStyle:selectStyle} value={isPar3?"":currentHole.tee_accuracy}
+                onChange={e=>!isPar3&&updateHoleField("tee_accuracy",e.target.value)} disabled={isPar3}>
                 <option value="">—</option>
                 {["Hit","Left","Right","Short","Long"].map(v=><option key={v} value={v}>{v}</option>)}
               </select>
@@ -438,9 +648,9 @@ function PlayCourseInner() {
               </div>
             ))}
           </div>
-          <button onClick={()=>{ saveCurrentHole(); setShowScore(false); if(currentHoleIdx<roundHoles.length-1) goToHole(currentHoleIdx+1); }}
+          <button onClick={()=>{ saveCurrentHole(); setShowScore(false); if(!isLastHole) goToHole(currentHoleIdx+1); }}
             style={{ ...btnStyle(true), width:"100%", textAlign:"center" }}>
-            Save & Next →
+            {isLastHole ? "Save Score" : "Save & Next →"}
           </button>
         </div>
       )}
@@ -524,45 +734,38 @@ function PlayCourseInner() {
         {hole.par>=4&&(
           <div style={card("#f6f6f6")}>
             <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE STRATEGY</p>
-            {/* Tee Shot Grid */}
-            <div style={{ marginTop:14 }}>
-
-              {/* Hazard row */}
-              {hazardImpacts.length>0&&(
-                <div style={{ marginBottom:8 }}>
-                  <p style={{ fontSize:10, color:"#aaa", margin:"0 0 4px" }}>Hazard Impacts (sorted by impact)</p>
-                  <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                    {hazardImpacts.map((h,i)=>{
-                      const colors = impactColor(h.impact);
-                      return (
-                        <div key={i} style={{ background:colors.bg, borderRadius:6, padding:"4px 8px", fontSize:11 }}>
-                          <span style={{ color:colors.color, fontWeight:600 }}>{h.label}: {fmtSTP(h.impact)}</span>
-                          <span style={{ color:colors.color, opacity:0.7, fontSize:10 }}> ({h.count})</span>
+            {hazardImpacts.length>0&&(
+              <div style={{ marginBottom:14 }}>
+                <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 6px" }}>TEE SHOT HAZARDS</p>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6 }}>
+                  {hazardImpacts.map((h,i)=>{
+                    const colors = impactColor(h.impact);
+                    return (
+                      <div key={i} style={{ background:colors.bg, borderRadius:8, padding:"8px 12px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                        <span style={{ fontSize:12, color:colors.color, fontWeight:500 }}>{h.label}</span>
+                        <div style={{ textAlign:"right" }}>
+                          <p style={{ fontSize:13, fontWeight:700, color:colors.color, margin:0 }}>{fmtSTP(h.impact)}</p>
+                          <p style={{ fontSize:10, color:colors.color, opacity:0.75, margin:0 }}>{h.count} holes</p>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-
-              {/* Column headers */}
+              </div>
+            )}
+            <div style={{ marginTop:8 }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:3, marginBottom:3 }}>
-                {["Club","Left","Hit","Right","Unknown"].map(h=>(
+                {["Club","Left","Hit","Right","Unk"].map(h=>(
                   <div key={h} style={{ fontSize:9, fontWeight:600, color:"#aaa", textAlign:"center", textTransform:"uppercase" }}>{h}</div>
                 ))}
               </div>
-
-              {/* Grid rows */}
               {gridData.map(row=>(
                 <div key={row.club} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:3, marginBottom:3 }}>
-                  {/* Club label cell */}
                   <div style={{ background:"#f6f6f6", borderRadius:4, padding:"3px 4px", display:"flex", flexDirection:"column", justifyContent:"center", textAlign:"center" }}>
                     <p style={{ fontSize:10, fontWeight:600, color:"#1a1a1a", margin:0 }}>{row.club}</p>
                     <p style={{ fontSize:9, color:"#aaa", margin:0 }}>{row.count}</p>
                   </div>
-                  {/* Direction cells */}
                   {row.cols.map((col,ci)=>{
-                    // Check if hazard exists for Left (col 0) and Right (col 2)
                     const isLeftCol = ci===0;
                     const isRightCol = ci===2;
                     const leftHazard = hole.tee_water_out_left||hole.tee_tree_hazard_left||hole.tee_bunkers_left;
@@ -652,6 +855,13 @@ function PlayCourseInner() {
             color:i===currentHoleIdx?"white":"#1a1a1a", fontSize:11, fontWeight:600,
           }}>{h.hole}</button>
         ))}
+      </div>
+
+      {/* Cancel round */}
+      <div style={{ marginTop:24, textAlign:"center" }}>
+        <button onClick={cancelRound} style={{ fontSize:13, color:"#c0392b", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
+          Cancel round
+        </button>
       </div>
 
     </main>
