@@ -34,7 +34,7 @@ function handicapDifferential(round: Round, courseInfo: CourseInfo | undefined):
   const is9 = round.holes_played === 9 || scoredHoles.length <= 9;
   let diff: number;
   if (is9) {
-    diff = (113 / courseInfo.slope) * (ags - courseInfo.rating);
+    diff = ((113 / courseInfo.slope) * (ags - courseInfo.rating)) * 2;
   } else {
     diff = (ags - courseInfo.rating) * 113 / courseInfo.slope;
   }
@@ -167,6 +167,7 @@ export default function RoundsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {filtered.map((round) => {
             const diff = handicapDifferential(round, courseInfoMap[round.course_id]);
+
             return (
               <div key={round.id} style={{ background: "white", border: "1px solid #eee", borderRadius: 12, padding: "16px 20px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>

@@ -59,7 +59,6 @@ function scoreColor(score:number,par:number):string{
 }
 function fmt0(n:number){return n>=0?`+${n.toFixed(1)}`:n.toFixed(1);}
 
-// ── Tee Shot Grid helpers ─────────────────────────────────────────────────────
 type EnrichedHole = { roundHole: any; courseHole: any; similarityScore: number; isExactHole: boolean };
 
 function impactColor(impact: number): { bg: string; color: string } {
@@ -142,16 +141,15 @@ function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; im
   );
 }
 
-// ── Scorecard ─────────────────────────────────────────────────────────────────
 function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, roundId }: {
   roundHoles: RoundHole[]; courseName: string; teeBox: string; date: string;
   allVersions: CourseRecord[]; roundId: string;
 }) {
   const is18 = roundHoles.length === 18;
-  const sortedTees = [...allVersions].sort((a, b) =>
+  const sortedTees = [...allVersions].sort((a,b) =>
     b.holes.reduce((s:number,h:any)=>s+(h.yards||0),0) - a.holes.reduce((s:number,h:any)=>s+(h.yards||0),0)
   );
-  type Col = { type:"hole"; rh:RoundHole } | { type:"spacer"; label:string; parSum:number; scoreSum:number; yardsMap:Record<string,number> };
+  type Col = {type:"hole";rh:RoundHole}|{type:"spacer";label:string;parSum:number;scoreSum:number;yardsMap:Record<string,number>};
   const cols: Col[] = [];
   const makeSpacerYards = (sliceHoles: RoundHole[]) => {
     const nums = new Set(sliceHoles.map(h=>h.hole));
@@ -166,15 +164,13 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
     roundHoles.forEach(h=>cols.push({type:"hole",rh:h}));
   }
   cols.push({type:"spacer",label:"Total",parSum:roundHoles.reduce((s,h)=>s+h.par,0),scoreSum:roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0),yardsMap:makeSpacerYards(roundHoles)});
-
-  const c: React.CSSProperties = {padding:"5px 3px",textAlign:"center",fontSize:11,borderRight:"1px solid #e0e0e0",whiteSpace:"nowrap",color:"#1a1a1a"};
-  const hdr: React.CSSProperties = {...c,background:"#1a3a2a",color:"white",fontWeight:600};
+  const c: React.CSSProperties = {padding:"5px 3px",textAlign:"center",fontSize:11,borderRight:"1px solid #e0e0e0",whiteSpace:"nowrap",};
+  const hdr: React.CSSProperties = { ...c, background:"#1a3a2a", color:"white", fontWeight:600 };
   const lbl: React.CSSProperties = {...c,background:"#f0f0f0",fontWeight:600,color:"#333",textAlign:"left",paddingLeft:8,minWidth:72,fontSize:10};
   const sp: React.CSSProperties = {...c,background:"#e8f5f0",fontWeight:700,color:"#0f6e56"};
   const totalScore = roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0);
   const totalPar = roundHoles.reduce((s,h)=>s+h.par,0);
   const toPar = totalScore-totalPar;
-
   return (
     <main style={{maxWidth:960,margin:"40px auto",fontFamily:"sans-serif",padding:"0 24px"}}>
       <div style={{marginBottom:20}}>
@@ -205,28 +201,28 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
                 ?<td key={ci} style={{...c,fontWeight:700,color:col.rh.score!==""?scoreColor(Number(col.rh.score),col.rh.par):"#aaa"}}>{col.rh.score!==""?col.rh.score:"—"}</td>
                 :<td key={ci} style={sp}>{col.scoreSum||"—"}</td>)}
             </tr>
-            <tr><td style={lbl}>Driv Club</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.club||"—"}</td>:<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}</tr>
+            <tr><td style={lbl}>Driv Club</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.club||"—"}</td>:<td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}</tr>
             <tr style={{background:"#f9f9f9"}}>
               <td style={{...lbl,background:"#f9f9f9"}}>Driv Acc</td>
               {cols.map((col,ci)=>col.type==="hole"
                 ?<td key={ci} style={{...c,background:"#f9f9f9",color:col.rh.tee_accuracy==="Hit"?"#27ae60":col.rh.tee_accuracy?"#c0392b":"#aaa"}}>{col.rh.tee_accuracy||"—"}</td>
                 :<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}
             </tr>
-            <tr><td style={lbl}>Appr Club</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.appr_distance||"—"}</td>:<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}</tr>
+            <tr><td style={lbl}>Appr Club</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.appr_distance||"—"}</td>:<td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}</tr>
             <tr style={{background:"#f9f9f9"}}>
               <td style={{...lbl,background:"#f9f9f9"}}>Appr Acc</td>
               {cols.map((col,ci)=>col.type==="hole"
                 ?<td key={ci} style={{...c,background:"#f9f9f9",color:col.rh.appr_accuracy==="Hit"?"#27ae60":col.rh.appr_accuracy?"#c0392b":"#aaa"}}>{col.rh.appr_accuracy||"—"}</td>
                 :<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}
             </tr>
-            <tr><td style={lbl}>Chips</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.chips!==""?col.rh.chips:"—"}</td>:<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}</tr>
+            <tr><td style={lbl}>Chips</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.chips!==""?col.rh.chips:"—"}</td>:<td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}</tr>
             <tr style={{background:"#f9f9f9"}}>
               <td style={{...lbl,background:"#f9f9f9"}}>Putts</td>
               {cols.map((col,ci)=>col.type==="hole"
                 ?<td key={ci} style={{...c,background:"#f9f9f9"}}>{col.rh.putts!==""?col.rh.putts:"—"}</td>
                 :<td key={ci} style={sp}>{col.type==="spacer"?roundHoles.filter(h=>is18?(col.label==="Out"?h.hole<=9:col.label==="In"?h.hole>9:true):true).reduce((s,h)=>s+(Number(h.putts)||0),0)||"—":"—"}</td>)}
             </tr>
-            <tr><td style={lbl}>1st Putt</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.first_putt_distance||"—"}</td>:<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}</tr>
+            <tr><td style={lbl}>1st Putt</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={c}>{col.rh.first_putt_distance||"—"}</td>:<td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}</tr>
           </tbody>
         </table>
       </div>
@@ -239,19 +235,20 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main component — ALL hooks must come before any conditional returns ────────
 function PlayCourseInner() {
   const searchParams = useSearchParams();
   const initCourseId = searchParams.get("courseId") ?? "";
   const initRoundId = searchParams.get("roundId") ?? "";
   const isEditMode = !!initRoundId;
 
+  // ── ALL useState hooks ────────────────────────────────────────────────────────
   const [courses, setCourses] = useState<CourseRecord[]>([]);
   const [courseId, setCourseId] = useState(initCourseId);
   const [roundDate, setRoundDate] = useState(new Date().toISOString().split("T")[0]);
   const [holesPlayed, setHolesPlayed] = useState<9|18>(18);
   const [startingHole, setStartingHole] = useState(1);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(isEditMode); // start in playing mode if editing
   const [currentHoleIdx, setCurrentHoleIdx] = useState(0);
   const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [roundId, setRoundId] = useState<string|null>(initRoundId||null);
@@ -265,11 +262,11 @@ function PlayCourseInner() {
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const [loadingRound, setLoadingRound] = useState(isEditMode);
 
+  // ── ALL useEffect hooks ───────────────────────────────────────────────────────
   useEffect(() => {
     loadCourses().then(data => { setCourses(data); });
   }, []);
 
-  // If roundId param provided, load the existing round
   useEffect(() => {
     if (!initRoundId) return;
     supabase.from("rounds").select("*").eq("id", initRoundId).single().then(async ({ data, error }) => {
@@ -280,11 +277,8 @@ function PlayCourseInner() {
         setStartingHole(data.starting_hole ?? 1);
         setRoundHoles(data.holes ?? []);
         setRoundId(initRoundId);
-        // Load all tee versions for scorecard
         const allCourses = await loadCourses();
         setAllTeeVersions(allCourses.filter(c => c.name === data.course_name));
-        setStarted(true);
-        // Fetch strategy for first hole
         if (data.holes?.length > 0) {
           fetchStrategy(data.holes[0].hole, data.course_id);
         }
@@ -293,18 +287,91 @@ function PlayCourseInner() {
     });
   }, [initRoundId]);
 
-  const selectedCourse = courses.find(c => c.id === courseId);
+  // ── ALL useMemo hooks ─────────────────────────────────────────────────────────
+  const selectedCourse = useMemo(() => courses.find(c => c.id === courseId), [courses, courseId]);
 
-  function buildRoundHoles(): RoundHole[] {
-    if (!selectedCourse) return [];
-    const courseHoles = selectedCourse.holes;
-    const holes = holesPlayed===9 ? courseHoles.slice(startingHole-1, startingHole-1+9) : courseHoles;
-    return holes.map(h => blankHole(h));
+  const enriched: EnrichedHole[] = useMemo(() => strategy?.enrichedHoles ?? [], [strategy]);
+  const holeHistory = useMemo(() => strategy?.holeHistory ?? [], [strategy]);
+
+  const displayEnriched = useMemo(() => {
+    if (!showThisHoleOnly) return enriched;
+    return enriched.filter((e: EnrichedHole) => e.isExactHole);
+  }, [enriched, showThisHoleOnly]);
+
+  const baseline = useMemo(() => {
+    if (!displayEnriched.length) return 0;
+    return wAvg(displayEnriched, scoreToPar);
+  }, [displayEnriched]);
+
+  const gridData = useMemo(() => computeGridData(displayEnriched, baseline), [displayEnriched, baseline]);
+
+  const hole = useMemo(() => strategy?.hole, [strategy]);
+
+  const hazardImpacts = useMemo(() => computeHazardImpacts(displayEnriched, hole, baseline), [displayEnriched, hole, baseline]);
+
+  const t = useMemo(() => {
+    if (!displayEnriched.length) return null;
+    const valid = displayEnriched.filter(e => e.roundHole.score !== "");
+    if (!valid.length) return null;
+    const wp = (pred: (e: EnrichedHole) => boolean, denom?: (e: EnrichedHole) => boolean) => {
+      let n = 0, d = 0;
+      for (const e of valid) { const ok = denom ? denom(e) : true; if (ok) { d += e.similarityScore; if (pred(e)) n += e.similarityScore; } }
+      return d > 0 ? n / d : 0;
+    };
+    const drv = (e: EnrichedHole) => e.roundHole.par >= 4;
+    return {
+      avgScoreToPar: wAvg(valid, scoreToPar),
+      driveHitPct: wp(e => e.roundHole.tee_accuracy === "Hit", drv),
+      driveMissLeftPct: wp(e => e.roundHole.tee_accuracy === "Left", drv),
+      driveMissRightPct: wp(e => e.roundHole.tee_accuracy === "Right", drv),
+      driveWaterPct: wp(e => (Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0, drv),
+      driveTreePct: wp(e => (Number(e.roundHole.tree_haz)||0)>0, drv),
+      driveBunkerPct: wp(e => (Number(e.roundHole.fairway_bunker)||0)>0, drv),
+      apprHitPct: wp(e => e.roundHole.appr_accuracy === "Hit"),
+      apprMissLeftPct: wp(e => e.roundHole.appr_accuracy === "Left"),
+      apprMissRightPct: wp(e => e.roundHole.appr_accuracy === "Right"),
+      apprMissShortPct: wp(e => e.roundHole.appr_accuracy === "Short"),
+      apprMissLongPct: wp(e => e.roundHole.appr_accuracy === "Long"),
+      girPct: wp(e => !!e.roundHole.gir),
+      apprWaterPct: wp(e => (Number(e.roundHole.water_penalty)||0)>0),
+      apprBunkerPct: wp(e => (Number(e.roundHole.greenside_bunker)||0)>0),
+      apprTreePct: wp(e => (Number(e.roundHole.tree_haz)||0)>0),
+      avgPutts: wAvg(valid, e => e.roundHole.putts !== "" ? Number(e.roundHole.putts) : null),
+    };
+  }, [displayEnriched]);
+
+  // ── Derived values (not hooks) ────────────────────────────────────────────────
+  const currentHole = roundHoles[currentHoleIdx];
+  const isLastHole = currentHoleIdx === roundHoles.length - 1;
+  const strat = strategy?.strategy;
+  const course = strategy?.course;
+  const ds = strategy?.data_summary;
+  const conf = strat?.confidence;
+  const isPar3 = currentHole?.par === 3;
+  const scorecardCourse = selectedCourse ?? allTeeVersions[0] ?? null;
+
+  // ── Helper functions ──────────────────────────────────────────────────────────
+  async function fetchStrategy(holeNum: number, cId?: string) {
+    setLoadingStrategy(true); setStrategy(null);
+    try {
+      const res = await fetch("/api/strategy", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId: cId ?? courseId, hole: holeNum }),
+      });
+      const data = await res.json();
+      setStrategy(data);
+      setApproachDist(data.defaultApproachDist ?? null);
+    } catch {}
+    setLoadingStrategy(false);
   }
 
   async function startRound() {
     if (!selectedCourse) return;
-    const holes = buildRoundHoles();
+    const holes = (() => {
+      const courseHoles = selectedCourse.holes;
+      const hs = holesPlayed===9 ? courseHoles.slice(startingHole-1, startingHole-1+9) : courseHoles;
+      return hs.map(h => blankHole(h));
+    })();
     setRoundHoles(holes);
     setCurrentHoleIdx(0);
     const id = `round_${Date.now()}`;
@@ -313,10 +380,7 @@ function PlayCourseInner() {
       id, course_id: courseId,
       course_name: selectedCourse.name,
       tee_box: selectedCourse.tee_box ?? "",
-      date: roundDate,
-      holes_played: holesPlayed,
-      starting_hole: startingHole,
-      holes,
+      date: roundDate, holes_played: holesPlayed, starting_hole: startingHole, holes,
     });
     const allCourses = await loadCourses();
     setAllTeeVersions(allCourses.filter(c => c.name === selectedCourse.name));
@@ -325,32 +389,11 @@ function PlayCourseInner() {
   }
 
   async function cancelRound() {
+    if (isEditMode) { window.location.href = `/rounds/${roundId}/edit`; return; }
     if (!roundId) { setStarted(false); return; }
-    if (isEditMode) {
-      // In edit mode just go back to edit page
-      window.location.href = `/rounds/${roundId}/edit`;
-      return;
-    }
     if (!confirm("Cancel this round? It will be deleted.")) return;
     await supabase.from("rounds").delete().eq("id", roundId);
-    setStarted(false);
-    setRoundId(null);
-    setRoundHoles([]);
-  }
-
-  async function fetchStrategy(holeNum: number, cId?: string) {
-    setLoadingStrategy(true); setStrategy(null);
-    try {
-      const res = await fetch("/api/strategy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId: cId ?? courseId, hole: holeNum }),
-      });
-      const data = await res.json();
-      setStrategy(data);
-      setApproachDist(data.defaultApproachDist ?? null);
-    } catch {}
-    setLoadingStrategy(false);
+    setStarted(false); setRoundId(null); setRoundHoles([]);
   }
 
   async function saveCurrentHole() {
@@ -382,81 +425,7 @@ function PlayCourseInner() {
     if (roundHoles[idx]) fetchStrategy(roundHoles[idx].hole, courseId);
   }
 
-  // Loading existing round
-  if (loadingRound) return (
-    <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
-      <p style={{ color:"#666" }}>Loading round...</p>
-    </main>
-  );
-
-  // Show scorecard
-  if (showScorecard && roundId && selectedCourse) {
-    return (
-      <RoundScorecard
-        roundHoles={roundHoles}
-        courseName={selectedCourse.name}
-        teeBox={selectedCourse.tee_box ?? ""}
-        date={roundDate}
-        allVersions={allTeeVersions.length > 0 ? allTeeVersions : [selectedCourse]}
-        roundId={roundId}
-      />
-    );
-  }
-
-  const currentHole = roundHoles[currentHoleIdx];
-  const isLastHole = currentHoleIdx === roundHoles.length - 1;
-  const strat = strategy?.strategy;
-  const hole = strategy?.hole;
-  const course = strategy?.course;
-  const enriched: EnrichedHole[] = strategy?.enrichedHoles ?? [];
-  const holeHistory = strategy?.holeHistory ?? [];
-  const ds = strategy?.data_summary;
-  const isPar3 = currentHole?.par === 3;
-
-  const displayEnriched = useMemo(() => {
-    if (!showThisHoleOnly) return enriched;
-    return enriched.filter((e: EnrichedHole) => e.isExactHole);
-  }, [enriched, showThisHoleOnly]);
-
-  const baseline = useMemo(() => {
-    if (!displayEnriched.length) return 0;
-    return wAvg(displayEnriched, scoreToPar);
-  }, [displayEnriched]);
-
-  const gridData = useMemo(() => computeGridData(displayEnriched, baseline), [displayEnriched, baseline]);
-  const hazardImpacts = useMemo(() => computeHazardImpacts(displayEnriched, hole, baseline), [displayEnriched, hole, baseline]);
-
-  const t = useMemo(() => {
-    if (!displayEnriched.length) return null;
-    const valid = displayEnriched.filter(e => e.roundHole.score !== "");
-    if (!valid.length) return null;
-    const wp = (pred: (e: EnrichedHole) => boolean, denom?: (e: EnrichedHole) => boolean) => {
-      let n = 0, d = 0;
-      for (const e of valid) { const ok = denom ? denom(e) : true; if (ok) { d += e.similarityScore; if (pred(e)) n += e.similarityScore; } }
-      return d > 0 ? n / d : 0;
-    };
-    const drv = (e: EnrichedHole) => e.roundHole.par >= 4;
-    return {
-      avgScoreToPar: wAvg(valid, scoreToPar),
-      driveHitPct: wp(e => e.roundHole.tee_accuracy === "Hit", drv),
-      driveMissLeftPct: wp(e => e.roundHole.tee_accuracy === "Left", drv),
-      driveMissRightPct: wp(e => e.roundHole.tee_accuracy === "Right", drv),
-      driveWaterPct: wp(e => (Number(e.roundHole.water_penalty) || 0) + (Number(e.roundHole.drop_or_out) || 0) > 0, drv),
-      driveTreePct: wp(e => (Number(e.roundHole.tree_haz) || 0) > 0, drv),
-      driveBunkerPct: wp(e => (Number(e.roundHole.fairway_bunker) || 0) > 0, drv),
-      apprHitPct: wp(e => e.roundHole.appr_accuracy === "Hit"),
-      apprMissLeftPct: wp(e => e.roundHole.appr_accuracy === "Left"),
-      apprMissRightPct: wp(e => e.roundHole.appr_accuracy === "Right"),
-      apprMissShortPct: wp(e => e.roundHole.appr_accuracy === "Short"),
-      apprMissLongPct: wp(e => e.roundHole.appr_accuracy === "Long"),
-      girPct: wp(e => !!e.roundHole.gir),
-      apprWaterPct: wp(e => (Number(e.roundHole.water_penalty) || 0) > 0),
-      apprBunkerPct: wp(e => (Number(e.roundHole.greenside_bunker) || 0) > 0),
-      apprTreePct: wp(e => (Number(e.roundHole.tree_haz) || 0) > 0),
-      avgPutts: wAvg(valid, e => e.roundHole.putts !== "" ? Number(e.roundHole.putts) : null),
-    };
-  }, [displayEnriched]);
-
+  // ── Styles ────────────────────────────────────────────────────────────────────
   const inputStyle: React.CSSProperties = { width:"100%", padding:"6px 8px", fontSize:14, border:"1px solid #ddd", borderRadius:6, boxSizing:"border-box" };
   const selectStyle: React.CSSProperties = { ...inputStyle, background:"white", color:"#0f6e56" };
   const disabledSelectStyle: React.CSSProperties = { ...inputStyle, background:"#f0f0f0", color:"#bbb" };
@@ -468,10 +437,36 @@ function PlayCourseInner() {
     background: primary ? "#1a1a1a" : "white", color: primary ? "white" : "#1a1a1a",
     border: "1px solid #1a1a1a", borderRadius: 8, cursor: "pointer", textDecoration: "none", display: "inline-block",
   });
-  const conf = strat?.confidence;
   const confidenceColor: Record<string,string> = { high:"#0f6e56", medium:"#e67e22", low:"#c0392b" };
 
-  // ── Setup screen ─────────────────────────────────────────────────────────────
+  // ── NOW safe to do conditional returns ────────────────────────────────────────
+
+  if (loadingRound) return (
+    <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
+      <p style={{ color:"#666" }}>Loading round...</p>
+    </main>
+  );
+
+  if (showScorecard && roundId && scorecardCourse) {
+    return (
+      <RoundScorecard
+        roundHoles={roundHoles}
+        courseName={scorecardCourse.name}
+        teeBox={scorecardCourse.tee_box ?? ""}
+        date={roundDate}
+        allVersions={allTeeVersions.length > 0 ? allTeeVersions : [scorecardCourse]}
+        roundId={roundId}
+      />
+    );
+  }
+
+  if (showScorecard && roundId && !scorecardCourse) return (
+    <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
+      <p style={{ color:"#666" }}>Loading scorecard...</p>
+    </main>
+  );
+
+  // ── Setup screen ──────────────────────────────────────────────────────────────
   if (!started) {
     return (
       <main style={{ maxWidth:520, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
@@ -489,8 +484,7 @@ function PlayCourseInner() {
           </div>
           <div>
             <label style={labelStyle}>Date</label>
-            <input type="date" value={roundDate} onChange={e => setRoundDate(e.target.value)}
-              style={{ ...inputStyle, maxWidth:160 }} />
+            <input type="date" value={roundDate} onChange={e => setRoundDate(e.target.value)} style={{ ...inputStyle, maxWidth:160 }} />
           </div>
           <div>
             <label style={labelStyle}>Holes</label>
@@ -520,13 +514,15 @@ function PlayCourseInner() {
     <main style={{ maxWidth:520, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-        <a href={isEditMode ? `/rounds/${roundId}/edit` : "/"} style={{ fontSize:13, color:"#666" }}>← {isEditMode ? "Back to edit" : "Exit"}</a>
+        <a href={isEditMode ? `/rounds/${roundId}/edit` : "/"} style={{ fontSize:13, color:"#666" }}>
+          ← {isEditMode ? "Back to edit" : "Exit"}
+        </a>
         <span style={{ fontSize:13, color:"#666" }}>{saving ? "Saving..." : "Auto-saved"}</span>
       </div>
 
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-        <button onClick={() => goToHole(Math.max(0, currentHoleIdx - 1))} disabled={currentHoleIdx === 0}
-          style={{ ...btnStyle(false, true), opacity: currentHoleIdx === 0 ? 0.4 : 1 }}>← Prev</button>
+        <button onClick={() => goToHole(Math.max(0, currentHoleIdx-1))} disabled={currentHoleIdx===0}
+          style={{ ...btnStyle(false,true), opacity: currentHoleIdx===0 ? 0.4 : 1 }}>← Prev</button>
         <div style={{ textAlign:"center" }}>
           <p style={{ fontSize:18, fontWeight:700, color:"#0f6e56", margin:0 }}>Hole {currentHole?.hole}</p>
           <p style={{ fontSize:13, color:"#666", margin:0 }}>Par {currentHole?.par} · {currentHole?.yards} yds · SI {currentHole?.stroke_index}</p>
@@ -537,13 +533,12 @@ function PlayCourseInner() {
             Post Score ✓
           </button>
         ) : (
-          <button onClick={() => goToHole(currentHoleIdx + 1)}
-            style={{ ...btnStyle(true, true) }}>Next →</button>
+          <button onClick={() => goToHole(currentHoleIdx+1)} style={{ ...btnStyle(true,true) }}>Next →</button>
         )}
       </div>
 
       <button onClick={() => setShowScore(s => !s)}
-        style={{ ...btnStyle(showScore, true), width:"100%", marginBottom:12, textAlign:"center" }}>
+        style={{ ...btnStyle(showScore,true), width:"100%", marginBottom:12, textAlign:"center" }}>
         {showScore ? "Hide Score Entry" : "📝 Enter Score"}
       </button>
 
@@ -556,12 +551,12 @@ function PlayCourseInner() {
                 <label style={labelStyle}>{label}</label>
                 <input type="number" min={min} max={max} style={inputStyle}
                   value={(currentHole as any)[field]}
-                  onChange={e => updateHoleField(field as keyof RoundHole, e.target.value === "" ? "" : Number(e.target.value))} />
+                  onChange={e => updateHoleField(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
               </div>
             ))}
             <div>
               <label style={labelStyle}>1st Putt</label>
-              <select style={selectStyle} value={currentHole.first_putt_distance} onChange={e => updateHoleField("first_putt_distance", e.target.value)}>
+              <select style={selectStyle} value={currentHole.first_putt_distance} onChange={e => updateHoleField("first_putt_distance",e.target.value)}>
                 <option value="">—</option>
                 {["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"].map(d => <option key={d} value={d}>{d}</option>)}
               </select>
@@ -570,31 +565,31 @@ function PlayCourseInner() {
           <p style={sl}>Tee & Approach</p>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
             <div>
-              <label style={{ ...labelStyle, color: isPar3 ? "#bbb" : "#666" }}>DRIV Club</label>
-              <select style={isPar3 ? disabledSelectStyle : selectStyle} value={isPar3 ? "" : currentHole.club}
-                onChange={e => !isPar3 && updateHoleField("club", e.target.value)} disabled={isPar3}>
+              <label style={{ ...labelStyle, color: isPar3?"#bbb":"#666" }}>DRIV Club</label>
+              <select style={isPar3?disabledSelectStyle:selectStyle} value={isPar3?"":currentHole.club}
+                onChange={e => !isPar3&&updateHoleField("club",e.target.value)} disabled={isPar3}>
                 <option value="">—</option>
                 {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label style={{ ...labelStyle, color: isPar3 ? "#bbb" : "#666" }}>DRIV Acc</label>
-              <select style={isPar3 ? disabledSelectStyle : selectStyle} value={isPar3 ? "" : currentHole.tee_accuracy}
-                onChange={e => !isPar3 && updateHoleField("tee_accuracy", e.target.value)} disabled={isPar3}>
+              <label style={{ ...labelStyle, color: isPar3?"#bbb":"#666" }}>DRIV Acc</label>
+              <select style={isPar3?disabledSelectStyle:selectStyle} value={isPar3?"":currentHole.tee_accuracy}
+                onChange={e => !isPar3&&updateHoleField("tee_accuracy",e.target.value)} disabled={isPar3}>
                 <option value="">—</option>
                 {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
             <div>
               <label style={labelStyle}>APPR Club</label>
-              <select style={selectStyle} value={currentHole.appr_distance} onChange={e => updateHoleField("appr_distance", e.target.value)}>
+              <select style={selectStyle} value={currentHole.appr_distance} onChange={e => updateHoleField("appr_distance",e.target.value)}>
                 <option value="">—</option>
                 {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
               <label style={labelStyle}>APPR Acc</label>
-              <select style={selectStyle} value={currentHole.appr_accuracy} onChange={e => updateHoleField("appr_accuracy", e.target.value)}>
+              <select style={selectStyle} value={currentHole.appr_accuracy} onChange={e => updateHoleField("appr_accuracy",e.target.value)}>
                 <option value="">—</option>
                 {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
               </select>
@@ -607,11 +602,11 @@ function PlayCourseInner() {
                 <label style={labelStyle}>{label}</label>
                 <input type="number" min={0} max={10} style={inputStyle}
                   value={(currentHole as any)[field]}
-                  onChange={e => updateHoleField(field as keyof RoundHole, e.target.value === "" ? "" : Number(e.target.value))} />
+                  onChange={e => updateHoleField(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
               </div>
             ))}
           </div>
-          <button onClick={() => { saveCurrentHole(); setShowScore(false); if (!isLastHole) goToHole(currentHoleIdx + 1); }}
+          <button onClick={() => { saveCurrentHole(); setShowScore(false); if(!isLastHole) goToHole(currentHoleIdx+1); }}
             style={{ ...btnStyle(true), width:"100%", textAlign:"center" }}>
             {isLastHole ? "Save Score" : "Save & Next →"}
           </button>
@@ -623,14 +618,14 @@ function PlayCourseInner() {
       {!loadingStrategy && strategy && hole && strat && (
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <span style={{ fontSize:11, fontWeight:700, letterSpacing:1, color:confidenceColor[conf] ?? "#666", textTransform:"uppercase" }}>{conf} confidence</span>
+            <span style={{ fontSize:11, fontWeight:700, letterSpacing:1, color:confidenceColor[conf]??"#666", textTransform:"uppercase" }}>{conf} confidence</span>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <span style={{ fontSize:11, color:"#aaa" }}>
-                {ds?.exact_hole_history > 0 ? `${ds.exact_hole_history}× this hole · ` : ""}{displayEnriched.length} similar
+                {ds?.exact_hole_history>0?`${ds.exact_hole_history}× this hole · `:""}{displayEnriched.length} similar
               </span>
-              <button onClick={() => setShowThisHoleOnly(v => !v)}
+              <button onClick={() => setShowThisHoleOnly(v=>!v)}
                 style={{ fontSize:11, padding:"2px 8px", borderRadius:12, border:"1px solid #0f6e56", background:showThisHoleOnly?"#0f6e56":"white", color:showThisHoleOnly?"white":"#0f6e56", cursor:"pointer", fontWeight:600 }}>
-                {showThisHoleOnly ? "This hole only" : "All similar"}
+                {showThisHoleOnly?"This hole only":"All similar"}
               </button>
             </div>
           </div>
@@ -641,69 +636,69 @@ function PlayCourseInner() {
               <span style={{ fontSize:14, color:"#333" }}>Par {hole.par}</span>
               <span style={{ fontSize:14, color:"#333" }}>{hole.yards} yds</span>
               <span style={{ fontSize:14, color:"#333" }}>SI {hole.stroke_index}</span>
-              {course?.rating && <span style={{ fontSize:14, color:"#666" }}>Rating {course.rating}</span>}
-              {course?.slope && <span style={{ fontSize:14, color:"#666" }}>Slope {course.slope}</span>}
+              {course?.rating&&<span style={{ fontSize:14, color:"#666" }}>Rating {course.rating}</span>}
+              {course?.slope&&<span style={{ fontSize:14, color:"#666" }}>Slope {course.slope}</span>}
             </div>
-            {hole.dogleg_direction && <p style={{ fontSize:13, color:"#555", margin:"4px 0 0" }}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction] ?? hole.dogleg_direction}</p>}
-            {hole.approach_green_depth > 0 && <p style={{ fontSize:13, color:"#555", margin:"4px 0 0" }}>Green depth: {hole.approach_green_depth} yds</p>}
+            {hole.dogleg_direction&&<p style={{ fontSize:13, color:"#555", margin:"4px 0 0" }}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>}
+            {hole.approach_green_depth>0&&<p style={{ fontSize:13, color:"#555", margin:"4px 0 0" }}>Green depth: {hole.approach_green_depth} yds</p>}
           </div>
 
           <div style={{ ...card("#f0f0f0"), display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 20px" }}>
-            <span style={{ fontSize:13, color:"#aaa" }}>Avg on {showThisHoleOnly ? "this hole" : "similar holes"}</span>
-            <span style={{ fontSize:20, fontWeight:700, color:(t?.avgScoreToPar ?? 0) > 0 ? "#c0392b" : "#27ae60" }}>
-              {t ? fmtSTP(t.avgScoreToPar ?? 0) : ds?.avg_score_to_par}
+            <span style={{ fontSize:13, color:"#aaa" }}>Avg on {showThisHoleOnly?"this hole":"similar holes"}</span>
+            <span style={{ fontSize:20, fontWeight:700, color:(t?.avgScoreToPar??0)>0?"#c0392b":"#27ae60" }}>
+              {t?fmtSTP(t.avgScoreToPar??0):ds?.avg_score_to_par}
             </span>
           </div>
 
-          {holeHistory.length > 0 && (() => {
-            const avgScore = holeHistory.reduce((s: number, h: any) => s + (Number(h.score) - h.par), 0) / holeHistory.length;
-            const COLS = "60px 28px 32px 30px 26px 26px 28px 1fr";
-            return (
-              <div style={{ background:"#f9f9f9", border:"1px solid #eee", borderRadius:12, padding:"12px 14px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                  <p style={{ fontSize:12, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1, margin:0 }}>My History — This Hole</p>
-                  <span style={{ fontSize:13, fontWeight:700, color:avgScore > 0 ? "#c0392b" : avgScore < 0 ? "#27ae60" : "#333" }}>
+          {holeHistory.length>0&&(()=>{
+            const avgScore=holeHistory.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/holeHistory.length;
+            const COLS="60px 28px 32px 30px 26px 26px 28px 1fr";
+            return(
+              <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <p style={{fontSize:12,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:0}}>My History — This Hole</p>
+                  <span style={{fontSize:13,fontWeight:700,color:avgScore>0?"#c0392b":avgScore<0?"#27ae60":"#333"}}>
                     avg {fmt0(avgScore)} · {holeHistory.length} rounds
                   </span>
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:COLS, gap:"0 4px", marginBottom:4 }}>
-                  {["Date","Sc","Club","Tee","Ap","Pu","Haz","Appr"].map(h => (
-                    <span key={h} style={{ fontSize:9, color:"#aaa", fontWeight:600, textTransform:"uppercase" }}>{h}</span>
+                <div style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",marginBottom:4}}>
+                  {["Date","Sc","Club","Tee","Ap","Pu","Haz","Appr"].map(h=>(
+                    <span key={h} style={{fontSize:9,color:"#aaa",fontWeight:600,textTransform:"uppercase"}}>{h}</span>
                   ))}
                 </div>
-                {holeHistory.map((h: any, i: number) => (
-                  <div key={i} style={{ display:"grid", gridTemplateColumns:COLS, gap:"0 4px", alignItems:"center", padding:"3px 0", borderTop:i > 0 ? "1px solid #f0f0f0" : "none" }}>
-                    <span style={{ fontSize:10, color:"#888" }}>{h.date?.slice(2,10) || "—"}</span>
-                    <span style={{ fontSize:13, fontWeight:700, color:scoreColor(Number(h.score), h.par) }}>
-                      {Number(h.score) - h.par === 0 ? "E" : Number(h.score) - h.par > 0 ? `+${Number(h.score) - h.par}` : Number(h.score) - h.par}
+                {holeHistory.map((h:any,i:number)=>(
+                  <div key={i} style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",alignItems:"center",padding:"3px 0",borderTop:i>0?"1px solid #f0f0f0":"none"}}>
+                    <span style={{fontSize:10,color:"#888"}}>{h.date?.slice(2,10)||"—"}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:scoreColor(Number(h.score),h.par)}}>
+                      {Number(h.score)-h.par===0?"E":Number(h.score)-h.par>0?`+${Number(h.score)-h.par}`:Number(h.score)-h.par}
                     </span>
-                    <span style={{ fontSize:10, color:"#555" }}>{h.club || "—"}</span>
-                    <span style={{ fontSize:10, color:"#555" }}>{h.tee_accuracy?.slice(0,3) || "—"}</span>
-                    <span style={{ fontSize:10, color:"#555" }}>{h.appr_accuracy?.slice(0,3) || "—"}</span>
-                    <span style={{ fontSize:10, color:"#555" }}>{h.putts || "—"}</span>
-                    <span style={{ fontSize:10, color:"#e67e22", fontWeight:500 }}>{hazardCode(h)}</span>
-                    <span style={{ fontSize:10, color:"#555", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{h.appr_distance || "—"}</span>
+                    <span style={{fontSize:10,color:"#555"}}>{h.club||"—"}</span>
+                    <span style={{fontSize:10,color:"#555"}}>{h.tee_accuracy?.slice(0,3)||"—"}</span>
+                    <span style={{fontSize:10,color:"#555"}}>{h.appr_accuracy?.slice(0,3)||"—"}</span>
+                    <span style={{fontSize:10,color:"#555"}}>{h.putts||"—"}</span>
+                    <span style={{fontSize:10,color:"#e67e22",fontWeight:500}}>{hazardCode(h)}</span>
+                    <span style={{fontSize:10,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.appr_distance||"—"}</span>
                   </div>
                 ))}
               </div>
             );
           })()}
 
-          {hole.par >= 4 && (
+          {hole.par>=4&&(
             <div style={card("#f6f6f6")}>
               <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE STRATEGY</p>
-              {hazardImpacts.length > 0 && (
+              {hazardImpacts.length>0&&(
                 <div style={{ marginBottom:14 }}>
                   <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 6px" }}>TEE SHOT HAZARDS</p>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6 }}>
-                    {hazardImpacts.map((h, i) => {
-                      const colors = impactColor(h.impact);
-                      return (
-                        <div key={i} style={{ background:colors.bg, borderRadius:8, padding:"8px 12px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <span style={{ fontSize:12, color:colors.color, fontWeight:500 }}>{h.label}</span>
-                          <div style={{ textAlign:"right" }}>
-                            <p style={{ fontSize:13, fontWeight:700, color:colors.color, margin:0 }}>{fmtSTP(h.impact)}</p>
-                            <p style={{ fontSize:10, color:colors.color, opacity:0.75, margin:0 }}>{h.count} holes</p>
+                    {hazardImpacts.map((h,i)=>{
+                      const colors=impactColor(h.impact);
+                      return(
+                        <div key={i} style={{background:colors.bg,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:12,color:colors.color,fontWeight:500}}>{h.label}</span>
+                          <div style={{textAlign:"right"}}>
+                            <p style={{fontSize:13,fontWeight:700,color:colors.color,margin:0}}>{fmtSTP(h.impact)}</p>
+                            <p style={{fontSize:10,color:colors.color,opacity:0.75,margin:0}}>{h.count} holes</p>
                           </div>
                         </div>
                       );
@@ -713,23 +708,22 @@ function PlayCourseInner() {
               )}
               <div style={{ marginTop:8 }}>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:3, marginBottom:3 }}>
-                  {["Club","Left","Hit","Right","Unk"].map(h => (
-                    <div key={h} style={{ fontSize:9, fontWeight:600, color:"#aaa", textAlign:"center", textTransform:"uppercase" }}>{h}</div>
+                  {["Club","Left","Hit","Right","Unk"].map(h=>(
+                    <div key={h} style={{fontSize:9,fontWeight:600,color:"#aaa",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
                   ))}
                 </div>
-                {gridData.map(row => (
-                  <div key={row.club} style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:3, marginBottom:3 }}>
-                    <div style={{ background:"#f6f6f6", borderRadius:4, padding:"3px 4px", display:"flex", flexDirection:"column", justifyContent:"center", textAlign:"center" }}>
-                      <p style={{ fontSize:10, fontWeight:600, color:"#1a1a1a", margin:0 }}>{row.club}</p>
-                      <p style={{ fontSize:9, color:"#aaa", margin:0 }}>{row.count}</p>
+                {gridData.map(row=>(
+                  <div key={row.club} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
+                    <div style={{background:"#f6f6f6",borderRadius:4,padding:"3px 4px",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"center"}}>
+                      <p style={{fontSize:10,fontWeight:600,color:"#1a1a1a",margin:0}}>{row.club}</p>
+                      <p style={{fontSize:9,color:"#aaa",margin:0}}>{row.count}</p>
                     </div>
-                    {row.cols.map((col, ci) => {
-                      const isLeftCol = ci === 0;
-                      const isRightCol = ci === 2;
-                      const leftHazard = hole.tee_water_out_left || hole.tee_tree_hazard_left || hole.tee_bunkers_left;
-                      const rightHazard = hole.tee_water_out_right || hole.tee_tree_hazard_right || hole.tee_bunkers_right;
-                      const greyed = (isLeftCol && !leftHazard) || (isRightCol && !rightHazard);
-                      return <GridCell key={ci} likelihood={col.likelihood} impact={col.impact} count={col.count} greyed={greyed} />;
+                    {row.cols.map((col,ci)=>{
+                      const isLeftCol=ci===0, isRightCol=ci===2;
+                      const leftHazard=hole.tee_water_out_left||hole.tee_tree_hazard_left||hole.tee_bunkers_left;
+                      const rightHazard=hole.tee_water_out_right||hole.tee_tree_hazard_right||hole.tee_bunkers_right;
+                      const greyed=(isLeftCol&&!leftHazard)||(isRightCol&&!rightHazard);
+                      return<GridCell key={ci} likelihood={col.likelihood} impact={col.impact} count={col.count} greyed={greyed}/>;
                     })}
                   </div>
                 ))}
@@ -740,42 +734,42 @@ function PlayCourseInner() {
           <div style={card("#f6f6f6")}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
               <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:0 }}>APPROACH</p>
-              {approachDist != null && (
+              {approachDist!=null&&(
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ fontSize:11, color:"#aaa" }}>Distance (yds)</span>
                   <input type="number" min={0} max={700} value={approachDist}
-                    onChange={e => setApproachDist(Number(e.target.value))}
+                    onChange={e=>setApproachDist(Number(e.target.value))}
                     style={{ width:64, padding:"3px 6px", fontSize:13, border:"1px solid #0f6e56", borderRadius:6, color:"#0f6e56", fontWeight:600, textAlign:"center" }} />
                 </div>
               )}
             </div>
             <div style={{ fontSize:22, fontWeight:700, color:"#0f6e56", marginBottom:8 }}>
-              {t ? pct(t.girPct) : "—"} <span style={{ fontSize:14, color:"#aaa", fontWeight:400 }}>GIR</span>
+              {t?pct(t.girPct):"—"} <span style={{ fontSize:14, color:"#aaa", fontWeight:400 }}>GIR</span>
             </div>
-            {t && (
+            {t&&(
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
-                {[{label:"Hit",v:t.apprHitPct,c:"#27ae60"},{label:"Left",v:t.apprMissLeftPct,c:"#2980b9"},{label:"Right",v:t.apprMissRightPct,c:"#8e44ad"},{label:"Short",v:t.apprMissShortPct,c:"#e67e22"},{label:"Long",v:t.apprMissLongPct,c:"#c0392b"}].map(({label,v,c}) => (
-                  <div key={label} style={{ background:"#eee", borderRadius:8, padding:"4px 10px", fontSize:12 }}>
-                    <span style={{ color:"#999" }}>{label}: </span><span style={{ fontWeight:600, color:c }}>{pct(v)}</span>
+                {[{label:"Hit",v:t.apprHitPct,c:"#27ae60"},{label:"Left",v:t.apprMissLeftPct,c:"#2980b9"},{label:"Right",v:t.apprMissRightPct,c:"#8e44ad"},{label:"Short",v:t.apprMissShortPct,c:"#e67e22"},{label:"Long",v:t.apprMissLongPct,c:"#c0392b"}].map(({label,v,c})=>(
+                  <div key={label} style={{background:"#eee",borderRadius:8,padding:"4px 10px",fontSize:12}}>
+                    <span style={{color:"#999"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
                   </div>
                 ))}
               </div>
             )}
-            {t && (
+            {t&&(
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {(hole.approach_water_out_left || hole.approach_water_out_right || hole.approach_water_out_short || hole.approach_water_out_long) && (
-                  <div style={{ background:"#fff3e0", borderRadius:8, padding:"4px 10px", fontSize:12 }}>
-                    <span style={{ color:"#999" }}>OB/Water: </span><span style={{ fontWeight:600, color:"#e67e22" }}>{pct(t.apprWaterPct)}</span>
+                {(hole.approach_water_out_left||hole.approach_water_out_right||hole.approach_water_out_short||hole.approach_water_out_long)&&(
+                  <div style={{background:"#fff3e0",borderRadius:8,padding:"4px 10px",fontSize:12}}>
+                    <span style={{color:"#999"}}>OB/Water: </span><span style={{fontWeight:600,color:"#e67e22"}}>{pct(t.apprWaterPct)}</span>
                   </div>
                 )}
-                {(hole.approach_bunker_short_left || hole.approach_bunker_short_middle || hole.approach_bunker_short_right || hole.approach_bunker_middle_left || hole.approach_bunker_middle_right || hole.approach_bunker_long_left || hole.approach_bunker_long_middle || hole.approach_bunker_long_right) && (
-                  <div style={{ background:"#fef9e7", borderRadius:8, padding:"4px 10px", fontSize:12 }}>
-                    <span style={{ color:"#999" }}>Bunker: </span><span style={{ fontWeight:600, color:"#c8a84b" }}>{pct(t.apprBunkerPct)}</span>
+                {(hole.approach_bunker_short_left||hole.approach_bunker_short_middle||hole.approach_bunker_short_right||hole.approach_bunker_middle_left||hole.approach_bunker_middle_right||hole.approach_bunker_long_left||hole.approach_bunker_long_middle||hole.approach_bunker_long_right)&&(
+                  <div style={{background:"#fef9e7",borderRadius:8,padding:"4px 10px",fontSize:12}}>
+                    <span style={{color:"#999"}}>Bunker: </span><span style={{fontWeight:600,color:"#c8a84b"}}>{pct(t.apprBunkerPct)}</span>
                   </div>
                 )}
-                {(hole.approach_tree_hazard_left || hole.approach_tree_hazard_right || hole.approach_tree_hazard_long) && (
-                  <div style={{ background:"#eafaf1", borderRadius:8, padding:"4px 10px", fontSize:12 }}>
-                    <span style={{ color:"#999" }}>Trees/Haz: </span><span style={{ fontWeight:600, color:"#27ae60" }}>{pct(t.apprTreePct)}</span>
+                {(hole.approach_tree_hazard_left||hole.approach_tree_hazard_right||hole.approach_tree_hazard_long)&&(
+                  <div style={{background:"#eafaf1",borderRadius:8,padding:"4px 10px",fontSize:12}}>
+                    <span style={{color:"#999"}}>Trees/Haz: </span><span style={{fontWeight:600,color:"#27ae60"}}>{pct(t.apprTreePct)}</span>
                   </div>
                 )}
               </div>
@@ -783,18 +777,18 @@ function PlayCourseInner() {
             <p style={{ fontSize:13, color:"#666", margin:"8px 0 0" }}>{strat.approach_strategy?.reason}</p>
           </div>
 
-          {strat.warning && (
-            <div style={{ background:"#fff4e5", border:"1px solid #f0a500", borderRadius:12, padding:"14px 20px" }}>
-              <p style={{ fontSize:11, color:"#b37400", fontWeight:700, letterSpacing:1, margin:"0 0 6px" }}>⚠ WATCH OUT</p>
-              <p style={{ fontSize:13, color:"#7a4f00", margin:0 }}>{strat.warning}</p>
+          {strat.warning&&(
+            <div style={{background:"#fff4e5",border:"1px solid #f0a500",borderRadius:12,padding:"14px 20px"}}>
+              <p style={{fontSize:11,color:"#b37400",fontWeight:700,letterSpacing:1,margin:"0 0 6px"}}>⚠ WATCH OUT</p>
+              <p style={{fontSize:13,color:"#7a4f00",margin:0}}>{strat.warning}</p>
             </div>
           )}
 
-          {ds?.insights?.length > 0 && (
+          {ds?.insights?.length>0&&(
             <div style={card("#f0f9f6")}>
-              <p style={{ fontSize:11, color:"#0f6e56", fontWeight:700, letterSpacing:1, margin:"0 0 8px" }}>YOUR TENDENCIES ON SIMILAR HOLES</p>
-              <ul style={{ margin:0, paddingLeft:16 }}>
-                {ds.insights.map((ins: string, i: number) => <li key={i} style={{ fontSize:13, color:"#333", marginBottom:4 }}>{ins}</li>)}
+              <p style={{fontSize:11,color:"#0f6e56",fontWeight:700,letterSpacing:1,margin:"0 0 8px"}}>YOUR TENDENCIES ON SIMILAR HOLES</p>
+              <ul style={{margin:0,paddingLeft:16}}>
+                {ds.insights.map((ins:string,i:number)=><li key={i} style={{fontSize:13,color:"#333",marginBottom:4}}>{ins}</li>)}
               </ul>
             </div>
           )}
@@ -802,18 +796,18 @@ function PlayCourseInner() {
       )}
 
       <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:24, justifyContent:"center" }}>
-        {roundHoles.map((h, i) => (
-          <button key={i} onClick={() => goToHole(i)} style={{
+        {roundHoles.map((h,i)=>(
+          <button key={i} onClick={()=>goToHole(i)} style={{
             width:28, height:28, borderRadius:"50%", border:"none", cursor:"pointer",
-            background: i === currentHoleIdx ? "#0f6e56" : h.score !== "" ? "#b2dfdb" : "#eee",
-            color: i === currentHoleIdx ? "white" : "#1a1a1a", fontSize:11, fontWeight:600,
+            background:i===currentHoleIdx?"#0f6e56":h.score!==""?"#b2dfdb":"#eee",
+            color:i===currentHoleIdx?"white":"#1a1a1a", fontSize:11, fontWeight:600,
           }}>{h.hole}</button>
         ))}
       </div>
 
       <div style={{ marginTop:24, textAlign:"center" }}>
         <button onClick={cancelRound} style={{ fontSize:13, color:"#c0392b", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
-          {isEditMode ? "← Back to edit round" : "Cancel round"}
+          {isEditMode?"← Back to edit round":"Cancel round"}
         </button>
       </div>
 
@@ -823,7 +817,7 @@ function PlayCourseInner() {
 
 export default function PlayCourse() {
   return (
-    <Suspense fallback={<main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"#666" }}>Loading...</p></main>}>
+    <Suspense fallback={<main style={{maxWidth:520,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><p style={{color:"#666"}}>Loading...</p></main>}>
       <PlayCourseInner />
     </Suspense>
   );
