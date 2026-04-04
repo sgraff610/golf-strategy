@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { CourseRecord } from "@/lib/types";
 import { loadCourses } from "@/lib/storage";
 
-// ─── Shared types (mirrors route) ─────────────────────────────────────────────
+// ─── Shared types ─────────────────────────────────────────────────────────────
 type RoundHole = {
   hole: number; par: number; yards: number; stroke_index: number;
   score: number|""; putts: number|""; chips: number|""; club: string;
@@ -21,7 +21,98 @@ type EnrichedHole = {
 type CellValue = 0|1|2;
 type GreensideState = { long_left:CellValue; long_middle:CellValue; long_right:CellValue; middle_left:CellValue; middle_right:CellValue; short_left:CellValue; short_middle:CellValue; short_right:CellValue; };
 
-// ─── Greenside radial (read-only + filter) ────────────────────────────────────
+// ─── Tee Shot Grid helpers ────────────────────────────────────────────────────
+const IRONS = ["4i","5i","6i","7i","8i","9i","PW","SW","LW"];
+
+function impactColor(impact: number): { bg: string; color: string } {
+  if (impact >= 0.3)  return { bg:"#c0392b", color:"white" };
+  if (impact >= 0.1)  return { bg:"#f1948a", color:"#1a1a1a" };
+  if (impact > -0.1)  return { bg:"white",   color:"#1a1a1a" };
+  if (impact > -0.3)  return { bg:"#a9dfbf", color:"#1a1a1a" };
+  return               { bg:"#1e8449", color:"white" };
+}
+
+function wAvgGrid(holes: EnrichedHole[], fn: (e: EnrichedHole)=>number|null): number {
+  let n=0,d=0;
+  for (const e of holes) { const v=fn(e); if(v!==null&&!isNaN(v)){n+=v*e.similarityScore;d+=e.similarityScore;} }
+  return d>0?n/d:0;
+}
+
+function scoreToPar(e: EnrichedHole) { return Number(e.roundHole.score)-e.roundHole.par; }
+
+function clubGroup(club: string): string {
+  if (!club) return "Unknown";
+  if (club==="Driver") return "Driver";
+  if (club==="3W") return "3W";
+  if (club==="5W") return "5W";
+  if (club==="7W") return "7W";
+  if (IRONS.includes(club)) return "Irons";
+  return "Unknown";
+}
+
+function computeGridData(enriched: EnrichedHole[], baseline: number) {
+  const rows = ["Driver","3W","5W","7W","Irons","Unknown"];
+  const dirs = ["Left","Hit","Right","Unknown"] as const;
+  return rows.map(rowClub => {
+    const clubHoles = enriched.filter(e => clubGroup(e.roundHole.club||"")=== rowClub);
+    const count = clubHoles.length;
+    const cols = dirs.map(dir => {
+      const dirHoles = dir==="Unknown"
+        ? clubHoles.filter(e => !e.roundHole.tee_accuracy)
+        : clubHoles.filter(e => e.roundHole.tee_accuracy===dir);
+      const total = clubHoles.length;
+      const likelihood = total>0 ? dirHoles.length/total : 0;
+      const avg = dirHoles.length>0 ? wAvgGrid(dirHoles, scoreToPar) : NaN;
+      const impact = !isNaN(avg) ? avg-baseline : NaN;
+      return { likelihood, impact, count: dirHoles.length };
+    });
+    return { club: rowClub, count, cols };
+  });
+}
+
+function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: number) {
+  const hazards = [
+    { label:"OB/Water Left",   key:"tee_water_out_left",   filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Left" },
+    { label:"OB/Water Right",  key:"tee_water_out_right",  filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Right" },
+    { label:"OB/Water Across", key:"tee_water_out_across", filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 },
+    { label:"Trees Left",      key:"tee_tree_hazard_left", filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Left" },
+    { label:"Trees Right",     key:"tee_tree_hazard_right",filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Right" },
+    { label:"Bunker Left",     key:"tee_bunkers_left",     filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Left" },
+    { label:"Bunker Right",    key:"tee_bunkers_right",    filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Right" },
+  ];
+  return hazards
+    .filter(h => hole?.[h.key])
+    .map(h => {
+      const matching = enriched.filter(h.filterFn);
+      const avg = matching.length>0 ? wAvgGrid(matching, scoreToPar) : NaN;
+      const impact = !isNaN(avg) ? avg-baseline : NaN;
+      return { label:h.label, impact, count:matching.length };
+    })
+    .filter(h => !isNaN(h.impact))
+    .sort((a,b)=>b.impact-a.impact)
+    .slice(0,4);
+}
+
+function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; impact:number; count:number; greyed?:boolean }) {
+  const pct = (n:number) => `${Math.round(n*100)}%`;
+  const fmtSTP = (s:number) => s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
+  if (greyed) return (
+    <div style={{ background:"#f0f0f0", borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40 }}>
+      <p style={{ fontSize:9, color:"#bbb", margin:0 }}>N/A</p>
+    </div>
+  );
+  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#aaa" } : impactColor(impact);
+  return (
+    <div style={{ background:colors.bg, borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40, display:"flex", flexDirection:"column", justifyContent:"center" }}>
+      {count>0 ? <>
+        <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
+        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{pct(likelihood)}</p>
+      </> : <p style={{ fontSize:9, color:"#bbb", margin:0 }}>—</p>}
+    </div>
+  );
+}
+
+// ─── Greenside radial ─────────────────────────────────────────────────────────
 const GS_SEGMENTS = [
   {key:"long_left"as keyof GreensideState,abbr:"FL",angle:315},{key:"long_middle"as keyof GreensideState,abbr:"F",angle:0},
   {key:"long_right"as keyof GreensideState,abbr:"FR",angle:45},{key:"middle_right"as keyof GreensideState,abbr:"R",angle:90},
@@ -85,12 +176,7 @@ function Section({title,badge,defaultOpen=false,children}:{title:string;badge?:n
   );
 }
 
-// ─── Tendency recomputation (mirrors route logic, client-side) ────────────────
-function resolveChips(h:RoundHole):number|null{
-  if(h.appr_accuracy==="Hit")return 0;
-  if(h.chips!==""&&h.chips!==undefined&&h.chips!==null)return Number(h.chips);
-  return null;
-}
+// ─── Tendency recomputation ───────────────────────────────────────────────────
 function recomputeTendencies(enriched:EnrichedHole[]){
   const valid=enriched.filter(e=>e.roundHole.score!==""&&e.similarityScore>0);
   if(!valid.length)return null;
@@ -111,7 +197,6 @@ function recomputeTendencies(enriched:EnrichedHole[]){
     avgScoreToPar:wAvg(stp),
     driveHitPct:wPct(e=>e.roundHole.tee_accuracy==="Hit",drv),
     driveMissLeftPct:wPct(e=>e.roundHole.tee_accuracy==="Left",drv),
-    driveMissCenterPct:wPct(e=>e.roundHole.tee_accuracy==="Hit",drv),
     driveMissRightPct:wPct(e=>e.roundHole.tee_accuracy==="Right",drv),
     driveWaterPct:wPct(e=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0,drv),
     driveTreePct:wPct(e=>(Number(e.roundHole.tree_haz)||0)>0,drv),
@@ -135,19 +220,13 @@ const APPROACH_CLUBS=["3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW
 const defaultGS=():GreensideState=>({long_left:0,long_middle:0,long_right:0,middle_left:0,middle_right:0,short_left:0,short_middle:0,short_right:0});
 
 type StratFilters={
-  useLastN:boolean; lastN:number;
-  pars:Set<string>;
-  siDelta:string; // "pm1"|"pm2"|"pm3"|""
-  yardsDelta:string; // "pm10"|"pm20"|"pm30"|""
+  useLastN:boolean; lastN:number; pars:Set<string>; siDelta:string; yardsDelta:string;
   drivingClubs:Set<string>;
   teeHazards:{teeTreeLeft:boolean;teeTreeRight:boolean;teeBunkerLeft:boolean;teeBunkerRight:boolean;teeWaterLeft:boolean;teeWaterRight:boolean};
-  apprClubs:Set<string>;
-  greenDepth:string;
-  greensideFilter:GreensideState;
+  apprClubs:Set<string>; greenDepth:string; greensideFilter:GreensideState;
 };
 const DEFAULT_FILTERS=(totalRounds:number):StratFilters=>({
-  useLastN:false,lastN:Math.min(10,totalRounds),
-  pars:new Set(),siDelta:"",yardsDelta:"",
+  useLastN:false,lastN:Math.min(10,totalRounds),pars:new Set(),siDelta:"",yardsDelta:"",
   drivingClubs:new Set(),
   teeHazards:{teeTreeLeft:false,teeTreeRight:false,teeBunkerLeft:false,teeBunkerRight:false,teeWaterLeft:false,teeWaterRight:false},
   apprClubs:new Set(),greenDepth:"",greensideFilter:defaultGS(),
@@ -156,23 +235,19 @@ const DEFAULT_FILTERS=(totalRounds:number):StratFilters=>({
 function toggleSet(s:Set<string>,v:string):Set<string>{const n=new Set(s);n.has(v)?n.delete(v):n.add(v);return n;}
 
 function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData,totalRounds:number):EnrichedHole[]{
-  // Exact matches (this specific hole on this course) always included regardless of filters
   const isExact=(e:EnrichedHole)=>e.isExactHole===true;
   let pool=enriched;
-  // Last N rounds — get most recent N round dates
   if(f.useLastN&&f.lastN>0){
     const dates=[...new Set(enriched.map(e=>e.roundDate))].sort().reverse().slice(0,f.lastN);
     const dateSet=new Set(dates);
     pool=pool.filter(e=>dateSet.has(e.roundDate));
   }
-  if(f.pars.size>0)  pool=pool.filter(e=>f.pars.has(String(e.roundHole.par)));
-  // SI delta
+  if(f.pars.size>0) pool=pool.filter(e=>f.pars.has(String(e.roundHole.par)));
   if(f.siDelta&&targetHole?.stroke_index){
     const si=targetHole.stroke_index;
     const delta=f.siDelta==="pm1"?1:f.siDelta==="pm2"?2:3;
     pool=pool.filter(e=>Math.abs((e.courseHole?.stroke_index??e.roundHole.stroke_index)-si)<=delta);
   }
-  // Yards delta
   if(f.yardsDelta&&targetHole?.yards){
     const y=targetHole.yards;
     const delta=f.yardsDelta==="pm10"?10:f.yardsDelta==="pm20"?20:30;
@@ -180,12 +255,12 @@ function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData
   }
   if(f.drivingClubs.size>0) pool=pool.filter(e=>f.drivingClubs.has(e.roundHole.club));
   const th=f.teeHazards;
-  if(th.teeTreeLeft)  pool=pool.filter(e=>e.courseHole?.tee_tree_hazard_left);
-  if(th.teeTreeRight) pool=pool.filter(e=>e.courseHole?.tee_tree_hazard_right);
+  if(th.teeTreeLeft)   pool=pool.filter(e=>e.courseHole?.tee_tree_hazard_left);
+  if(th.teeTreeRight)  pool=pool.filter(e=>e.courseHole?.tee_tree_hazard_right);
   if(th.teeBunkerLeft) pool=pool.filter(e=>e.courseHole?.tee_bunkers_left);
   if(th.teeBunkerRight)pool=pool.filter(e=>e.courseHole?.tee_bunkers_right);
-  if(th.teeWaterLeft) pool=pool.filter(e=>e.courseHole?.tee_water_out_left);
-  if(th.teeWaterRight)pool=pool.filter(e=>e.courseHole?.tee_water_out_right);
+  if(th.teeWaterLeft)  pool=pool.filter(e=>e.courseHole?.tee_water_out_left);
+  if(th.teeWaterRight) pool=pool.filter(e=>e.courseHole?.tee_water_out_right);
   if(f.apprClubs.size>0) pool=pool.filter(e=>f.apprClubs.has(e.roundHole.appr_distance));
   if(f.greenDepth){
     const gd=(e:EnrichedHole)=>e.courseHole?.approach_green_depth??0;
@@ -201,19 +276,15 @@ function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData
     const keys=Object.keys(f.greensideFilter)as(keyof GreensideState)[];
     pool=pool.filter(e=>{
       for(const k of keys){
-        const fv=f.greensideFilter[k];
-        if(fv===0)continue;
-        const bunkerKey=`approach_bunker_${k}`;
-        const greenKey=`approach_green_${k}`;
-        const isBunker=e.courseHole?.[bunkerKey];
-        const isGreen=e.courseHole?.[greenKey];
+        const fv=f.greensideFilter[k]; if(fv===0)continue;
+        const isBunker=e.courseHole?.[`approach_bunker_${k}`];
+        const isGreen=e.courseHole?.[`approach_green_${k}`];
         const cv:CellValue=isBunker?2:isGreen?1:0;
         if(cv!==fv)return false;
       }
       return true;
     });
   }
-  // Always re-include exact hole matches that may have been filtered out
   const exactHoles=enriched.filter(isExact);
   const poolKeys=new Set(pool.map(e=>`${e.roundDate}|${e.courseId}|${e.roundHole.hole}`));
   for(const e of exactHoles){
@@ -221,20 +292,18 @@ function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData
     if(!poolKeys.has(key)){pool=[...pool,e];poolKeys.add(key);}
   }
   return pool;
-} 
+}
+
 const DOGLEG_LABELS:Record<string,string>={
   severe_left:"Severe Left",moderate_left:"Moderate Left",slight_left:"Slight Left",straight:"Straight",
   slight_right:"Slight Right",moderate_right:"Moderate Right",severe_right:"Severe Right",
 };
-
-// ─── Pill style ───────────────────────────────────────────────────────────────
 const pill=(active:boolean):React.CSSProperties=>({
   padding:"4px 10px",borderRadius:20,fontSize:12,fontWeight:500,cursor:"pointer",border:"1px solid",
   background:active?"#0f6e56":"white",color:active?"white":"#0f6e56",borderColor:"#0f6e56",whiteSpace:"nowrap",
 });
 const fl:React.CSSProperties={fontSize:11,color:"#999",margin:"0 0 6px",fontWeight:600};
 
-// ─── Main component ───────────────────────────────────────────────────────────
 function hazardCode(h:any):string{
   const parts:string[]=[];
   const ob=(Number(h.water_penalty)||0)+(Number(h.drop_or_out)||0);
@@ -247,7 +316,6 @@ function hazardCode(h:any):string{
   if(gb>0)parts.push(gb>1?`${gb}S`:"S");
   return parts.join(" ")||"—";
 }
-
 function scoreColor(score:number,par:number):string{
   const d=score-par;
   if(d<=-2)return"#1a6fd4"; if(d===-1)return"#27ae60"; if(d===0)return"#333"; if(d===1)return"#e67e22"; return"#c0392b";
@@ -288,6 +356,7 @@ function HoleHistorySection({history}:{history:any[]}){
   );
 }
 
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function Home(){
   const [courses,setCourses]=useState<CourseRecord[]>([]);
   const [courseId,setCourseId]=useState("");
@@ -308,24 +377,22 @@ export default function Home(){
   const selectedCourse=courses.find(c=>c.id===courseId);
   const availableHoles=Array.from({length:selectedCourse?.holes.length??18},(_,i)=>i+1);
   const targetHole=selectedCourse?.holes.find((h:any)=>h.hole===holeNumber);
+  const totalHoles=selectedCourse?.holes.length??18;
 
-  const handleSubmit=async(apprOverride?:number)=>{
+  const handleSubmit=async(apprOverride?:number, holeOverride?:number)=>{
     if(!selectedCourse)return;
     setLoading(true);setError("");setResult(null);
+    const hNum = holeOverride ?? holeNumber;
     try{
-      const body:any={courseId,hole:holeNumber};
+      const body:any={courseId,hole:hNum};
       if(apprOverride!=null)body.approachDistance=apprOverride;
       const res=await fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       const data=await res.json();
       if(!res.ok)setError(data.error??"Something went wrong.");
       else{
         setResult(data);
-        if(apprOverride==null){
-          setApproachDist(data.defaultApproachDist??null);
-          setApproachDistOverride(null);
-        }else{
-          setApproachDist(apprOverride);
-        }
+        if(apprOverride==null){setApproachDist(data.defaultApproachDist??null);setApproachDistOverride(null);}
+        else{setApproachDist(apprOverride);}
         const rounds=new Set((data.enrichedHoles as EnrichedHole[]).map((e:EnrichedHole)=>e.roundDate));
         setTotalRounds(rounds.size);
         setFilters(DEFAULT_FILTERS(rounds.size));
@@ -334,7 +401,14 @@ export default function Home(){
     setLoading(false);
   };
 
-  // Apply filters to enriched holes and recompute tendencies
+  function goToHole(n: number) {
+    setHoleNumber(n);
+    setResult(null);
+    setApproachDist(null);
+    setApproachDistOverride(null);
+    handleSubmit(undefined, n);
+  }
+
   const filteredEnriched=useMemo(()=>{
     if(!result?.enrichedHoles)return[];
     return applyFilters(result.enrichedHoles as EnrichedHole[],filters,targetHole,totalRounds);
@@ -342,7 +416,14 @@ export default function Home(){
 
   const filteredTendencies=useMemo(()=>recomputeTendencies(filteredEnriched),[filteredEnriched]);
 
-  // Count active filters for badges
+  const baseline=useMemo(()=>{
+    if(!filteredEnriched.length)return 0;
+    return wAvgGrid(filteredEnriched, e=>Number(e.roundHole.score)-e.roundHole.par);
+  },[filteredEnriched]);
+
+  const gridData=useMemo(()=>computeGridData(filteredEnriched,baseline),[filteredEnriched,baseline]);
+  const hazardImpacts=useMemo(()=>computeHazardImpacts(filteredEnriched,result?.hole,baseline),[filteredEnriched,result?.hole,baseline]);
+
   const filterCount=
     (filters.useLastN?1:0)+filters.pars.size+
     (filters.siDelta?1:0)+(filters.yardsDelta?1:0)+
@@ -386,18 +467,39 @@ export default function Home(){
             {availableHoles.map(n=>{const hd=selectedCourse?.holes.find((h:any)=>h.hole===n);return<option key={n} value={n}>Hole {n}{hd?` — Par ${hd.par}, ${hd.yards} yds, SI ${hd.stroke_index}`:""}</option>;})}
           </select>
         </div>
-        <button onClick={()=>handleSubmit()} disabled={loading} style={{padding:"12px",fontSize:15,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:8,cursor:loading?"not-allowed":"pointer",opacity:loading?0.6:1}}>
-          {loading?"Analysing...":"Get Strategy"}
-        </button>
-        <a href={courseId?`/rounds/play?courseId=${courseId}`:"#"}
-          style={{padding:"12px",fontSize:15,fontWeight:600,background:"white",color:"#0f6e56",border:"2px solid #0f6e56",borderRadius:8,cursor:"pointer",textAlign:"center",textDecoration:"none",display:"block"}}>
-          ⛳ Play Course
-        </a>
+
+        {/* Side-by-side buttons */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <button onClick={()=>handleSubmit()} disabled={loading} style={{padding:"12px",fontSize:15,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:8,cursor:loading?"not-allowed":"pointer",opacity:loading?0.6:1}}>
+            {loading?"Analysing...":"Get Strategy"}
+          </button>
+          <a href={courseId?`/rounds/play?courseId=${courseId}`:"#"}
+            style={{padding:"12px",fontSize:15,fontWeight:600,background:"white",color:"#0f6e56",border:"2px solid #0f6e56",borderRadius:8,cursor:"pointer",textAlign:"center",textDecoration:"none",display:"block"}}>
+            ⛳ Play Course
+          </a>
+        </div>
       </div>
 
       {error&&<p style={{color:"red",marginTop:20}}>{error}</p>}
 
       {result&&hole&&strategy&&(<div style={{marginTop:28,display:"flex",flexDirection:"column",gap:12}}>
+
+        {/* Prev / Next hole buttons */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+          <button
+            onClick={()=>goToHole(holeNumber-1)}
+            disabled={holeNumber<=1}
+            style={{padding:"6px 14px",fontSize:13,fontWeight:600,background:"white",color:holeNumber<=1?"#ccc":"#0f6e56",border:`1px solid ${holeNumber<=1?"#eee":"#0f6e56"}`,borderRadius:8,cursor:holeNumber<=1?"not-allowed":"pointer"}}>
+            ← Prev Hole
+          </button>
+          <span style={{fontSize:13,fontWeight:600,color:"#0f6e56"}}>Hole {holeNumber}</span>
+          <button
+            onClick={()=>goToHole(holeNumber+1)}
+            disabled={holeNumber>=totalHoles}
+            style={{padding:"6px 14px",fontSize:13,fontWeight:600,background:"white",color:holeNumber>=totalHoles?"#ccc":"#0f6e56",border:`1px solid ${holeNumber>=totalHoles?"#eee":"#0f6e56"}`,borderRadius:8,cursor:holeNumber>=totalHoles?"not-allowed":"pointer"}}>
+            Next Hole →
+          </button>
+        </div>
 
         {/* Confidence badge */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -417,9 +519,7 @@ export default function Home(){
             {course?.rating&&<span style={{fontSize:14,color:"#666"}}>Rating {course.rating}</span>}
             {course?.slope&&<span style={{fontSize:14,color:"#666"}}>Slope {course.slope}</span>}
           </div>
-          {hole.dogleg_direction&&(
-            <p style={{fontSize:13,color:"#555",margin:"4px 0 0"}}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>
-          )}
+          {hole.dogleg_direction&&<p style={{fontSize:13,color:"#555",margin:"4px 0 0"}}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>}
           {hole.approach_green_depth>0&&<p style={{fontSize:13,color:"#555",margin:"4px 0 0"}}>Green depth: {hole.approach_green_depth} yds</p>}
         </div>
 
@@ -431,44 +531,56 @@ export default function Home(){
           </span>
         </div>
 
-        {/* Tee strategy */}
-        <div style={card("#f6f6f6")}>
-          <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 8px"}}>TEE STRATEGY</p>
-          <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:10}}>
-            <span style={{fontSize:18,fontWeight:700,color:"#1a1a1a"}}>{strategy.tee_strategy.club}</span>
-            <span style={{fontSize:15,fontWeight:600,color:aimColors[strategy.tee_strategy.aim]??"#333"}}>aim {strategy.tee_strategy.aim}</span>
-          </div>
-          {/* Direction tendencies */}
-          {t&&hole.par>=4&&(
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-              {[{label:"Hit",v:t.driveHitPct,c:"#27ae60"},{label:"Left",v:t.driveMissLeftPct,c:"#2980b9"},{label:"Right",v:t.driveMissRightPct,c:"#8e44ad"}].map(({label,v,c})=>(
-                <div key={label} style={{background:"#eee",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
+        {/* Tee strategy — grid + hazards (par 4/5 only) */}
+        {hole.par>=4&&(
+          <div style={card("#f6f6f6")}>
+            <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 12px"}}>TEE STRATEGY</p>
+
+            {/* Tee Shot Hazards */}
+            {hazardImpacts.length>0&&(
+              <div style={{marginBottom:14}}>
+                <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>TEE SHOT HAZARDS</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
+                  {hazardImpacts.map((h,i)=>{
+                    const colors=impactColor(h.impact);
+                    return(
+                      <div key={i} style={{background:colors.bg,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:12,color:colors.color,fontWeight:500}}>{h.label}</span>
+                        <div style={{textAlign:"right"}}>
+                          <p style={{fontSize:13,fontWeight:700,color:colors.color,margin:0}}>{fmtSTP(h.impact)}</p>
+                          <p style={{fontSize:10,color:colors.color,opacity:0.75,margin:0}}>{h.count} holes</p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
+            )}
+
+            {/* Tee Shot Grid */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
+              {["Club","Left","Hit","Right","Unk"].map(h=>(
+                <div key={h} style={{fontSize:9,fontWeight:600,color:"#aaa",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
               ))}
             </div>
-          )}
-          {/* Hazard likelihoods — only show if hazard exists on this hole */}
-          {t&&hole.par>=4&&(
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {(hole.tee_water_out_left||hole.tee_water_out_right||hole.tee_water_out_across)&&(
-                <div style={{background:"#fff3e0",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>OB/Water: </span><span style={{fontWeight:600,color:"#e67e22"}}>{pct(t.driveWaterPct)}</span>
+            {gridData.map(row=>(
+              <div key={row.club} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
+                <div style={{background:"#f6f6f6",borderRadius:4,padding:"3px 4px",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"center"}}>
+                  <p style={{fontSize:10,fontWeight:600,color:"#1a1a1a",margin:0}}>{row.club}</p>
+                  <p style={{fontSize:9,color:"#aaa",margin:0}}>{row.count}</p>
                 </div>
-              )}
-              {(hole.tee_bunkers_left||hole.tee_bunkers_right)&&(
-                <div style={{background:"#fef9e7",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>Bunker: </span><span style={{fontWeight:600,color:"#c8a84b"}}>{pct(t.driveBunkerPct)}</span>
-                </div>
-              )}
-              {(hole.tee_tree_hazard_left||hole.tee_tree_hazard_right||hole.tee_tree_hazard_across)&&(
-                <div style={{background:"#eafaf1",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>Trees/Haz: </span><span style={{fontWeight:600,color:"#27ae60"}}>{pct(t.driveTreePct)}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                {row.cols.map((col,ci)=>{
+                  const isLeftCol=ci===0;
+                  const isRightCol=ci===2;
+                  const leftHazard=hole.tee_water_out_left||hole.tee_tree_hazard_left||hole.tee_bunkers_left;
+                  const rightHazard=hole.tee_water_out_right||hole.tee_tree_hazard_right||hole.tee_bunkers_right;
+                  const greyed=(isLeftCol&&!leftHazard)||(isRightCol&&!rightHazard);
+                  return <GridCell key={ci} likelihood={col.likelihood} impact={col.impact} count={col.count} greyed={greyed}/>;
+                })}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Approach strategy */}
         <div style={card("#f6f6f6")}>
@@ -477,37 +589,19 @@ export default function Home(){
             {approachDist!=null&&(
               <div style={{display:"flex",alignItems:"center",gap:6}}>
                 <span style={{fontSize:11,color:"#aaa"}}>Distance (yds)</span>
-                <input
-                  type="number" min={0} max={700}
+                <input type="number" min={0} max={700}
                   value={approachDistOverride??approachDist}
-                  onChange={e=>{
-                    const v=Number(e.target.value);
-                    setApproachDistOverride(v);
-                  }}
-                  onBlur={e=>{
-                    const v=Number(e.target.value);
-                    if(v!==(approachDistOverride??approachDist)){
-                      setApproachDistOverride(v);
-                      handleSubmit(v);
-                    }
-                  }}
-                  onKeyDown={e=>{
-                    if(e.key==="Enter"){
-                      const v=Number((e.target as HTMLInputElement).value);
-                      setApproachDistOverride(v);
-                      handleSubmit(v);
-                    }
-                  }}
+                  onChange={e=>{setApproachDistOverride(Number(e.target.value));}}
+                  onBlur={e=>{const v=Number(e.target.value);if(v!==(approachDistOverride??approachDist)){setApproachDistOverride(v);handleSubmit(v);}}}
+                  onKeyDown={e=>{if(e.key==="Enter"){const v=Number((e.target as HTMLInputElement).value);setApproachDistOverride(v);handleSubmit(v);}}}
                   style={{width:64,padding:"3px 6px",fontSize:13,border:"1px solid #0f6e56",borderRadius:6,color:"#0f6e56",fontWeight:600,textAlign:"center"}}
                 />
               </div>
             )}
           </div>
-          {/* GIR % as hero */}
           <div style={{fontSize:22,fontWeight:700,color:"#0f6e56",marginBottom:8}}>
             {t?pct(t.girPct):"—"} <span style={{fontSize:14,color:"#aaa",fontWeight:400}}>GIR</span>
           </div>
-          {/* Direction tendencies */}
           {t&&(
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
               {[{label:"Hit",v:t.apprHitPct,c:"#27ae60"},{label:"Left",v:t.apprMissLeftPct,c:"#2980b9"},{label:"Right",v:t.apprMissRightPct,c:"#8e44ad"},{label:"Short",v:t.apprMissShortPct,c:"#e67e22"},{label:"Long",v:t.apprMissLongPct,c:"#c0392b"}].map(({label,v,c})=>(
@@ -517,7 +611,6 @@ export default function Home(){
               ))}
             </div>
           )}
-          {/* Greenside hazard likelihoods */}
           {t&&(
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {(hole.approach_water_out_left||hole.approach_water_out_right||hole.approach_water_out_short||hole.approach_water_out_long)&&(
@@ -557,13 +650,12 @@ export default function Home(){
           </div>
         )}
 
-        {/* ── Hole History ── */}
+        {/* Hole History */}
         {result.holeHistory&&result.holeHistory.length>0&&<HoleHistorySection history={result.holeHistory}/>}
 
-        {/* ── Hole Summary (collapsible, not affected by filters) ── */}
+        {/* Hole Summary */}
         <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
           <Section title="Hole Summary">
-            {/* Tee Shot Hazards */}
             {[
               {label:"Trees/Haz left",v:hole.tee_tree_hazard_left},{label:"Trees/Haz right",v:hole.tee_tree_hazard_right},
               {label:"Trees/Haz across",v:hole.tee_tree_hazard_across},{label:"Bunkers left",v:hole.tee_bunkers_left},
@@ -581,11 +673,7 @@ export default function Home(){
                 ))}
               </div>
             )}
-            {/* Approach Hazards */}
-            {[
-              hole.approach_tree_hazard_left,hole.approach_tree_hazard_right,hole.approach_tree_hazard_long,
-              hole.approach_water_out_left,hole.approach_water_out_right,hole.approach_water_out_short,hole.approach_water_out_long,
-            ].some(Boolean)&&(
+            {[hole.approach_tree_hazard_left,hole.approach_tree_hazard_right,hole.approach_tree_hazard_long,hole.approach_water_out_left,hole.approach_water_out_right,hole.approach_water_out_short,hole.approach_water_out_long].some(Boolean)&&(
               <div style={{marginBottom:12}}>
                 <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>APPROACH HAZARDS</p>
                 {[
@@ -598,26 +686,23 @@ export default function Home(){
                 ))}
               </div>
             )}
-            {/* Greenside radial — read only */}
             <div>
               <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>GREENSIDE</p>
-              <GreensideWidget readOnly value={
-                {
-                  long_left:  hole.approach_bunker_long_left?2:hole.approach_green_long_left?1:0,
-                  long_middle:hole.approach_bunker_long_middle?2:hole.approach_green_long_middle?1:0,
-                  long_right: hole.approach_bunker_long_right?2:hole.approach_green_long_right?1:0,
-                  middle_left:hole.approach_bunker_middle_left?2:hole.approach_green_middle_left?1:0,
-                  middle_right:hole.approach_bunker_middle_right?2:hole.approach_green_middle_right?1:0,
-                  short_left: hole.approach_bunker_short_left?2:hole.approach_green_short_left?1:0,
-                  short_middle:hole.approach_bunker_short_middle?2:hole.approach_green_short_middle?1:0,
-                  short_right:hole.approach_bunker_short_right?2:hole.approach_green_short_right?1:0,
-                }
-              }/>
+              <GreensideWidget readOnly value={{
+                long_left:  hole.approach_bunker_long_left?2:hole.approach_green_long_left?1:0,
+                long_middle:hole.approach_bunker_long_middle?2:hole.approach_green_long_middle?1:0,
+                long_right: hole.approach_bunker_long_right?2:hole.approach_green_long_right?1:0,
+                middle_left:hole.approach_bunker_middle_left?2:hole.approach_green_middle_left?1:0,
+                middle_right:hole.approach_bunker_middle_right?2:hole.approach_green_middle_right?1:0,
+                short_left: hole.approach_bunker_short_left?2:hole.approach_green_short_left?1:0,
+                short_middle:hole.approach_bunker_short_middle?2:hole.approach_green_short_middle?1:0,
+                short_right:hole.approach_bunker_short_right?2:hole.approach_green_short_right?1:0,
+              }}/>
             </div>
           </Section>
         </div>
 
-        {/* ── Filters ── */}
+        {/* Filters */}
         <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <p style={{fontSize:12,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:0}}>
@@ -625,8 +710,6 @@ export default function Home(){
             </p>
             {filterCount>0&&<button onClick={()=>setFilters(DEFAULT_FILTERS(totalRounds))} style={{fontSize:12,color:"#666",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset</button>}
           </div>
-
-          {/* Rounds + Par */}
           <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:12}}>
             <div style={{flex:"1 1 120px"}}>
               <p style={fl}>Rounds</p>
@@ -643,14 +726,12 @@ export default function Home(){
             <div style={{flex:"0 0 auto"}}>
               <p style={fl}>Par</p>
               <div style={{display:"flex",gap:4}}>
-                {["3","4","5"].map(p => (
+                {["3","4","5"].map(p=>(
                   <button key={p} style={pill(filters.pars.has(p))} onClick={()=>setFilters(f=>({...f,pars:toggleSet(f.pars,p)}))}>Par {p}</button>
                 ))}
               </div>
             </div>
           </div>
-
-          {/* Hole Handicap + Yards */}
           <Section title="Hole Similarity" badge={(filters.siDelta?1:0)+(filters.yardsDelta?1:0)}>
             <div style={{marginBottom:10}}>
               <p style={fl}>Hole Handicap (vs SI {targetHole?.stroke_index})</p>
@@ -669,13 +750,11 @@ export default function Home(){
               </div>
             </div>
           </Section>
-
-          {/* Driving / Tee */}
           <Section title="Driving / Tee" badge={filters.drivingClubs.size+Object.values(filters.teeHazards).filter(Boolean).length}>
             <div style={{marginBottom:10}}>
               <p style={fl}>Driving Club</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {DRIVE_CLUBS.map(c => (
+                {DRIVE_CLUBS.map(c=>(
                   <button key={c} style={pill(filters.drivingClubs.has(c))} onClick={()=>setFilters(f=>({...f,drivingClubs:toggleSet(f.drivingClubs,c)}))}>{c}</button>
                 ))}
               </div>
@@ -693,13 +772,11 @@ export default function Home(){
               </div>
             </div>
           </Section>
-
-          {/* Approach / Greenside */}
           <Section title="Approach / Greenside" badge={filters.apprClubs.size+(filters.greenDepth?1:0)+(Object.values(filters.greensideFilter).some(v=>v!==0)?1:0)}>
             <div style={{marginBottom:10}}>
               <p style={fl}>Approach Club</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {APPROACH_CLUBS.map(c => (
+                {APPROACH_CLUBS.map(c=>(
                   <button key={c} style={pill(filters.apprClubs.has(c))} onClick={()=>setFilters(f=>({...f,apprClubs:toggleSet(f.apprClubs,c)}))}>{c}</button>
                 ))}
               </div>

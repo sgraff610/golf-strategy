@@ -289,9 +289,9 @@ export default function EditRound() {
         <button style={{ ...btnStyle(true), opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : saved ? "Saved! Redirecting..." : "Save changes"}
         </button>
-        {courseId && (
-          <a href={`/rounds/play?courseId=${courseId}`} style={{ ...btnStyle(false), color: "#0f6e56", borderColor: "#0f6e56" }}>
-            ⛳ Play this course
+        {id && (
+          <a href={`/rounds/play?roundId=${id}`} style={{ ...btnStyle(false), color: "#0f6e56", borderColor: "#0f6e56" }}>
+            ⛳ Play this round
           </a>
         )}
       </div>
