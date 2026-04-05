@@ -130,7 +130,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
               <td style={lbl}>Driv Club</td>
               {cols.map((col,ci) => col.type==="hole"
                 ? <td key={ci} style={c}>{col.rh.club||"—"}</td>
-                : <td key={ci} sstyle={{...c,background:"#f5f5f5"}}></td>)}
+                : <td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}
             </tr>
             <tr style={{ background:"#f9f9f9" }}>
               <td style={{ ...lbl, background:"#f9f9f9" }}>Driv Acc</td>
