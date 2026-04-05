@@ -104,6 +104,7 @@ function Scorecard({ savedCourse, allVersions, savedCourseId }: {
   const hdr: React.CSSProperties = { ...c, background:"#1a3a2a", color:"white", fontWeight:600 };
   const lbl: React.CSSProperties = { ...c, background:"#f0f0f0", fontWeight:600, color:"#333", textAlign:"left", paddingLeft:8, minWidth:64 };
   const sp: React.CSSProperties  = { ...c, background:"#e8f5f0", fontWeight:700, color:"#0f6e56" };
+const yardStyle = (isCurrent: boolean): React.CSSProperties => ({ ...c, color: "#0f6e56", fontWeight: isCurrent ? 700 : 400 });
 
   const btn = (primary: boolean): React.CSSProperties => ({
     padding:"10px 20px", fontSize:14, fontWeight:600,
@@ -152,7 +153,7 @@ function Scorecard({ savedCourse, allVersions, savedCourseId }: {
                 {cols.map((col,ci) => {
                   if (col.type==="hole") {
                     const th = tee.holes.find(h => h.hole===col.hole.hole);
-                    return <td key={ci} style={c}>{th?.yards||"—"}</td>;
+                    return <td key={ci} style={{...c, color:"#0f6e56", fontWeight: tee.tee_box===savedCourse.tee_box?700:400}}>{th?.yards||"—"}</td>;
                   }
                   return <td key={ci} style={{ ...sp, fontSize:13 }}>{col.yardsMap[tee.tee_box]||"—"}</td>;
                 })}

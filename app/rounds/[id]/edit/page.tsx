@@ -63,7 +63,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   }
   cols.push({ type:"spacer", label:"Total", parSum:roundHoles.reduce((s,h)=>s+h.par,0), scoreSum:roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0), yardsMap:makeSpacerYards(roundHoles) });
 
-  const c: React.CSSProperties  = { padding:"5px 3px", textAlign:"center", fontSize:11, borderRight:"1px solid #e0e0e0", whiteSpace:"nowrap", color:"#1a1a1a" };
+  const c: React.CSSProperties  = { padding:"5px 3px", textAlign:"center", fontSize:11, borderRight:"1px solid #e0e0e0", whiteSpace:"nowrap", };
   const hdr: React.CSSProperties = { ...c, background:"#1a3a2a", color:"white", fontWeight:600 };
   const lbl: React.CSSProperties = { ...c, background:"#f0f0f0", fontWeight:600, color:"#333", textAlign:"left", paddingLeft:8, minWidth:72, fontSize:10 };
   const sp: React.CSSProperties  = { ...c, background:"#e8f5f0", fontWeight:700, color:"#0f6e56" };
@@ -104,8 +104,8 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
                 : <td key={ci} style={sp}>{col.parSum}</td>)}
             </tr>
             {sortedTees.map((tee,ti) => (
-              <tr key={tee.id} style={{ background: ti%2===0?"#fff":"#f9f9f9" }}>
-                <td style={{ ...lbl, background: ti%2===0?"#fff":"#f9f9f9" }}>
+              <tr key={tee.id} style={{ background: ti%2===0?"#f5f5f5":"#f9f9f9" }}>
+                <td style={{ ...lbl, background: ti%2===0?"#f5f5f5":"#f9f9f9" }}>
                   <span style={{ fontSize:10, color:"#0f6e56", fontWeight:600 }}>{tee.tee_box}</span>
                 </td>
                 {cols.map((col,ci) => {
@@ -130,7 +130,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
               <td style={lbl}>Driv Club</td>
               {cols.map((col,ci) => col.type==="hole"
                 ? <td key={ci} style={c}>{col.rh.club||"—"}</td>
-                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+                : <td key={ci} sstyle={{...c,background:"#f5f5f5"}}></td>)}
             </tr>
             <tr style={{ background:"#f9f9f9" }}>
               <td style={{ ...lbl, background:"#f9f9f9" }}>Driv Acc</td>
@@ -144,7 +144,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
               <td style={lbl}>Appr Club</td>
               {cols.map((col,ci) => col.type==="hole"
                 ? <td key={ci} style={c}>{col.rh.appr_distance||"—"}</td>
-                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+                : <td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}
             </tr>
             <tr style={{ background:"#f9f9f9" }}>
               <td style={{ ...lbl, background:"#f9f9f9" }}>Appr Acc</td>
@@ -158,7 +158,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
               <td style={lbl}>Chips</td>
               {cols.map((col,ci) => col.type==="hole"
                 ? <td key={ci} style={c}>{col.rh.chips!==""?col.rh.chips:"—"}</td>
-                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+                : <td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}
             </tr>
             <tr style={{ background:"#f9f9f9" }}>
               <td style={{ ...lbl, background:"#f9f9f9" }}>Putts</td>
@@ -175,7 +175,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
               <td style={lbl}>1st Putt</td>
               {cols.map((col,ci) => col.type==="hole"
                 ? <td key={ci} style={c}>{col.rh.first_putt_distance||"—"}</td>
-                : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
+                : <td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}
             </tr>
           </tbody>
         </table>
