@@ -43,6 +43,7 @@ type EnrichedHole = {
   yards: number;
   dogleg: string;
   appr_dist_num: number;
+  roundDiff: number | null;
 };
 
 type Filters = {
@@ -70,6 +71,7 @@ type Filters = {
   doglegFilter: string;
   apprDistBucket: string;
   impactDir: "all" | "positive" | "negative";
+  diffBucket: Set<string>;
 };
 
 const DEFAULT_FILTERS: Filters = {
@@ -88,7 +90,18 @@ const DEFAULT_FILTERS: Filters = {
   greenDepth: "", greensideFilter: defaultGreensideFilter(),
   yardsBucket: "", siTierFilter: "", doglegFilter: "", apprDistBucket: "",
   impactDir: "all",
+  diffBucket: new Set(),
 };
+
+const DIFF_BUCKETS = [
+  { label: "< 7",     val: "lt7",    test: (d: number) => d < 7 },
+  { label: "7–9.9",   val: "7-9.9",  test: (d: number) => d >= 7 && d < 10 },
+  { label: "10–12.9", val: "10-12.9",test: (d: number) => d >= 10 && d < 13 },
+  { label: "13–15.9", val: "13-15.9",test: (d: number) => d >= 13 && d < 16 },
+  { label: "16–18.9", val: "16-18.9",test: (d: number) => d >= 16 && d < 19 },
+  { label: "19–21.9", val: "19-21.9",test: (d: number) => d >= 19 && d < 22 },
+  { label: "22+",     val: "22plus", test: (d: number) => d >= 22 },
+];
 
 const DRIVE_CLUBS    = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
 const APPROACH_CLUBS = ["3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
@@ -204,18 +217,36 @@ function yardsBucket(yards: number): string {
   const low = Math.floor(yards / 25) * 25;
   return `${low}-${low+24}`;
 }
-
 function apprDistBucket(dist: number): string {
   if (dist <= 0) return "Unknown";
   const low = Math.floor(dist / 10) * 10;
   return `${low}-${low+9}`;
 }
-
 function siTier(si: number): string {
   if (si <= 4)  return "SI 1-4";
   if (si <= 9)  return "SI 5-9";
   if (si <= 14) return "SI 10-14";
   return "SI 15-18";
+}
+
+function computeRoundDiff(round: any, course: any): number | null {
+  if (!course?.rating || !course?.slope) return null;
+  const scoredHoles = (round.holes ?? []).filter((h: any) => h.score !== "" && h.score != null && Number(h.score) > 0);
+  if (scoredHoles.length === 0) return null;
+  const ags = scoredHoles.reduce((s: number, h: any) => s + Math.min(Number(h.score), h.par + 2), 0);
+  const holesPlayed = round.holes_played ?? scoredHoles.length;
+  const is9Round = holesPlayed <= 9;
+  const is9Course = (course.holes?.length ?? 18) <= 9;
+  let rating = course.rating;
+  if (is9Round && !is9Course) rating = rating / 2;
+  else if (!is9Round && is9Course) rating = rating * 2;
+  let diff: number;
+  if (is9Round) {
+    diff = ((113 / course.slope) * (ags - rating)) * 2;
+  } else {
+    diff = (ags - rating) * 113 / course.slope;
+  }
+  return diff;
 }
 
 function calcAvg(holes: EnrichedHole[]): number {
@@ -288,6 +319,12 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
     if (f.greenDepth === "30-34" && (h.green_depth < 30 || h.green_depth > 34)) return false;
     if (f.greenDepth === "35-39" && (h.green_depth < 35 || h.green_depth > 39)) return false;
     if (f.greenDepth === "gt40"  && h.green_depth < 40) return false;
+    // Diff bucket filter
+    if (f.diffBucket.size > 0) {
+      if (h.roundDiff === null) return false;
+      const matchesAny = DIFF_BUCKETS.filter(b => f.diffBucket.has(b.val)).some(b => b.test(h.roundDiff!));
+      if (!matchesAny) return false;
+    }
     const gsAny = Object.values(f.greensideFilter).some(v => v !== 0);
     if (gsAny) {
       const combined: GreensideFilter = defaultGreensideFilter();
@@ -346,12 +383,12 @@ export default function RoundsInsights() {
         const course = await getCourse(round.course_id);
         const year = round.date ? new Date(round.date).getFullYear() : new Date().getFullYear();
         years.add(year);
+        const roundDiff = computeRoundDiff(round, course);
         for (const hole of round.holes ?? []) {
           if (!hole.score || !hole.par) continue;
           const ch = course?.holes.find((h: HoleData) => h.hole === hole.hole);
           const score = Number(hole.score);
           const putts = Number(hole.putts)||0;
-          // Parse approach distance recorded as club name → look up yards
           const CLUB_DIST: Record<string,number> = { Driver:230,"3W":210,"5W":195,"7W":180,"4i":185,"5i":175,"6i":165,"7i":155,"8i":145,"9i":130,PW:120,SW:100,LW:80 };
           const apprDistNum = CLUB_DIST[hole.appr_distance ?? ""] ?? 0;
           enriched.push({
@@ -399,6 +436,7 @@ export default function RoundsInsights() {
             roundIndex: ri, year,
             gir:    typeof hole.gir    === "boolean" ? hole.gir    : (score - putts) <= (hole.par - 2),
             grints: typeof hole.grints === "boolean" ? hole.grints : score <= hole.par,
+            roundDiff,
           });
         }
       }
@@ -432,13 +470,12 @@ export default function RoundsInsights() {
     !!filters.puttsMin || !!filters.puttsMax ||
     !!filters.chipsMin || !!filters.chipsMax || !!filters.firstPutt ||
     !!filters.greenDepth || !!filters.yardsBucket || !!filters.siTierFilter ||
-    !!filters.doglegFilter || !!filters.apprDistBucket ||
+    !!filters.doglegFilter || !!filters.apprDistBucket || filters.diffBucket.size > 0 ||
     Object.values(filters.greensideFilter).some(v => v !== 0);
 
-  const holesWithKnownChips = roundFiltered.filter(h => h.chips !== null);
+  const holesWithKnownChips = filtered.filter(h => h.chips !== null);
 
-  // Build grouped correlations dynamically
-  function groupedCorr(label: string, groupFn: (h: EnrichedHole) => string, pool: EnrichedHole[] = roundFiltered) {
+  function groupedCorr(label: string, groupFn: (h: EnrichedHole) => string, pool: EnrichedHole[] = filtered) {
     const groups: Record<string, EnrichedHole[]> = {};
     for (const h of pool) {
       const key = groupFn(h);
@@ -453,83 +490,71 @@ export default function RoundsInsights() {
     }));
   }
 
-  const MIN_HOLES = 5; // statistical significance threshold
+  const MIN_HOLES = 5;
 
   const correlations = [
-    // ── Outcome / scoring ──
-    { label: "Drive Hit",        holes: roundFiltered.filter(h => h.tee_accuracy==="Hit") },
-    { label: "Drive Left",       holes: roundFiltered.filter(h => h.tee_accuracy==="Left") },
-    { label: "Drive Right",      holes: roundFiltered.filter(h => h.tee_accuracy==="Right") },
-    { label: "Drive Short",      holes: roundFiltered.filter(h => h.tee_accuracy==="Short") },
-    { label: "Drive Long",       holes: roundFiltered.filter(h => h.tee_accuracy==="Long") },
-    { label: "Approach Hit",     holes: roundFiltered.filter(h => h.appr_accuracy==="Hit") },
-    { label: "Approach Left",    holes: roundFiltered.filter(h => h.appr_accuracy==="Left") },
-    { label: "Approach Right",   holes: roundFiltered.filter(h => h.appr_accuracy==="Right") },
-    { label: "Approach Short",   holes: roundFiltered.filter(h => h.appr_accuracy==="Short") },
-    { label: "Approach Long",    holes: roundFiltered.filter(h => h.appr_accuracy==="Long") },
-    { label: "GIR",              holes: roundFiltered.filter(h => h.gir) },
-    { label: "Non-GIR",          holes: roundFiltered.filter(h => !h.gir) },
-    { label: "GS Bunker",        holes: roundFiltered.filter(h => h.greenside_bunker > 0) },
+    { label: "Drive Hit",        holes: filtered.filter(h => h.tee_accuracy==="Hit") },
+    { label: "Drive Left",       holes: filtered.filter(h => h.tee_accuracy==="Left") },
+    { label: "Drive Right",      holes: filtered.filter(h => h.tee_accuracy==="Right") },
+    { label: "Drive Short",      holes: filtered.filter(h => h.tee_accuracy==="Short") },
+    { label: "Drive Long",       holes: filtered.filter(h => h.tee_accuracy==="Long") },
+    { label: "Approach Hit",     holes: filtered.filter(h => h.appr_accuracy==="Hit") },
+    { label: "Approach Left",    holes: filtered.filter(h => h.appr_accuracy==="Left") },
+    { label: "Approach Right",   holes: filtered.filter(h => h.appr_accuracy==="Right") },
+    { label: "Approach Short",   holes: filtered.filter(h => h.appr_accuracy==="Short") },
+    { label: "Approach Long",    holes: filtered.filter(h => h.appr_accuracy==="Long") },
+    { label: "GIR",              holes: filtered.filter(h => h.gir) },
+    { label: "Non-GIR",          holes: filtered.filter(h => !h.gir) },
+    { label: "GS Bunker",        holes: filtered.filter(h => h.greenside_bunker > 0) },
     { label: "1+ Chips",         holes: holesWithKnownChips.filter(h => (h.chips ?? 0) >= 1) },
-    { label: "1 Putt",           holes: roundFiltered.filter(h => h.putts === 1) },
-    { label: "2 Putts",          holes: roundFiltered.filter(h => h.putts === 2) },
-    { label: "3+ Putts",         holes: roundFiltered.filter(h => h.putts >= 3) },
-    // ── Tee hazards ──
-    { label: "Tee: Tree/Haz Left",   holes: roundFiltered.filter(h => h.tee_tree_left) },
-    { label: "Tee: Tree/Haz Right",  holes: roundFiltered.filter(h => h.tee_tree_right) },
-    { label: "Tee: Tree/Haz Across", holes: roundFiltered.filter(h => h.tee_tree_across) },
-    { label: "Tee: Bunker Left",     holes: roundFiltered.filter(h => h.tee_bunker_left) },
-    { label: "Tee: Bunker Right",    holes: roundFiltered.filter(h => h.tee_bunker_right) },
-    { label: "Tee: OB/Water Left",   holes: roundFiltered.filter(h => h.tee_water_left) },
-    { label: "Tee: OB/Water Right",  holes: roundFiltered.filter(h => h.tee_water_right) },
-    { label: "Tee: OB/Water Across", holes: roundFiltered.filter(h => h.tee_water_across) },
-    // ── Drive risk ──
-    { label: "High OB/Water Risk",   holes: roundFiltered.filter(h => h.drive_water_ob_pct > 0) },
-    { label: "High Tree Risk",       holes: roundFiltered.filter(h => h.drive_tree_pct > 0) },
-    { label: "High Bunker Risk",     holes: roundFiltered.filter(h => h.drive_bunker_pct > 0) },
-    // ── Approach hazards ──
-    { label: "Appr: Tree/Haz Left",   holes: roundFiltered.filter(h => h.appr_tree_left) },
-    { label: "Appr: Tree/Haz Right",  holes: roundFiltered.filter(h => h.appr_tree_right) },
-    { label: "Appr: Tree/Haz Long",   holes: roundFiltered.filter(h => h.appr_tree_long) },
-    { label: "Appr: Tree/Haz Across", holes: roundFiltered.filter(h => h.appr_tree_across) },
-    { label: "Appr: OB/Water Left",   holes: roundFiltered.filter(h => h.appr_water_left) },
-    { label: "Appr: OB/Water Right",  holes: roundFiltered.filter(h => h.appr_water_right) },
-    { label: "Appr: OB/Water Short",  holes: roundFiltered.filter(h => h.appr_water_short) },
-    { label: "Appr: OB/Water Long",   holes: roundFiltered.filter(h => h.appr_water_long) },
-    // ── Greenside bunker positions ──
+    { label: "1 Putt",           holes: filtered.filter(h => h.putts === 1) },
+    { label: "2 Putts",          holes: filtered.filter(h => h.putts === 2) },
+    { label: "3+ Putts",         holes: filtered.filter(h => h.putts >= 3) },
+    { label: "Tee: Tree/Haz Left",   holes: filtered.filter(h => h.tee_tree_left) },
+    { label: "Tee: Tree/Haz Right",  holes: filtered.filter(h => h.tee_tree_right) },
+    { label: "Tee: Tree/Haz Across", holes: filtered.filter(h => h.tee_tree_across) },
+    { label: "Tee: Bunker Left",     holes: filtered.filter(h => h.tee_bunker_left) },
+    { label: "Tee: Bunker Right",    holes: filtered.filter(h => h.tee_bunker_right) },
+    { label: "Tee: OB/Water Left",   holes: filtered.filter(h => h.tee_water_left) },
+    { label: "Tee: OB/Water Right",  holes: filtered.filter(h => h.tee_water_right) },
+    { label: "Tee: OB/Water Across", holes: filtered.filter(h => h.tee_water_across) },
+    { label: "High OB/Water Risk",   holes: filtered.filter(h => h.drive_water_ob_pct > 0) },
+    { label: "High Tree Risk",       holes: filtered.filter(h => h.drive_tree_pct > 0) },
+    { label: "High Bunker Risk",     holes: filtered.filter(h => h.drive_bunker_pct > 0) },
+    { label: "Appr: Tree/Haz Left",   holes: filtered.filter(h => h.appr_tree_left) },
+    { label: "Appr: Tree/Haz Right",  holes: filtered.filter(h => h.appr_tree_right) },
+    { label: "Appr: Tree/Haz Long",   holes: filtered.filter(h => h.appr_tree_long) },
+    { label: "Appr: Tree/Haz Across", holes: filtered.filter(h => h.appr_tree_across) },
+    { label: "Appr: OB/Water Left",   holes: filtered.filter(h => h.appr_water_left) },
+    { label: "Appr: OB/Water Right",  holes: filtered.filter(h => h.appr_water_right) },
+    { label: "Appr: OB/Water Short",  holes: filtered.filter(h => h.appr_water_short) },
+    { label: "Appr: OB/Water Long",   holes: filtered.filter(h => h.appr_water_long) },
     ...["short_left","short_middle","short_right","middle_left","middle_right","long_left","long_middle","long_right"].map(pos => ({
       label: `GS Bunker: ${pos.replace("_"," ")}`,
-      holes: roundFiltered.filter(h => h.approach_bunker[pos as keyof GreensideFilter] === 2),
+      holes: filtered.filter(h => h.approach_bunker[pos as keyof GreensideFilter] === 2),
     })),
-    // ── Greenside green positions ──
     ...["short_left","short_middle","short_right","middle_left","middle_right","long_left","long_middle","long_right"].map(pos => ({
       label: `GS Green: ${pos.replace("_"," ")}`,
-      holes: roundFiltered.filter(h => h.approach_green[pos as keyof GreensideFilter] === 1),
+      holes: filtered.filter(h => h.approach_green[pos as keyof GreensideFilter] === 1),
     })),
-    // ── Green depth ──
-    { label: "Green Depth <20",   holes: roundFiltered.filter(h => h.green_depth > 0 && h.green_depth < 20) },
-    { label: "Green Depth 20-24", holes: roundFiltered.filter(h => h.green_depth >= 20 && h.green_depth <= 24) },
-    { label: "Green Depth 25-29", holes: roundFiltered.filter(h => h.green_depth >= 25 && h.green_depth <= 29) },
-    { label: "Green Depth 30-34", holes: roundFiltered.filter(h => h.green_depth >= 30 && h.green_depth <= 34) },
-    { label: "Green Depth 35-39", holes: roundFiltered.filter(h => h.green_depth >= 35 && h.green_depth <= 39) },
-    { label: "Green Depth 40+",   holes: roundFiltered.filter(h => h.green_depth >= 40) },
+    { label: "Green Depth <20",   holes: filtered.filter(h => h.green_depth > 0 && h.green_depth < 20) },
+    { label: "Green Depth 20-24", holes: filtered.filter(h => h.green_depth >= 20 && h.green_depth <= 24) },
+    { label: "Green Depth 25-29", holes: filtered.filter(h => h.green_depth >= 25 && h.green_depth <= 29) },
+    { label: "Green Depth 30-34", holes: filtered.filter(h => h.green_depth >= 30 && h.green_depth <= 34) },
+    { label: "Green Depth 35-39", holes: filtered.filter(h => h.green_depth >= 35 && h.green_depth <= 39) },
+    { label: "Green Depth 40+",   holes: filtered.filter(h => h.green_depth >= 40) },
   ].map(({ label, holes }) => ({
     label, count: holes.length, avg: calcAvg(holes),
     impact: holes.length > 0 ? calcAvg(holes) - baseline : NaN,
   }));
 
-  // Grouped correlations (dynamic bucketing)
   const yardsBuckets = groupedCorr("Hole Yards", h => yardsBucket(h.yards));
   const siBuckets    = groupedCorr("Handicap",   h => siTier(h.stroke_index));
   const doglegBuckets= groupedCorr("Dogleg",     h => h.dogleg || "None");
   const apprBuckets  = groupedCorr("Appr Dist",  h => h.appr_dist_num > 0 ? apprDistBucket(h.appr_dist_num) : "");
 
   const allCorrelations = [
-    ...correlations,
-    ...yardsBuckets,
-    ...siBuckets,
-    ...doglegBuckets,
-    ...apprBuckets,
+    ...correlations, ...yardsBuckets, ...siBuckets, ...doglegBuckets, ...apprBuckets,
   ]
     .filter(c => c.count >= MIN_HOLES)
     .filter(c => {
@@ -574,7 +599,8 @@ export default function RoundsInsights() {
     (filters.ratingMin||filters.ratingMax?1:0) +
     (filters.slopeMin||filters.slopeMax?1:0) +
     (filters.yardsBucket?1:0) + (filters.siTierFilter?1:0) +
-    (filters.doglegFilter?1:0) + (filters.apprDistBucket?1:0);
+    (filters.doglegFilter?1:0) + (filters.apprDistBucket?1:0) +
+    (filters.diffBucket.size>0?1:0)
 
   return (
     <main style={{ maxWidth: 520, margin: "40px auto", fontFamily: "sans-serif", padding: "0 16px" }}>
@@ -599,7 +625,8 @@ export default function RoundsInsights() {
 
           <CollapsibleSection title="Course / Rounds" activeCount={
             (useLastN?1:0) + filters.years.size + (filters.courseId?1:0) +
-            (filters.ratingMin||filters.ratingMax?1:0) + (filters.slopeMin||filters.slopeMax?1:0)
+            (filters.ratingMin||filters.ratingMax?1:0) + (filters.slopeMin||filters.slopeMax?1:0) +
+            (filters.diffBucket?1:0)
           }>
             <div style={{ marginBottom: 10 }}>
               <p style={fl}>Rounds</p>
@@ -630,6 +657,17 @@ export default function RoundsInsights() {
                   <option key={id} value={id}>{name}</option>
                 ))}
               </select>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Handicap Differential</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {DIFF_BUCKETS.map(b => (
+                  <button key={b.val} style={pill(filters.diffBucket.has(b.val))}
+                    onClick={() => setFilters(f => ({ ...f, diffBucket: toggleSet(f.diffBucket, b.val) }))}>
+                    {b.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div style={{ marginBottom: 10 }}>
               <p style={fl}>Course Rating</p>
@@ -838,7 +876,6 @@ export default function RoundsInsights() {
           </CollapsibleSection>
         </div>
 
-        {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginBottom: 14 }}>
           {[
             { label: "Baseline Avg", val: fmt(baseline), color: clr(baseline), sub: `${roundFiltered.length} holes` },
@@ -853,7 +890,6 @@ export default function RoundsInsights() {
           ))}
         </div>
 
-        {/* Correlations */}
         <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Factor Correlations</p>
