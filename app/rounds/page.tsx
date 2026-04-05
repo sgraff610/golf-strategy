@@ -16,6 +16,7 @@ type Round = {
 type CourseInfo = {
   rating: number | null;
   slope: number | null;
+  hole_count: number | null;
 };
 
 function adjustedGrossScore(holes: any[]): number {
@@ -31,12 +32,27 @@ function handicapDifferential(round: Round, courseInfo: CourseInfo | undefined):
   const scoredHoles = round.holes.filter(h => h.score !== "" && h.score != null && Number(h.score) > 0);
   if (scoredHoles.length === 0) return "—";
   const ags = adjustedGrossScore(scoredHoles);
-  const is9 = round.holes_played === 9 || scoredHoles.length <= 9;
+  const holesPlayed = round.holes_played ?? scoredHoles.length;
+  const is9Round = holesPlayed <= 9;
+  const is9Course = (courseInfo.hole_count ?? round.holes.length) <= 9;
+
+  let rating = courseInfo.rating;
+  let slope = courseInfo.slope;
+
+  // Adjust rating if round holes don't match course holes
+  if (is9Round && !is9Course) {
+    // Playing 9 from an 18-hole course — halve the rating
+    rating = rating / 2;
+  } else if (!is9Round && is9Course) {
+    // Playing 18 from a 9-hole course — double the rating
+    rating = rating * 2;
+  }
+
   let diff: number;
-  if (is9) {
-    diff = ((113 / courseInfo.slope) * (ags - courseInfo.rating)) * 2;
+  if (is9Round) {
+    diff = ((113 / slope) * (ags - rating)) * 2;
   } else {
-    diff = (ags - courseInfo.rating) * 113 / courseInfo.slope;
+    diff = (ags - rating) * 113 / slope;
   }
   return diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
 }
@@ -63,11 +79,11 @@ export default function RoundsPage() {
           if (uniqueCourseIds.length > 0) {
             const { data: courses } = await supabase
               .from("courses")
-              .select("id, rating, slope")
+              .select("id, rating, slope, hole_count")
               .in("id", uniqueCourseIds);
             if (courses) {
               const map: Record<string, CourseInfo> = {};
-              courses.forEach((c: any) => { map[c.id] = { rating: c.rating, slope: c.slope }; });
+              courses.forEach((c: any) => { map[c.id] = { rating: c.rating, slope: c.slope, hole_count: c.hole_count }; });
               setCourseInfoMap(map);
             }
           }

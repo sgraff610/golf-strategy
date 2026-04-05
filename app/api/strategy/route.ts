@@ -525,7 +525,7 @@ export async function POST(req: NextRequest) {
         greensideProfile:encodeGreensideProfile(ch),
         courseSlope:rc?.slope??null,
       });
-      if(round.course_id===courseId&&Number(rh.hole)===Number(holeNumber)&&rh.score)
+      if(courseCache[round.course_id]?.name===courseRow.name&&Number(rh.hole)===Number(holeNumber)&&rh.score)
         exactHoleRoundHoles.push({rh,date:round.date??""});
     }
   }

@@ -548,8 +548,8 @@ function PlayCourseInner() {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
             {[{label:"Score",field:"score",min:1,max:20},{label:"Putts",field:"putts",min:0,max:10},{label:"Chips",field:"chips",min:0,max:10}].map(({label,field,min,max}) => (
               <div key={field}>
-                <label style={labelStyle}>{label}</label>
-                <input type="number" min={min} max={max} style={inputStyle}
+                <label style={{ ...labelStyle, ...(field==="chips"?{color:"#b8860b",fontWeight:700}:{}) }}>{label}</label>
+                <input type="number" min={min} max={max} style={{ ...inputStyle, ...(field==="chips"?{border:"2px solid #f0c040",background:"#fffde7"}:{}) }}
                   value={(currentHole as any)[field]}
                   onChange={e => updateHoleField(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
               </div>
@@ -581,15 +581,15 @@ function PlayCourseInner() {
               </select>
             </div>
             <div>
-              <label style={labelStyle}>APPR Club</label>
-              <select style={selectStyle} value={currentHole.appr_distance} onChange={e => updateHoleField("appr_distance",e.target.value)}>
+              <label style={{ ...labelStyle, color:"#b8860b", fontWeight:700 }}>APPR Club</label>
+              <select style={{ ...selectStyle, border:"2px solid #f0c040", background:"#fffde7" }} value={currentHole.appr_distance} onChange={e => updateHoleField("appr_distance",e.target.value)}>
                 <option value="">—</option>
                 {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div>
-              <label style={labelStyle}>APPR Acc</label>
-              <select style={selectStyle} value={currentHole.appr_accuracy} onChange={e => updateHoleField("appr_accuracy",e.target.value)}>
+              <label style={{ ...labelStyle, color:"#b8860b", fontWeight:700 }}>APPR Acc</label>
+              <select style={{ ...selectStyle, border:"2px solid #f0c040", background:"#fffde7" }} value={currentHole.appr_accuracy} onChange={e => updateHoleField("appr_accuracy",e.target.value)}>
                 <option value="">—</option>
                 {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
               </select>
