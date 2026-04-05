@@ -159,6 +159,8 @@ export default function EditCourse() {
   const [state, setState] = useState("");
   const [rating, setRating] = useState("");
   const [slope, setSlope] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [holes, setHoles] = useState<HoleData[]>([]);
   const [currentHole, setCurrentHole] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -178,6 +180,7 @@ export default function EditCourse() {
         setState(data.state ?? "");
         setRating(data.rating != null ? String(data.rating) : "");
         setSlope(data.slope != null ? String(data.slope) : "");
+        setAiSummary(data.ai_summary ?? "");
         setHoles(data.holes ?? []);
         if (data.holes?.length > 0) setGreenside(flatToGreenside(data.holes[0] as Record<string,unknown>));
       }
@@ -240,6 +243,7 @@ export default function EditCourse() {
       rating: rating!==""?parseFloat(rating):null,
       slope: slope!==""?parseInt(slope):null,
       holes,
+      ai_summary: aiSummary || null,
     };
     await saveCourse(updated);
     const allCourses = await loadCourses();
@@ -282,6 +286,28 @@ export default function EditCourse() {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
           <div><label style={LABEL}>City</label><input style={inputStyle} value={city} onChange={e => setCity(e.target.value)} /></div>
           <div><label style={LABEL}>State</label><input style={inputStyle} value={state} onChange={e => setState(e.target.value)} /></div>
+        </div>
+        {/* AI Summary collapsible */}
+        <div style={{ borderTop:"1px solid #eee", paddingTop:10 }}>
+          <button onClick={() => setSummaryOpen(o => !o)}
+            style={{ display:"flex", justifyContent:"space-between", alignItems:"center", width:"100%", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+            <span style={{ fontSize:12, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1 }}>
+              AI Course Summary {aiSummary ? "✓" : ""}
+            </span>
+            <span style={{ fontSize:13, color:"#999" }}>{summaryOpen ? "▲" : "▼"}</span>
+          </button>
+          {summaryOpen && (
+            <div style={{ marginTop:10 }}>
+              <label style={LABEL}>Paste an AI-generated course description here</label>
+              <textarea
+                value={aiSummary}
+                onChange={e => setAiSummary(e.target.value)}
+                placeholder="e.g. Designed by Arthur Hills, this course features..."
+                rows={8}
+                style={{ ...inputStyle, resize:"vertical", lineHeight:1.5, fontSize:13 }}
+              />
+            </div>
+          )}
         </div>
       </div>
 

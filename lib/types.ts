@@ -58,4 +58,5 @@ export type CourseRecord = {
   rating: number | null;
   slope: number | null;
   holes: HoleData[];
+  ai_summary?: string | null;
 };

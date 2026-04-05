@@ -16,6 +16,7 @@ export async function loadCourses(): Promise<CourseRecord[]> {
     rating: row.rating ?? null,
     slope: row.slope ?? null,
     holes: row.holes,
+    ai_summary: row.ai_summary ?? null,
   }));
 }
 
@@ -32,6 +33,7 @@ export async function saveCourse(course: CourseRecord): Promise<void> {
       slope: course.slope ?? null,
       hole_count: course.holes.length,
       holes: course.holes,
+      ai_summary: course.ai_summary ?? null,
     });
   if (error) console.error("saveCourse error:", error);
 }
@@ -55,5 +57,6 @@ export async function getCourse(id: string): Promise<CourseRecord | null> {
     rating: data.rating ?? null,
     slope: data.slope ?? null,
     holes: data.holes,
+    ai_summary: data.ai_summary ?? null,
   };
 }
