@@ -125,7 +125,8 @@ Guidelines:
       }),
     });
     const data = await response.json();
-    const reply = data.content?.map((b: any) => b.text || "").join("") || "Sorry, I couldn't generate a response.";
+    console.log("Anthropic response:", JSON.stringify(data).slice(0, 500));
+    const reply = data.content?.map((b: any) => b.text || "").join("") || `No content. Response: ${JSON.stringify(data).slice(0, 200)}`;
     return NextResponse.json({ reply });
   } catch (err) {
     console.error("Chat API error:", err);
