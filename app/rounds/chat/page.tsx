@@ -40,7 +40,6 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMessages }),
       });
-      const data = await res.json();
       setMessages(prev => [...prev, { role: "assistant", content: data.reply || data.error || "Something went wrong." }]);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }]);
