@@ -47,6 +47,7 @@ export type HoleData = {
   approach_green_middle_right: boolean;
   approach_green_short_right: boolean;
   approach_green_depth: number;
+  hole_notes?: string | null;
 };
 
 export type CourseRecord = {

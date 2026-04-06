@@ -61,7 +61,12 @@ function fmt0(n:number){return n>=0?`+${n.toFixed(1)}`:n.toFixed(1);}
 
 type EnrichedHole = { roundHole: any; courseHole: any; similarityScore: number; isExactHole: boolean };
 
-function impactColor(impact: number): { bg: string; color: string } {
+function impactColor(impact: number, lowCount=false): { bg: string; color: string } {
+  if (lowCount) {
+    if (impact > 0.1)  return { bg:"#f9d6d6", color:"#1a1a1a" };
+    if (impact < -0.1) return { bg:"#d6f0e0", color:"#1a1a1a" };
+    return              { bg:"white", color:"#1a1a1a" };
+  }
   if (impact >= 0.3)  return { bg:"#c0392b", color:"white" };
   if (impact >= 0.1)  return { bg:"#f1948a", color:"#1a1a1a" };
   if (impact > -0.1)  return { bg:"white",   color:"#1a1a1a" };
@@ -125,17 +130,19 @@ function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: num
 }
 
 function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; impact:number; count:number; greyed?:boolean }) {
+  const fmtSTP = (s:number) => s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
   if (greyed) return (
     <div style={{ background:"#f0f0f0", borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40 }}>
       <p style={{ fontSize:9, color:"#bbb", margin:0 }}>N/A</p>
     </div>
   );
-  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#aaa" } : impactColor(impact);
+  const lowCount = count <= 2;
+  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#aaa" } : impactColor(impact, lowCount);
   return (
     <div style={{ background:colors.bg, borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40, display:"flex", flexDirection:"column", justifyContent:"center" }}>
       {count>0 ? <>
         <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
-        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{pct(likelihood)}</p>
+        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{count}</p>
       </> : <p style={{ fontSize:9, color:"#bbb", margin:0 }}>—</p>}
     </div>
   );
@@ -249,6 +256,11 @@ function PlayCourseInner() {
   const [holesPlayed, setHolesPlayed] = useState<9|18>(18);
   const [startingHole, setStartingHole] = useState(1);
   const [started, setStarted] = useState(isEditMode); // start in playing mode if editing
+  const [loadingRound, setLoadingRound] = useState(isEditMode);
+  const [holeNotesOpen, setHoleNotesOpen] = useState(false);
+  const [holeNotesText, setHoleNotesText] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
   const [currentHoleIdx, setCurrentHoleIdx] = useState(0);
   const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [roundId, setRoundId] = useState<string|null>(initRoundId||null);
@@ -260,7 +272,6 @@ function PlayCourseInner() {
   const [approachDist, setApproachDist] = useState<number|null>(null);
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
-  const [loadingRound, setLoadingRound] = useState(isEditMode);
 
   // ── ALL useEffect hooks ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -361,6 +372,8 @@ function PlayCourseInner() {
       const data = await res.json();
       setStrategy(data);
       setApproachDist(data.defaultApproachDist ?? null);
+      setHoleNotesText(data.hole?.hole_notes ?? "");
+      setHoleNotesOpen(false);
     } catch {}
     setLoadingStrategy(false);
   }
@@ -386,6 +399,18 @@ function PlayCourseInner() {
     setAllTeeVersions(allCourses.filter(c => c.name === selectedCourse.name));
     setStarted(true);
     fetchStrategy(holes[0].hole, courseId);
+  }
+
+  async function saveHoleNotes() {
+    if (!selectedCourse || !hole) return;
+    setSavingNotes(true);
+    const updatedHoles = selectedCourse.holes.map((h:any) =>
+      h.hole === hole.hole ? { ...h, hole_notes: holeNotesText } : h
+    );
+    await supabase.from("courses").update({ holes: updatedHoles }).eq("id", courseId);
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+    setSavingNotes(false);
   }
 
   async function cancelRound() {
@@ -683,6 +708,27 @@ function PlayCourseInner() {
               </div>
             );
           })()}
+
+          {/* Hole Notes */}
+          <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 16px"}}>
+            <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:0}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {holeNotesText?"✓":""}</span>
+              <span style={{fontSize:13,color:"#999"}}>{holeNotesOpen?"▲":"▼"}</span>
+            </button>
+            {holeNotesOpen&&(
+              <div style={{marginTop:10}}>
+                <textarea value={holeNotesText} onChange={e=>setHoleNotesText(e.target.value)}
+                  placeholder="Add notes about this hole..."
+                  rows={3}
+                  style={{width:"100%",padding:"8px 10px",fontSize:13,border:"1px solid #ddd",borderRadius:8,boxSizing:"border-box",resize:"vertical",fontFamily:"sans-serif",lineHeight:1.5}}
+                />
+                <button onClick={saveHoleNotes} disabled={savingNotes}
+                  style={{marginTop:6,padding:"6px 16px",fontSize:12,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:6,cursor:"pointer",opacity:savingNotes?0.6:1}}>
+                  {notesSaved?"Saved!":savingNotes?"Saving...":"Save Notes"}
+                </button>
+              </div>
+            )}
+          </div>
 
           {hole.par>=4&&(
             <div style={card("#f6f6f6")}>

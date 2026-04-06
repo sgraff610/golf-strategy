@@ -164,6 +164,7 @@ export default function EditCourse() {
   const [holes, setHoles] = useState<HoleData[]>([]);
   const [currentHole, setCurrentHole] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [holeNotesOpen, setHoleNotesOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [greenside, setGreenside] = useState<GreensideState>(defaultGreensideState());
   const [showScorecard, setShowScorecard] = useState(false);
@@ -334,6 +335,22 @@ export default function EditCourse() {
           <div><label style={LABEL}>Stroke Index</label>
             <input style={inputStyle} type="number" min={1} max={18} value={hole.stroke_index||""} onChange={e => updateHole("stroke_index", Number(e.target.value))} />
           </div>
+        </div>
+
+        {/* Hole Notes */}
+        <div>
+          <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"4px 0"}}>
+            <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {hole.hole_notes?"✓":""}</span>
+            <span style={{fontSize:13,color:"#bbb"}}>{holeNotesOpen?"▲":"▼"}</span>
+          </button>
+          {holeNotesOpen&&(
+            <textarea
+              value={hole.hole_notes??""} onChange={e=>updateHole("hole_notes",e.target.value)}
+              placeholder="Add notes about this hole..."
+              rows={3}
+              style={{width:"100%",padding:"8px 10px",fontSize:13,border:"1px solid #ddd",borderRadius:8,boxSizing:"border-box",resize:"vertical",fontFamily:"sans-serif",lineHeight:1.5,marginTop:6}}
+            />
+          )}
         </div>
 
         <div>

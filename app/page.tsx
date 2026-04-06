@@ -24,12 +24,18 @@ type GreensideState = { long_left:CellValue; long_middle:CellValue; long_right:C
 // ─── Tee Shot Grid helpers ────────────────────────────────────────────────────
 const IRONS = ["4i","5i","6i","7i","8i","9i","PW","SW","LW"];
 
-function impactColor(impact: number): { bg: string; color: string } {
+function impactColor(impact: number, lowCount=false): { bg: string; color: string } {
+  if (lowCount) {
+    if (impact > 0.1)  return { bg:"#f9d6d6", color:"#1a1a1a" };
+    if (impact < -0.1) return { bg:"#d6f0e0", color:"#1a1a1a" };
+    return              { bg:"white", color:"#1a1a1a" };
+  }
   if (impact >= 0.3)  return { bg:"#c0392b", color:"white" };
   if (impact >= 0.1)  return { bg:"#f1948a", color:"#1a1a1a" };
   if (impact > -0.1)  return { bg:"white",   color:"#1a1a1a" };
   if (impact > -0.3)  return { bg:"#a9dfbf", color:"#1a1a1a" };
   return               { bg:"#1e8449", color:"white" };
+}
 }
 
 function wAvgGrid(holes: EnrichedHole[], fn: (e: EnrichedHole)=>number|null): number {
@@ -94,19 +100,19 @@ function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: num
 }
 
 function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; impact:number; count:number; greyed?:boolean }) {
-  const pct = (n:number) => `${Math.round(n*100)}%`;
   const fmtSTP = (s:number) => s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
   if (greyed) return (
     <div style={{ background:"#f0f0f0", borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40 }}>
       <p style={{ fontSize:9, color:"#bbb", margin:0 }}>N/A</p>
     </div>
   );
-  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#aaa" } : impactColor(impact);
+  const lowCount = count <= 2;
+  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#aaa" } : impactColor(impact, lowCount);
   return (
     <div style={{ background:colors.bg, borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40, display:"flex", flexDirection:"column", justifyContent:"center" }}>
       {count>0 ? <>
         <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
-        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{pct(likelihood)}</p>
+        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{count}</p>
       </> : <p style={{ fontSize:9, color:"#bbb", margin:0 }}>—</p>}
     </div>
   );
@@ -364,6 +370,10 @@ export default function Home(){
   const [result,setResult]=useState<any>(null);
   const [approachDist,setApproachDist]=useState<number|null>(null);
   const [approachDistOverride,setApproachDistOverride]=useState<number|null>(null);
+  const [holeNotesOpen,setHoleNotesOpen]=useState(false);
+  const [holeNotesText,setHoleNotesText]=useState("");
+  const [savingNotes,setSavingNotes]=useState(false);
+  const [notesSaved,setNotesSaved]=useState(false);
   const [loading,setLoading]=useState(false);
   const [loadingCourses,setLoadingCourses]=useState(true);
   const [error,setError]=useState("");
@@ -396,10 +406,25 @@ export default function Home(){
         const rounds=new Set((data.enrichedHoles as EnrichedHole[]).map((e:EnrichedHole)=>e.roundDate));
         setTotalRounds(rounds.size);
         setFilters(DEFAULT_FILTERS(rounds.size));
+        setHoleNotesText(data.hole?.hole_notes ?? "");
+        setHoleNotesOpen(false);
       }
     }catch{setError("Something went wrong. Please try again.");}
     setLoading(false);
   };
+
+  async function saveHoleNotes() {
+    if (!selectedCourse || !hole) return;
+    setSavingNotes(true);
+    const updatedHoles = selectedCourse.holes.map((h:any) =>
+      h.hole === hole.hole ? { ...h, hole_notes: holeNotesText } : h
+    );
+    const { supabase: sb } = await import("@/lib/supabase");
+    await sb.from("courses").update({ holes: updatedHoles }).eq("id", courseId);
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+    setSavingNotes(false);
+  }
 
   function goToHole(n: number) {
     setHoleNumber(n);
@@ -529,6 +554,27 @@ export default function Home(){
           <span style={{fontSize:20,fontWeight:700,color:(t?.avgScoreToPar??0)>0?"#c0392b":"#27ae60"}}>
             {t?fmtSTP(t.avgScoreToPar??0):ds?.avg_score_to_par}
           </span>
+        </div>
+
+        {/* Hole Notes */}
+        <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 16px"}}>
+          <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:0}}>
+            <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {holeNotesText?"✓":""}</span>
+            <span style={{fontSize:13,color:"#999"}}>{holeNotesOpen?"▲":"▼"}</span>
+          </button>
+          {holeNotesOpen&&(
+            <div style={{marginTop:10}}>
+              <textarea value={holeNotesText} onChange={e=>setHoleNotesText(e.target.value)}
+                placeholder="Add notes about this hole..."
+                rows={3}
+                style={{width:"100%",padding:"8px 10px",fontSize:13,border:"1px solid #ddd",borderRadius:8,boxSizing:"border-box",resize:"vertical",fontFamily:"sans-serif",lineHeight:1.5}}
+              />
+              <button onClick={saveHoleNotes} disabled={savingNotes}
+                style={{marginTop:6,padding:"6px 16px",fontSize:12,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:6,cursor:"pointer",opacity:savingNotes?0.6:1}}>
+                {notesSaved?"Saved!":savingNotes?"Saving...":"Save Notes"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tee strategy — grid + hazards (par 4/5 only) */}
