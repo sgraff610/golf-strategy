@@ -38,8 +38,8 @@ export async function POST(req: NextRequest) {
   console.log("Rounds loaded:", rounds?.length, "Error:", roundsResult);
   if (!rounds?.length) return NextResponse.json({ reply: "No rounds found in your data yet. Add some rounds first!" });
 
-  // Load all courses
-  const { data: courses } = await supabase.from("courses").select("*");
+  // Load all courses including AI summaries
+  const { data: courses } = await supabase.from("courses").select("id, name, tee_box, rating, slope, hole_count, ai_summary");
   const courseMap: Record<string, any> = {};
   for (const c of courses ?? []) courseMap[c.id] = c;
 
@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
       handicapDiff: diff != null ? Math.round(diff * 10) / 10 : null,
       courseRating: course?.rating ?? null,
       courseSlope: course?.slope ?? null,
+      courseDescription: course?.ai_summary ?? null,
       holes: scored.map((h: any) => ({
         hole: h.hole,
         par: h.par,
@@ -95,6 +96,9 @@ export async function POST(req: NextRequest) {
   const systemPrompt = `You are a golf performance analyst AI embedded in a golf strategy app. You have access to the player's complete round history below.
 
 Your job is to answer questions about their game, find patterns and correlations in their data, and give specific, data-driven insights. Be conversational but precise. Use numbers from the data to back up your points. When you spot interesting patterns, call them out proactively.
+
+Here are the AI course descriptions for courses the player has played:
+${(courses ?? []).filter(c => c.ai_summary).map(c => `${c.name} (${c.tee_box} tees): ${c.ai_summary}`).join("\n\n")}
 
 Here is the player's complete round data (${rounds.length} rounds, most recent first):
 
