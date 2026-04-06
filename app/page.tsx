@@ -574,7 +574,7 @@ export default function Home(){
             <div style={{marginTop:10}}>
               <textarea value={holeNotesText} onChange={e=>setHoleNotesText(e.target.value)}
                 placeholder="Add notes about this hole..."
-                rows={3}
+                rows={8}
                 style={{width:"100%",padding:"8px 10px",fontSize:13,border:"1px solid #ddd",borderRadius:8,boxSizing:"border-box",resize:"vertical",fontFamily:"sans-serif",lineHeight:1.5}}
               />
               <button onClick={saveHoleNotes} disabled={savingNotes}
