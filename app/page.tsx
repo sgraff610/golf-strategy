@@ -36,7 +36,6 @@ function impactColor(impact: number, lowCount=false): { bg: string; color: strin
   if (impact > -0.3)  return { bg:"#a9dfbf", color:"#1a1a1a" };
   return               { bg:"#1e8449", color:"white" };
 }
-}
 
 function wAvgGrid(holes: EnrichedHole[], fn: (e: EnrichedHole)=>number|null): number {
   let n=0,d=0;
