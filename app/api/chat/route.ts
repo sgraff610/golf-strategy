@@ -71,24 +71,16 @@ export async function POST(req: NextRequest) {
       courseSlope: course?.slope ?? null,
       courseDescription: course?.ai_summary ?? null,
       holes: scored.map((h: any) => ({
-        hole: h.hole,
-        par: h.par,
-        yards: h.yards,
-        si: h.stroke_index,
-        score: Number(h.score),
-        scoreToPar: Number(h.score) - h.par,
-        club: h.club || null,
-        driveAcc: h.tee_accuracy || null,
-        apprClub: h.appr_distance || null,
-        apprAcc: h.appr_accuracy || null,
-        putts: Number(h.putts) || null,
-        chips: h.chips !== "" && h.chips != null ? Number(h.chips) : null,
-        gir: h.gir,
-        water: (Number(h.water_penalty) || 0) + (Number(h.drop_or_out) || 0),
-        trees: Number(h.tree_haz) || 0,
-        fwyBunker: Number(h.fairway_bunker) || 0,
-        gsBunker: Number(h.greenside_bunker) || 0,
-        firstPutt: h.first_putt_distance || null,
+        h: h.hole,
+        p: h.par,
+        s: Number(h.score),
+        cl: h.club || null,
+        da: h.tee_accuracy || null,
+        aa: h.appr_accuracy || null,
+        pu: Number(h.putts) || null,
+        g: h.gir ? 1 : 0,
+        w: (Number(h.water_penalty)||0)+(Number(h.drop_or_out)||0)||null,
+        t: Number(h.tree_haz)||null,
       })),
     };
   });
@@ -103,6 +95,8 @@ ${(courses ?? []).filter(c => c.ai_summary).map(c => `${c.name} (${c.tee_box} te
 Here is the player's complete round data (${rounds.length} rounds, most recent first):
 
 ${JSON.stringify(roundSummaries, null, 2)}
+
+Hole data key: h=hole, p=par, s=score, cl=drive club, da=drive accuracy, aa=approach accuracy, pu=putts, g=GIR(1=yes), w=water/OB penalties, t=tree hazards.
 
 Guidelines:
 - Reference specific rounds, dates, and courses when relevant
