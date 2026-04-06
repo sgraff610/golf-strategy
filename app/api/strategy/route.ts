@@ -17,6 +17,7 @@ type HoleData = {
   approach_green_short_left?: boolean; approach_green_short_middle?: boolean; approach_green_short_right?: boolean;
   approach_green_middle_left?: boolean; approach_green_middle_right?: boolean;
   approach_green_long_left?: boolean; approach_green_long_middle?: boolean; approach_green_long_right?: boolean;
+  hole_notes?: string | null;
 };
 
 type RoundHole = {
