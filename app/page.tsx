@@ -413,12 +413,15 @@ export default function Home(){
   };
 
   async function saveHoleNotes() {
-    if (!selectedCourse || !hole) return;
+    if (!hole) return;
     setSavingNotes(true);
-    const updatedHoles = selectedCourse.holes.map((h:any) =>
+    const { supabase: sb } = await import("@/lib/supabase");
+    // Always fetch latest holes from Supabase to avoid overwriting other holes' notes
+    const { data: fresh } = await sb.from("courses").select("holes").eq("id", courseId).single();
+    const freshHoles = fresh?.holes ?? selectedCourse?.holes ?? [];
+    const updatedHoles = freshHoles.map((h:any) =>
       h.hole === hole.hole ? { ...h, hole_notes: holeNotesText } : h
     );
-    const { supabase: sb } = await import("@/lib/supabase");
     await sb.from("courses").update({ holes: updatedHoles }).eq("id", courseId);
     setNotesSaved(true);
     setTimeout(() => setNotesSaved(false), 2000);

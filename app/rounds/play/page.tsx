@@ -402,9 +402,11 @@ function PlayCourseInner() {
   }
 
   async function saveHoleNotes() {
-    if (!selectedCourse || !hole) return;
+    if (!hole) return;
     setSavingNotes(true);
-    const updatedHoles = selectedCourse.holes.map((h:any) =>
+    const { data: fresh } = await supabase.from("courses").select("holes").eq("id", courseId).single();
+    const freshHoles = fresh?.holes ?? selectedCourse?.holes ?? [];
+    const updatedHoles = freshHoles.map((h:any) =>
       h.hole === hole.hole ? { ...h, hole_notes: holeNotesText } : h
     );
     await supabase.from("courses").update({ holes: updatedHoles }).eq("id", courseId);
