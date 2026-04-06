@@ -113,6 +113,7 @@ Guidelines:
 - If asked about something not in the data, say so clearly`;
 
   try {
+    console.log("Calling Anthropic, key starts with:", process.env.ANTHROPIC_API_KEY?.slice(0,10));
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
@@ -128,6 +129,7 @@ Guidelines:
     return NextResponse.json({ reply });
   } catch (err) {
     console.error("Chat API error:", err);
-    return NextResponse.json({ error: "Failed to get response" }, { status: 500 });
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ reply: `Error: ${errMsg}` });
   }
 }
