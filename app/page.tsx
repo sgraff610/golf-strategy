@@ -407,9 +407,8 @@ export default function Home(){
         setFilters(DEFAULT_FILTERS(rounds.size));
         // Load hole notes fresh
         const { supabase: sbNotes } = await import("@/lib/supabase");
-        const { data: freshCourse } = await sbNotes.from("courses").select("holes").eq("id", courseId).single();
-        const freshHole = freshCourse?.holes?.find((h:any) => h.hole === hNum);
-        setHoleNotesText(freshHole?.hole_notes ?? "");
+        const { data: freshCourse } = await sbNotes.from("courses").select("hole_notes").eq("id", courseId).single();
+        setHoleNotesText(freshCourse?.hole_notes?.[String(hNum)] ?? "");
         setHoleNotesOpen(false);
       }
     }catch{setError("Something went wrong. Please try again.");}
@@ -420,13 +419,12 @@ export default function Home(){
     if (!hole) return;
     setSavingNotes(true);
     const { supabase: sb } = await import("@/lib/supabase");
-    // Always fetch latest holes from Supabase to avoid overwriting other holes' notes
-    const { data: fresh } = await sb.from("courses").select("holes").eq("id", courseId).single();
-    const freshHoles = fresh?.holes ?? selectedCourse?.holes ?? [];
-    const updatedHoles = freshHoles.map((h:any) =>
-      h.hole === hole.hole ? { ...h, hole_notes: holeNotesText } : h
-    );
-    await sb.from("courses").update({ holes: updatedHoles }).eq("id", courseId);
+    // Use jsonb_set to update just this hole's note atomically
+    await sb.rpc('upsert_hole_note', {
+      p_course_id: courseId,
+      p_hole: hole.hole,
+      p_note: holeNotesText,
+    });
     setNotesSaved(true);
     setTimeout(() => setNotesSaved(false), 2000);
     setSavingNotes(false);
@@ -439,9 +437,8 @@ export default function Home(){
     setApproachDistOverride(null);
     // Load hole notes fresh from Supabase
     const { supabase: sb } = await import("@/lib/supabase");
-    const { data: fresh } = await sb.from("courses").select("holes").eq("id", courseId).single();
-    const freshHole = fresh?.holes?.find((h:any) => h.hole === n);
-    setHoleNotesText(freshHole?.hole_notes ?? "");
+    const { data: fresh } = await sb.from("courses").select("hole_notes").eq("id", courseId).single();
+    setHoleNotesText(fresh?.hole_notes?.[String(n)] ?? "");
     handleSubmit(undefined, n);
   }
 

@@ -372,7 +372,8 @@ function PlayCourseInner() {
       const data = await res.json();
       setStrategy(data);
       setApproachDist(data.defaultApproachDist ?? null);
-      setHoleNotesText(data.hole?.hole_notes ?? "");
+      const { data: noteData } = await supabase.from("courses").select("hole_notes").eq("id", cId ?? courseId).single();
+      setHoleNotesText(noteData?.hole_notes?.[String(holeNum)] ?? "");
       setHoleNotesOpen(false);
     } catch {}
     setLoadingStrategy(false);
@@ -404,12 +405,11 @@ function PlayCourseInner() {
   async function saveHoleNotes() {
     if (!hole) return;
     setSavingNotes(true);
-    const { data: fresh } = await supabase.from("courses").select("holes").eq("id", courseId).single();
-    const freshHoles = fresh?.holes ?? selectedCourse?.holes ?? [];
-    const updatedHoles = freshHoles.map((h:any) =>
-      h.hole === hole.hole ? { ...h, hole_notes: holeNotesText } : h
-    );
-    await supabase.from("courses").update({ holes: updatedHoles }).eq("id", courseId);
+    await supabase.rpc('upsert_hole_note', {
+      p_course_id: courseId,
+      p_hole: hole.hole,
+      p_note: holeNotesText,
+    });
     setNotesSaved(true);
     setTimeout(() => setNotesSaved(false), 2000);
     setSavingNotes(false);
