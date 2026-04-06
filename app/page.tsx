@@ -405,7 +405,11 @@ export default function Home(){
         const rounds=new Set((data.enrichedHoles as EnrichedHole[]).map((e:EnrichedHole)=>e.roundDate));
         setTotalRounds(rounds.size);
         setFilters(DEFAULT_FILTERS(rounds.size));
-        setHoleNotesText(data.hole?.hole_notes ?? "");
+        // Load hole notes fresh
+        const { supabase: sbNotes } = await import("@/lib/supabase");
+        const { data: freshCourse } = await sbNotes.from("courses").select("holes").eq("id", courseId).single();
+        const freshHole = freshCourse?.holes?.find((h:any) => h.hole === hNum);
+        setHoleNotesText(freshHole?.hole_notes ?? "");
         setHoleNotesOpen(false);
       }
     }catch{setError("Something went wrong. Please try again.");}
@@ -428,11 +432,16 @@ export default function Home(){
     setSavingNotes(false);
   }
 
-  function goToHole(n: number) {
+  async function goToHole(n: number) {
     setHoleNumber(n);
     setResult(null);
     setApproachDist(null);
     setApproachDistOverride(null);
+    // Load hole notes fresh from Supabase
+    const { supabase: sb } = await import("@/lib/supabase");
+    const { data: fresh } = await sb.from("courses").select("holes").eq("id", courseId).single();
+    const freshHole = fresh?.holes?.find((h:any) => h.hole === n);
+    setHoleNotesText(freshHole?.hole_notes ?? "");
     handleSubmit(undefined, n);
   }
 
