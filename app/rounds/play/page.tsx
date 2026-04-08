@@ -626,8 +626,8 @@ function PlayCourseInner() {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:12 }}>
             {[{label:"Water",field:"water_penalty"},{label:"Drop/OB",field:"drop_or_out"},{label:"Tree/Haz",field:"tree_haz"},{label:"FWY Bkr",field:"fairway_bunker"},{label:"GS Bkr",field:"greenside_bunker"}].map(({label,field}) => (
               <div key={field}>
-                <label style={labelStyle}>{label}</label>
-                <input type="number" min={0} max={10} style={inputStyle}
+                <label style={{ ...labelStyle, ...(field==="tree_haz"?{color:"#b8860b",fontWeight:700}:{}) }}>{label}</label>
+                <input type="number" min={0} max={10} style={{ ...inputStyle, ...(field==="tree_haz"?{border:"2px solid #f0c040",background:"#fffde7"}:{}) }}
                   value={(currentHole as any)[field]}
                   onChange={e => updateHoleField(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
               </div>
