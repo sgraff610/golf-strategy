@@ -407,8 +407,13 @@ export default function Home(){
         setFilters(DEFAULT_FILTERS(rounds.size));
         // Load hole notes fresh
         const { supabase: sbNotes } = await import("@/lib/supabase");
-        const { data: freshCourse } = await sbNotes.from("courses").select("hole_notes").eq("id", courseId).single();
-        setHoleNotesText(freshCourse?.hole_notes?.[String(hNum)] ?? "");
+        const courseName = selectedCourse?.name ?? "";
+        const { data: allTeeNotes } = await sbNotes.from("courses").select("hole_notes").eq("name", courseName);
+        const mergedNotes: Record<string,string> = {};
+        for (const row of allTeeNotes ?? []) {
+          if (row.hole_notes) Object.assign(mergedNotes, row.hole_notes);
+        }
+        setHoleNotesText(mergedNotes[String(hNum)] ?? "");
         setHoleNotesOpen(false);
       }
     }catch{setError("Something went wrong. Please try again.");}
@@ -419,12 +424,14 @@ export default function Home(){
     if (!hole) return;
     setSavingNotes(true);
     const { supabase: sb } = await import("@/lib/supabase");
-    // Use jsonb_set to update just this hole's note atomically
-    await sb.rpc('upsert_hole_note', {
-      p_course_id: courseId,
-      p_hole: hole.hole,
-      p_note: holeNotesText,
-    });
+    const { data: allTees } = await sb.from("courses").select("id").eq("name", selectedCourse?.name ?? "");
+    for (const tee of allTees ?? []) {
+      await sb.rpc('upsert_hole_note', {
+        p_course_id: tee.id,
+        p_hole: hole.hole,
+        p_note: holeNotesText,
+      });
+    }
     setNotesSaved(true);
     setTimeout(() => setNotesSaved(false), 2000);
     setSavingNotes(false);
@@ -437,8 +444,13 @@ export default function Home(){
     setApproachDistOverride(null);
     // Load hole notes fresh from Supabase
     const { supabase: sb } = await import("@/lib/supabase");
-    const { data: fresh } = await sb.from("courses").select("hole_notes").eq("id", courseId).single();
-    setHoleNotesText(fresh?.hole_notes?.[String(n)] ?? "");
+    const courseName = selectedCourse?.name ?? "";
+    const { data: allTeeNotes } = await sb.from("courses").select("hole_notes").eq("name", courseName);
+    const mergedNotes: Record<string,string> = {};
+    for (const row of allTeeNotes ?? []) {
+      if (row.hole_notes) Object.assign(mergedNotes, row.hole_notes);
+    }
+    setHoleNotesText(mergedNotes[String(n)] ?? "");
     handleSubmit(undefined, n);
   }
 

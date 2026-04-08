@@ -372,8 +372,13 @@ function PlayCourseInner() {
       const data = await res.json();
       setStrategy(data);
       setApproachDist(data.defaultApproachDist ?? null);
-      const { data: noteData } = await supabase.from("courses").select("hole_notes").eq("id", cId ?? courseId).single();
-      setHoleNotesText(noteData?.hole_notes?.[String(holeNum)] ?? "");
+      // Load notes from all tee boxes of this course and merge
+      const { data: allTeeNotes } = await supabase.from("courses").select("hole_notes").eq("name", selectedCourse?.name ?? "");
+      const mergedNotes: Record<string,string> = {};
+      for (const row of allTeeNotes ?? []) {
+        if (row.hole_notes) Object.assign(mergedNotes, row.hole_notes);
+      }
+      setHoleNotesText(mergedNotes[String(holeNum)] ?? "");
       setHoleNotesOpen(false);
     } catch {}
     setLoadingStrategy(false);
@@ -405,11 +410,15 @@ function PlayCourseInner() {
   async function saveHoleNotes() {
     if (!hole) return;
     setSavingNotes(true);
-    await supabase.rpc('upsert_hole_note', {
-      p_course_id: courseId,
-      p_hole: hole.hole,
-      p_note: holeNotesText,
-    });
+    // Save to all tee boxes of this course
+    const { data: allTees } = await supabase.from("courses").select("id").eq("name", selectedCourse?.name ?? "");
+    for (const tee of allTees ?? []) {
+      await supabase.rpc('upsert_hole_note', {
+        p_course_id: tee.id,
+        p_hole: hole.hole,
+        p_note: holeNotesText,
+      });
+    }
     setNotesSaved(true);
     setTimeout(() => setNotesSaved(false), 2000);
     setSavingNotes(false);
