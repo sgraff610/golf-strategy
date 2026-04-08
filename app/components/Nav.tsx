@@ -58,26 +58,26 @@ export default function Nav() {
           </button>
         ) : (
           <div style={{ display: "flex", gap: 6 }}>
-            <a href="/" style={desktopNavLink}>Strategy</a>
+            <a href="/" style={desktopNavLink}>Strategy/Play</a>
             <a href="/courses" style={desktopNavLink}>Courses</a>
             <a href="/rounds" style={desktopNavLink}>Rounds</a>
             <a href="/rounds/calc" style={desktopNavLink}>Analysis</a>
             <a href="/rounds/insights" style={desktopNavLink}>Insights</a>
             <a href="/rounds/chat" style={desktopNavLink}>Chat</a>
-            <a href="/rounds/play" style={desktopNavLink}>Play</a>
+            <a href="/profile" style={desktopNavLink}>Profile</a>
           </div>
         )}
       </div>
 
       {isMobile && open && (
         <div style={{ background: "#222222", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          <a href="/" style={navLink} onClick={() => setOpen(false)}>Strategy</a>
+          <a href="/" style={navLink} onClick={() => setOpen(false)}>Strategy/Play</a>
           <a href="/courses" style={navLink} onClick={() => setOpen(false)}>Courses</a>
           <a href="/rounds" style={navLink} onClick={() => setOpen(false)}>Rounds</a>
           <a href="/rounds/calc" style={navLink} onClick={() => setOpen(false)}>Analysis</a>
           <a href="/rounds/insights" style={navLink} onClick={() => setOpen(false)}>Insights</a>
           <a href="/rounds/chat" style={navLink} onClick={() => setOpen(false)}>Chat</a>
-          <a href="/rounds/play" style={navLink} onClick={() => setOpen(false)}>Play</a>
+          <a href="/profile" style={navLink} onClick={() => setOpen(false)}>Profile</a>
         </div>
       )}
     </nav>
