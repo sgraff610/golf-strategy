@@ -48,6 +48,37 @@ export type HoleData = {
   approach_green_short_right: boolean;
   approach_green_depth: number;
   hole_notes?: string | null;
+visual_analysis?: {
+    fairway_width: string;
+    fairway_width_yards: number;
+    tree_coverage_left: string;
+    tree_coverage_right: string;
+    tree_coverage_notes: string;
+    total_bunker_count: number;
+    fairway_bunker_count: number;
+    greenside_bunker_count: number;
+    bunker_notes: string;
+    water_present: boolean;
+    water_type: string;
+    water_position: string;
+    water_threat_level: string;
+    water_notes: string | null;
+    green_size: string;
+    green_shape: string;
+    green_width_yards: number;
+    green_notes: string;
+    landing_zones: Array<{
+      zone_number: number;
+      distance_from_tee_yards: number;
+      width_yards: number;
+      description: string;
+    }>;
+    total_hazard_count: number;
+    visual_difficulty: string;
+    visual_difficulty_score: number;
+    primary_miss_side: string;
+    strategic_notes: string;
+  };
 };
 
 export type CourseRecord = {

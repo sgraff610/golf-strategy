@@ -213,6 +213,73 @@ function AddCourseInner() {
       }
     });
   }, [copyFromId]);
+const isScan = searchParams.get("scan") === "1";
+
+  useEffect(() => {
+    if (!isScan) return;
+
+    const holeNum = parseInt(searchParams.get("holeNum") || "1");
+    const vaRaw = searchParams.get("visual_analysis");
+
+    const prefilled: Partial<HoleData> = {
+      hole: holeNum,
+      par: parseInt(searchParams.get("par") || "4") as 3 | 4 | 5,
+      yards: parseInt(searchParams.get("yards") || "0"),
+      dogleg_direction: (searchParams.get("dogleg_direction") as DoglegDirection) || null,
+      tee_tree_hazard_left:       searchParams.get("tee_tree_hazard_left") === "true",
+      tee_tree_hazard_right:      searchParams.get("tee_tree_hazard_right") === "true",
+      tee_bunkers_left:           searchParams.get("tee_bunkers_left") === "true",
+      tee_bunkers_right:          searchParams.get("tee_bunkers_right") === "true",
+      tee_water_out_left:         searchParams.get("tee_water_out_left") === "true",
+      tee_water_out_right:        searchParams.get("tee_water_out_right") === "true",
+      tee_water_out_across:       searchParams.get("tee_water_out_across") === "true",
+      approach_tree_hazard_left:  searchParams.get("approach_tree_hazard_left") === "true",
+      approach_tree_hazard_right: searchParams.get("approach_tree_hazard_right") === "true",
+      approach_tree_hazard_long:  searchParams.get("approach_tree_hazard_long") === "true",
+      approach_bunkers_left:      searchParams.get("approach_bunkers_left") === "true",
+      approach_bunkers_right:     searchParams.get("approach_bunkers_right") === "true",
+      approach_water_out_left:    searchParams.get("approach_water_out_left") === "true",
+      approach_water_out_right:   searchParams.get("approach_water_out_right") === "true",
+      approach_water_out_short:   searchParams.get("approach_water_out_short") === "true",
+      approach_water_out_long:    searchParams.get("approach_water_out_long") === "true",
+      approach_bunker_short_middle:  searchParams.get("approach_bunker_short_middle") === "true",
+      approach_bunker_short_left:    searchParams.get("approach_bunker_short_left") === "true",
+      approach_bunker_middle_left:   searchParams.get("approach_bunker_middle_left") === "true",
+      approach_bunker_long_left:     searchParams.get("approach_bunker_long_left") === "true",
+      approach_bunker_long_middle:   searchParams.get("approach_bunker_long_middle") === "true",
+      approach_bunker_long_right:    searchParams.get("approach_bunker_long_right") === "true",
+      approach_bunker_middle_right:  searchParams.get("approach_bunker_middle_right") === "true",
+      approach_bunker_short_right:   searchParams.get("approach_bunker_short_right") === "true",
+      approach_green_short_middle:   searchParams.get("approach_green_short_middle") === "true",
+      approach_green_short_left:     searchParams.get("approach_green_short_left") === "true",
+      approach_green_middle_left:    searchParams.get("approach_green_middle_left") === "true",
+      approach_green_long_left:      searchParams.get("approach_green_long_left") === "true",
+      approach_green_long_middle:    searchParams.get("approach_green_long_middle") === "true",
+      approach_green_long_right:     searchParams.get("approach_green_long_right") === "true",
+      approach_green_middle_right:   searchParams.get("approach_green_middle_right") === "true",
+      approach_green_short_right:    searchParams.get("approach_green_short_right") === "true",
+      approach_green_depth:          parseInt(searchParams.get("approach_green_depth") || "25"),
+    };
+
+    // Parse and attach visual_analysis if present
+    if (vaRaw) {
+      try {
+        prefilled.visual_analysis = JSON.parse(vaRaw);
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Initialize blank holes if needed, then merge prefilled into the matching hole
+    setHoles(prev => {
+      const base = prev.length > 0
+        ? prev
+        : Array.from({ length: 18 }, (_, i) => blankHole(i + 1));
+      return base.map(h => h.hole === holeNum ? { ...h, ...prefilled } : h);
+    });
+
+    setCurrentHole(holeNum - 1);
+    setStep("holes");
+
+  }, [isScan]);
 
   const inputStyle: React.CSSProperties  = { width:"100%", padding:"8px 12px", fontSize:15, border:"1px solid #ddd", borderRadius:8, boxSizing:"border-box" };
   const selectStyle: React.CSSProperties = { ...inputStyle, background:"white", color:"#0f6e56" };
@@ -325,6 +392,9 @@ function AddCourseInner() {
         <div style={{ textAlign:"center", flex:1 }}>
           <div style={HOLE_NAME}>{courseName} — Hole {hole.hole}</div>
           <div style={{ fontSize:13, color:"#bbb", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
+<a href={`/add-course/scan?holeNum=${hole.hole}`} style={{ fontSize:12, color:"#0f6e56", textDecoration:"underline", display:"block", marginTop:4 }}>
+            Scan with AI →
+          </a>
         </div>
         <button style={navBtn(currentHole>=holes.length-1)} onClick={goToNextHole} disabled={currentHole>=holes.length-1}>Next →</button>
       </div>
