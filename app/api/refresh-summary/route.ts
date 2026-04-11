@@ -60,6 +60,12 @@ APPROACH ZONE:
 - Bunker positions around green: short_left=${result.approach_bunker_short_left}, short_middle=${result.approach_bunker_short_middle}, short_right=${result.approach_bunker_short_right}, middle_left=${result.approach_bunker_middle_left}, middle_right=${result.approach_bunker_middle_right}, long_left=${result.approach_bunker_long_left}, long_middle=${result.approach_bunker_long_middle}, long_right=${result.approach_bunker_long_right}
 - Water: ${va.water_present}${va.water_present ? ', type: ' + va.water_type + ', threat: ' + va.water_threat_level : ''}
 
+${va.pre_green_zone ? `PRE-GREEN ZONE (${va.pre_green_zone.distance_from_green_yards} yds short of green):
+- Trees left: ${va.pre_green_zone.trees_left}, right: ${va.pre_green_zone.trees_right}, long: ${va.pre_green_zone.trees_long}
+- Bunkers: ${va.pre_green_zone.bunkers_present}, Water: ${va.pre_green_zone.water_present}
+- Go for green rating: ${va.pre_green_zone.go_for_green_rating}/5, Layup rating: ${va.pre_green_zone.layup_rating}/5
+- Recommendation: ${va.pre_green_zone.recommendation}` : ''}
+
 ${layz ? `LAYUP ZONE (50 yds short of green):
 - Bunkers: ${layz.bunkers_present}, Water: ${layz.water_present}
 - Go for green rating: ${layz.go_for_green_rating}/5, Layup rating: ${layz.layup_rating}/5
@@ -82,7 +88,9 @@ Return ONLY a valid JSON object — no markdown, no backticks, no explanation:
   "approach_bunkers_description": "<describe greenside bunker positions based on the boolean fields — be specific about positions. Say none if no greenside bunkers>",
   "approach_water_description": ${va.water_present ? '"<describe water near the green>"' : 'null'},
   "approach_green_notes": "<one sentence describing the green challenge based on size, shape, and surrounding hazards>",
-  "approach_notes": "<one sentence summarizing the overall approach>"${layz ? `,
+  "approach_notes": "<one sentence summarizing the overall approach>",
+  "pre_green_zone_description": "<describe what is at the pre-green layup spot based on the data>",
+  "pre_green_zone_reason": "<2 sentences: compare going for green vs laying up short. Follow the distance thresholds: 125-145 yds always go for green, 146-174 only layup if very dangerous, 175+ full evaluation. Bias toward going for green.>"${layz ? `,
   "layup_description": "<describe what is at the 50-yard layup spot based on the data>",
   "layup_recommendation_reason": "<2 sentences comparing going for it vs laying up — bias toward going for the green unless approach is clearly very dangerous>"` : ''}
 }`;

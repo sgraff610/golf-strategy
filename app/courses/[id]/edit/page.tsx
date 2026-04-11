@@ -55,7 +55,27 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
 
   // Sync when hole changes (navigating between holes)
   React.useEffect(() => {
-    setVa((hole as any).visual_analysis ?? null);
+    const existing = (hole as any).visual_analysis ?? null;
+    if (existing && !existing.pre_green_zone) {
+      existing.pre_green_zone = {
+        distance_from_green_yards: 35,
+        description: "",
+        trees_left: "none",
+        trees_right: "none",
+        trees_long: "none",
+        bunkers_present: false,
+        bunker_description: null,
+        water_present: false,
+        water_description: null,
+        overall_danger: "safe",
+        approach_distance: 35,
+        go_for_green_rating: 3,
+        layup_rating: 3,
+        recommendation: "go_for_green",
+        recommendation_reason: "",
+      };
+    }
+    setVa(existing);
     setSaved(false);
   }, [hole.hole]);
 
@@ -338,15 +358,11 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
                   <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>← Left (fade)</div>
                   <ENum path={["tee_zone","left_buffer_yards"]} label="Buffer" unit="yds" />
                   <ESel path={["tee_zone","left_buffer_rating"]} label="Rating" opts={BUFFER} />
-                  <ESel path={["tee_zone","left_hazard_type"]} label="Hazard" opts={HAZARD_T} />
-                  <ESel path={["tee_zone","left_hazard_severity"]} label="Severity" opts={SEVERITY} />
                 </div>
                 <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>Right (pull) →</div>
                   <ENum path={["tee_zone","right_buffer_yards"]} label="Buffer" unit="yds" />
                   <ESel path={["tee_zone","right_buffer_rating"]} label="Rating" opts={BUFFER} />
-                  <ESel path={["tee_zone","right_hazard_type"]} label="Hazard" opts={HAZARD_T} />
-                  <ESel path={["tee_zone","right_hazard_severity"]} label="Severity" opts={SEVERITY} />
                 </div>
               </div>
               <EText path={["tee_zone","left_notes"]} label="Left notes (fade)" />
@@ -361,8 +377,8 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               </div>
             </>}
 
-            {/* Landing zone */}
-            {lz && <>
+            {/* Landing zone — hidden for par 3 */}
+            {lz && hole.par !== 3 && <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={sl}>🎯 Landing zone</span>
                 <DangerBadge value={lz.overall_danger ?? "safe"} />
@@ -397,8 +413,8 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               <EText path={["landing_zone","notes"]} label="Notes" />
             </>}
 
-            {/* Pre-landing zone */}
-            {plz && <>
+            {/* Pre-landing zone — hidden for par 3 */}
+            {plz && hole.par !== 3 && <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={sl}>📍 Pre-landing (50 yds short of green)</span>
                 <DangerBadge value={plz.overall_danger ?? "safe"} />
@@ -425,7 +441,7 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
             {/* Approach zone */}
             {az && <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={sl}>🏴 Approach zone</span>
+                <span style={sl}>⛳ Green zone</span>
                 <DangerBadge value={az.overall_danger ?? "safe"} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
@@ -459,6 +475,60 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               <EText path={["approach_zone","green_notes"]} label="Green notes" />
               <EText path={["approach_zone","notes"]} label="Approach notes" />
             </>}
+
+            {/* Pre-green zone */}
+            {va.pre_green_zone && (() => {
+              const pgz = va.pre_green_zone;
+              return <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={sl}>🏳️ Pre-green zone ({pgz.distance_from_green_yards} yds short)</span>
+                  <DangerBadge value={pgz.overall_danger ?? "safe"} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                  <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#7c3aed" }}>{pgz.distance_from_green_yards}</div>
+                    <div style={{ fontSize: 10, color: "#666" }}>yds short of green</div>
+                  </div>
+                  <div style={{ textAlign: "center", background: pgz.recommendation === "go_for_green" ? "#f0faf6" : "#fff8f0", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: pgz.recommendation === "go_for_green" ? "#0f6e56" : "#f97316" }}>
+                      {pgz.recommendation === "go_for_green" ? "✓ Go for it" : "→ Layup"}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#666" }}>recommendation</div>
+                  </div>
+                </div>
+                <ENum path={["pre_green_zone","distance_from_green_yards"]} label="Distance short of green" unit="yds" />
+                <ESel path={["pre_green_zone","overall_danger"]} label="Overall danger" opts={DANGER} />
+                <CovBar label="Trees left" value={pgz.trees_left ?? "none"} />
+                <ESel path={["pre_green_zone","trees_left"]} label="Trees left" opts={COVERAGE} />
+                <CovBar label="Trees right" value={pgz.trees_right ?? "none"} />
+                <ESel path={["pre_green_zone","trees_right"]} label="Trees right" opts={COVERAGE} />
+                <CovBar label="Trees long (behind)" value={pgz.trees_long ?? "none"} />
+                <ESel path={["pre_green_zone","trees_long"]} label="Trees long" opts={COVERAGE} />
+                <EBool path={["pre_green_zone","bunkers_present"]} label="Bunkers present" />
+                {pgz.bunkers_present && <EText path={["pre_green_zone","bunker_description"]} label="Bunker description" />}
+                <EBool path={["pre_green_zone","water_present"]} label="Water present" />
+                {pgz.water_present && <EText path={["pre_green_zone","water_description"]} label="Water description" />}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "8px 0" }}>
+                  <div style={{ background: "#f0faf6", borderRadius: 8, padding: "8px", border: "1px solid #c8e6c9" }}>
+                    <div style={{ fontSize: 10, color: "#0f6e56", fontWeight: 700, marginBottom: 4 }}>Go for green</div>
+                    <ENum path={["pre_green_zone","go_for_green_rating"]} label="Rating (1-5)" />
+                  </div>
+                  <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
+                    <div style={{ fontSize: 10, color: "#666", fontWeight: 700, marginBottom: 4 }}>Layup here</div>
+                    <ENum path={["pre_green_zone","layup_rating"]} label="Rating (1-5)" />
+                  </div>
+                </div>
+                <div style={row}>
+                  <span style={lbl}>Recommendation</span>
+                  <select value={pgz.recommendation} onChange={e => update(["pre_green_zone","recommendation"], e.target.value)} style={{ ...inp, color: "#0f6e56" }}>
+                    <option value="go_for_green">Go for green</option>
+                    <option value="layup">Layup</option>
+                  </select>
+                </div>
+                <EText path={["pre_green_zone","recommendation_reason"]} label="Reason" />
+                <EText path={["pre_green_zone","description"]} label="Zone description" />
+              </>;
+            })()}
 
             {/* Layup zone */}
             {layz && <>

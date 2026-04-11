@@ -59,26 +59,29 @@ ZONE DEFINITIONS
 ════════════════════════════════════════
 - TEE ZONE: Area around the tee box and the flight corridor
 
-- LANDING ZONE: Where the tee shot should land — follow this logic exactly:
-  * Start at 230 yards as the default target
-  * Check if there is any trouble (bunker, water, trees encroaching on fairway) within 15 yards of the 230-yard mark
-  * If YES trouble at 230: step back in 10-yard increments — check 220, then 210, then 200, then 190, then 180
-  * Use the FIRST distance that has no trouble within 15 yards
-  * MINIMUM distance is 180 yards — never go shorter than 180
-  * If no clean spot exists even at 180, use 180 and note the trouble in the notes field
+- LANDING ZONE: Always evaluate at 230 yards from the tee
+  * Report what is at that distance — trees, bunkers, water, width of fairway
   * Par 3s: no separate landing zone — the tee shot IS the approach shot
-  * Par 5s: evaluate TWO landing zones — tee shot landing (using above logic) AND a second layup landing zone
+  * Par 5s: evaluate TWO landing zones — tee shot at 230 yards AND a second layup landing zone
 
-- PRE-LANDING ZONE (smart layup spot near green):
-  * Evaluate the area between 25 and 50 yards short of the center of the green
-  * Scan that entire 25-yard range for trouble — bunkers, water, trees, rough patches
-  * Pick the SPECIFIC distance in that range (25-50 yds) with the LEAST trouble
-  * Report that distance as distance_yards in the pre_landing_zone
-  * If the whole range is clean, pick 30 yards (comfortable chip distance)
-  * If trouble exists throughout, pick the least-bad spot and note it clearly
+- PRE-LANDING ZONE (safer short option):
+  * Evaluate the range 180-220 yards from the tee
+  * Scan the entire range for trouble — bunkers, water, trees encroaching on fairway
+  * Find the SPECIFIC distance in that range with the LEAST trouble
+  * If equally clean throughout, default to 215 yards
+  * Report what is at that spot and why it was chosen
 
 - APPROACH ZONE: The area around and leading to the green
-- LAYUP ZONE: 50 yards short of center green — only relevant when 170+ yards from green
+
+- PRE-GREEN ZONE: 25-50 yards short of the center of the green
+  * Evaluate trees, bunkers, water in this area
+  * Determine if laying up here is worth it based on approach distance:
+    - 125-145 yards from green: NEVER recommend layup, always go for green
+    - 146-174 yards from green: only recommend layup if approach zone is very_dangerous AND pre-green zone is clearly safer
+    - 175+ yards from green: full evaluation — compare approach danger vs pre-green safety
+  * Bias is always toward going for the green unless the risk is clearly not worth it
+
+- LAYUP ZONE: Same as pre-green zone (kept for backward compatibility)
 
 ════════════════════════════════════════
 REQUIRED PRE-ANALYSIS - DO THIS BEFORE WRITING JSON
@@ -159,14 +162,10 @@ Return ONLY a valid JSON object - no markdown, no backticks, no explanation.
       "opening_description": "<describe the visual corridor from the tee — how wide it looks, what frames it on each side>",
       "left_buffer_yards": <estimated yards of safe space LEFT of ideal line before trees/hazard — fade territory for this lefty>,
       "left_buffer_rating": <"very_tight"|"tight"|"moderate"|"generous"|"open">,
-      "left_hazard_type": <"none"|"trees"|"bunker"|"water"|"rough"|"OB">,
-      "left_hazard_severity": <"none"|"low"|"moderate"|"high"|"severe">,
-      "left_notes": "<one sentence: what happens if the fade goes left>",
+      "left_notes": "<one sentence: what happens if the fade goes left — describe trees or other hazards>",
       "right_buffer_yards": <estimated yards of safe space RIGHT of ideal line before trees/hazard — pull territory>,
       "right_buffer_rating": <"very_tight"|"tight"|"moderate"|"generous"|"open">,
-      "right_hazard_type": <"none"|"trees"|"bunker"|"water"|"rough"|"OB">,
-      "right_hazard_severity": <"none"|"low"|"moderate"|"high"|"severe">,
-      "right_notes": "<one sentence: what happens if the pull goes right>",
+      "right_notes": "<one sentence: what happens if the pull goes right — describe trees or other hazards>",
       "tree_density_left": <"none"|"sparse"|"moderate"|"heavy"|"wall">,
       "tree_density_right": <"none"|"sparse"|"moderate"|"heavy"|"wall">,
       "recommended_aim": <"left_of_center"|"center"|"right_of_center">,
@@ -189,9 +188,9 @@ Return ONLY a valid JSON object - no markdown, no backticks, no explanation.
     },
 
     "pre_landing_zone": {
-      "distance_yards": <the specific distance from tee (in yards) to the chosen layup spot — this spot is 25-50 yards short of the green, chosen for minimum trouble>,
-      "width_yards": <estimated width of safe area at this distance>,
-      "description": "<what does the area 50 yards short of the landing zone look like overall>",
+      "distance_yards": <the specific distance from tee (in yards) in the 180-220 yard range with the LEAST trouble — default to 215 if equally clean throughout>,
+      "width_yards": <estimated width of safe fairway area at this distance>,
+      "description": "<describe what is at this specific distance — fairway conditions, any hazards nearby>",
       "trees_left": <"none"|"sparse"|"moderate"|"heavy"|"wall">,
       "trees_right": <"none"|"sparse"|"moderate"|"heavy"|"wall">,
       "bunkers_present": <true|false — are there any WHITE bunker shapes in this zone?>,
@@ -232,6 +231,24 @@ Return ONLY a valid JSON object - no markdown, no backticks, no explanation.
       "green_notes": "<one sentence describing the green>",
       "overall_danger": <"safe"|"mild"|"moderate"|"dangerous"|"very_dangerous">,
       "notes": "<one sentence summarizing the approach>"
+    },
+
+    "pre_green_zone": {
+      "distance_from_green_yards": <pick the safest distance between 25-50 yards short of green center>,
+      "description": "<describe what is at this layup spot>",
+      "trees_left": <"none"|"sparse"|"moderate"|"heavy"|"wall">,
+      "trees_right": <"none"|"sparse"|"moderate"|"heavy"|"wall">,
+      "trees_long": <"none"|"sparse"|"moderate"|"heavy"|"wall">,
+      "bunkers_present": <true|false>,
+      "bunker_description": "<describe bunkers in this zone or null>",
+      "water_present": <true|false>,
+      "water_description": "<describe water in this zone or null>",
+      "overall_danger": <"safe"|"mild"|"moderate"|"dangerous"|"very_dangerous">,
+      "approach_distance": <yards from this layup spot to center of green — should be 25-50>,
+      "go_for_green_rating": <integer 1-5, where 5=definitely go for green, 1=definitely layup>,
+      "layup_rating": <integer 1-5, where 5=layup is very safe, 1=layup is pointless>,
+      "recommendation": <"go_for_green"|"layup">,
+      "recommendation_reason": "<2 sentences: if approach distance is 125-145 always recommend go_for_green. If 146-174 only recommend layup if approach_zone is very_dangerous and this zone is clearly safer. If 175+ do full comparison. Bias toward going for the green.>"
     },
 
     "layup_zone": <null if approach distance under 170 yards, otherwise {
@@ -292,6 +309,7 @@ export async function POST(req: NextRequest) {
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 3000,
+      system: "You are a golf course image analyst. You MUST respond with ONLY a valid JSON object. Do not write any text, explanation, analysis, or narration before or after the JSON. Your entire response must start with { and end with }. Never say 'Looking at', 'Based on', or any other preamble.",
       messages: [
         {
           role: 'user',
@@ -309,11 +327,7 @@ export async function POST(req: NextRequest) {
       .replace(/```json|```/g, '')
       .trim();
 
-    const jsonStart = raw.indexOf('{');
-    const jsonEnd = raw.lastIndexOf('}');
-    if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON found in response');
-    const cleaned = raw.slice(jsonStart, jsonEnd + 1);
-    const parsed = JSON.parse(cleaned);
+    const parsed = JSON.parse(raw);
     return NextResponse.json({ result: parsed });
 
   } catch (err: unknown) {
