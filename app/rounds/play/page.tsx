@@ -117,7 +117,7 @@ function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: num
     { label:"Bunker Right",    key:"tee_bunkers_right",    filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Right" },
   ];
   return hazards
-    .filter(() => true)
+    .filter(h => hole?.[h.key])
     .map(h => {
       const matching = enriched.filter(h.filterFn);
       const avg = matching.length>0 ? wAvg(matching, scoreToPar) : NaN;

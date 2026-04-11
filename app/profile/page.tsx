@@ -43,12 +43,10 @@ function computeDiff(round: Round, courseInfo: CourseInfo | undefined): number |
   return diff;
 }
 
-// USGA handicap index from best 8 of last 20 differentials
 function computeHandicapIndex(diffs: number[]): number | null {
   const last20 = diffs.slice(-20);
   if (last20.length < 3) return null;
   const sorted = [...last20].sort((a, b) => a - b);
-  // Number of best diffs to use per USGA table
   const count = last20.length <= 6 ? 1
     : last20.length <= 8 ? 2
     : last20.length <= 11 ? 3
@@ -59,7 +57,7 @@ function computeHandicapIndex(diffs: number[]): number | null {
     : 8;
   const best = sorted.slice(0, count);
   const avg = best.reduce((s, d) => s + d, 0) / best.length;
-  return Math.floor(avg * 10) / 10; // truncate to 1 decimal
+  return Math.floor(avg * 10) / 10;
 }
 
 const PROFILE_KEY = "golf_player_profile";
@@ -72,8 +70,11 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [changeLogOpen, setChangeLogOpen] = useState(false);
+  const [changeLog, setChangeLog] = useState<string[]>([]);
+  const [newItem, setNewItem] = useState("");
 
-  // Load profile from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(PROFILE_KEY);
@@ -81,7 +82,13 @@ export default function ProfilePage() {
     } catch {}
   }, []);
 
-  // Load rounds and course info
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(PROFILE_KEY);
+      if (stored) setProfile(JSON.parse(stored));
+    } catch {}
+  }, []);
+
   useEffect(() => {
     supabase.from("rounds").select("*").order("date", { ascending: true })
       .then(async ({ data, error }) => {
@@ -115,7 +122,6 @@ export default function ProfilePage() {
     setSaving(false);
   }
 
-  // Compute differentials for all rounds in chronological order
   const diffs: number[] = rounds
     .map(r => computeDiff(r, courseInfoMap[r.course_id]))
     .filter((d): d is number => d !== null);
@@ -123,7 +129,6 @@ export default function ProfilePage() {
   const last20Diffs = diffs.slice(-20);
   const handicapIndex = computeHandicapIndex(diffs);
 
-  // Stats from last 20 rounds
   const last20Rounds = rounds.slice(-20);
   const totalHoles = last20Rounds.reduce((s, r) => s + r.holes.filter((h: any) => h.score && Number(h.score) > 0).length, 0);
   const totalScore = last20Rounds.reduce((s, r) => s + r.holes.reduce((hs: number, h: any) => hs + (Number(h.score) || 0), 0), 0);
@@ -145,6 +150,8 @@ export default function ProfilePage() {
     border: "1px solid #ddd", borderRadius: 8, boxSizing: "border-box",
     fontFamily: "sans-serif", lineHeight: 1.5,
   };
+
+  const expandableHeader = (label: string, open: boolean, onToggle: () => void): React.CSSProperties => ({});
 
   if (loading) return (
     <main style={{ maxWidth: 520, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
@@ -220,62 +227,138 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Strengths & Weaknesses */}
-      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "16px", marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <p style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Player Notes</p>
-          {!editing && (
-            <button onClick={() => setEditing(true)}
-              style={{ fontSize: 12, color: "#0f6e56", background: "none", border: "1px solid #0f6e56", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
-              Edit
-            </button>
-          )}
-        </div>
+      {/* Player Notes — expandable */}
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, marginBottom: 12, overflow: "hidden" }}>
+        <button
+          onClick={() => { setNotesOpen(o => !o); if (editing) setEditing(false); }}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1 }}>Player Notes</span>
+          <span style={{ fontSize: 16, color: "#aaa" }}>{notesOpen ? "▲" : "▼"}</span>
+        </button>
 
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 12, fontWeight: 600, color: "#27ae60", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>💪 Strengths</p>
-          {editing ? (
-            <textarea
-              value={profile.strengths}
-              onChange={e => setProfile(p => ({ ...p, strengths: e.target.value }))}
-              placeholder="e.g. Consistent off the tee with driver, good at reading greens, strong in wind..."
-              rows={4}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          ) : (
-            <p style={{ fontSize: 14, color: profile.strengths ? "#1a1a1a" : "#bbb", margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-              {profile.strengths || "Tap Edit to add your strengths..."}
-            </p>
-          )}
-        </div>
+        {notesOpen && (
+          <div style={{ padding: "0 16px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              {!editing && (
+                <button onClick={() => setEditing(true)}
+                  style={{ fontSize: 12, color: "#0f6e56", background: "none", border: "1px solid #0f6e56", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
+                  Edit
+                </button>
+              )}
+            </div>
 
-        <div>
-          <p style={{ fontSize: 12, fontWeight: 600, color: "#c0392b", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>⚠️ Weaknesses</p>
-          {editing ? (
-            <textarea
-              value={profile.weaknesses}
-              onChange={e => setProfile(p => ({ ...p, weaknesses: e.target.value }))}
-              placeholder="e.g. Struggle with short irons under pressure, tendency to miss right on approach..."
-              rows={4}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          ) : (
-            <p style={{ fontSize: 14, color: profile.weaknesses ? "#1a1a1a" : "#bbb", margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-              {profile.weaknesses || "Tap Edit to add your weaknesses..."}
-            </p>
-          )}
-        </div>
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#27ae60", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>💪 Strengths</p>
+              {editing ? (
+                <textarea
+                  value={profile.strengths}
+                  onChange={e => setProfile(p => ({ ...p, strengths: e.target.value }))}
+                  placeholder="e.g. Consistent off the tee with driver, good at reading greens, strong in wind..."
+                  rows={4}
+                  style={{ ...inputStyle, resize: "vertical" as const }}
+                />
+              ) : (
+                <p style={{ fontSize: 14, color: profile.strengths ? "#1a1a1a" : "#bbb", margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                  {profile.strengths || "Tap Edit to add your strengths..."}
+                </p>
+              )}
+            </div>
 
-        {editing && (
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <button onClick={saveProfile} disabled={saving}
-              style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#0f6e56", color: "white", border: "none", borderRadius: 8, cursor: "pointer", flex: 1 }}>
-              {saved ? "Saved!" : "Save"}
-            </button>
-            <button onClick={() => { setEditing(false); }}
-              style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#eee", color: "#333", border: "none", borderRadius: 8, cursor: "pointer" }}>
-              Cancel
-            </button>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#c0392b", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: 0.5 }}>⚠️ Weaknesses</p>
+              {editing ? (
+                <textarea
+                  value={profile.weaknesses}
+                  onChange={e => setProfile(p => ({ ...p, weaknesses: e.target.value }))}
+                  placeholder="e.g. Struggle with short irons under pressure, tendency to miss right on approach..."
+                  rows={4}
+                  style={{ ...inputStyle, resize: "vertical" as const }}
+                />
+              ) : (
+                <p style={{ fontSize: 14, color: profile.weaknesses ? "#1a1a1a" : "#bbb", margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                  {profile.weaknesses || "Tap Edit to add your weaknesses..."}
+                </p>
+              )}
+            </div>
+
+            {editing && (
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button onClick={saveProfile} disabled={saving}
+                  style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#0f6e56", color: "white", border: "none", borderRadius: 8, cursor: "pointer", flex: 1 }}>
+                  {saved ? "Saved!" : "Save"}
+                </button>
+                <button onClick={() => setEditing(false)}
+                  style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#eee", color: "#333", border: "none", borderRadius: 8, cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Change Log — expandable */}
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, marginBottom: 20, overflow: "hidden" }}>
+        <button
+          onClick={() => setChangeLogOpen(o => !o)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1 }}>Change Log</span>
+          <span style={{ fontSize: 16, color: "#aaa" }}>{changeLogOpen ? "▲" : "▼"}</span>
+        </button>
+
+        {changeLogOpen && (
+          <div style={{ padding: "0 16px 16px" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <input
+                value={newItem}
+                onChange={e => setNewItem(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && newItem.trim()) {
+                    const updated = [...changeLog, newItem.trim()];
+                    setChangeLog(updated);
+                    localStorage.setItem("golf_change_log", JSON.stringify(updated));
+                    setNewItem("");
+                  }
+                }}
+                placeholder="Add a desired change..."
+                style={{ flex: 1, padding: "8px 12px", fontSize: 13, border: "1px solid #ddd", borderRadius: 8 }}
+              />
+              <button
+                onClick={() => {
+                  if (!newItem.trim()) return;
+                  const updated = [...changeLog, newItem.trim()];
+                  setChangeLog(updated);
+                  localStorage.setItem("golf_change_log", JSON.stringify(updated));
+                  setNewItem("");
+                }}
+                style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, background: "#0f6e56", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
+              >
+                Add
+              </button>
+            </div>
+
+            {changeLog.length === 0 && (
+              <p style={{ fontSize: 13, color: "#bbb", fontStyle: "italic" }}>No items yet — add desired changes above.</p>
+            )}
+            <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
+              {changeLog.map((item, i) => (
+                <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
+                  <span style={{ flex: 1 }}>{item}</span>
+                  <button
+                    onClick={() => {
+                      const updated = changeLog.filter((_, idx) => idx !== i);
+                      setChangeLog(updated);
+                      localStorage.setItem("golf_change_log", JSON.stringify(updated));
+                    }}
+                    style={{ fontSize: 11, color: "#c0392b", background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: "2px 6px" }}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
