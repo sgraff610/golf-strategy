@@ -309,7 +309,11 @@ export async function POST(req: NextRequest) {
       .replace(/```json|```/g, '')
       .trim();
 
-    const parsed = JSON.parse(raw);
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd = raw.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON found in response');
+    const cleaned = raw.slice(jsonStart, jsonEnd + 1);
+    const parsed = JSON.parse(cleaned);
     return NextResponse.json({ result: parsed });
 
   } catch (err: unknown) {
