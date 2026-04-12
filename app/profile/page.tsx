@@ -22,6 +22,11 @@ type Profile = {
   weaknesses: string;
 };
 
+const PUTT_DIST_MAP: Record<string, number> = {
+  "Gimme": 1, "3ft": 3, "5ft": 5, "7ft": 7, "10ft": 10,
+  "15ft": 15, "20ft": 20, "30ft": 30, "40ft": 40, "50ft": 50, "50+": 60,
+};
+
 function adjustedGrossScore(holes: any[]): number {
   return holes.reduce((s, h) => s + Math.min(Number(h.score) || 0, h.par + 2), 0);
 }
@@ -60,6 +65,36 @@ function computeHandicapIndex(diffs: number[]): number | null {
   return Math.floor(avg * 10) / 10;
 }
 
+function calcStats(roundSlice: Round[]) {
+  const scoredHoles = roundSlice.flatMap(r => r.holes.filter((h: any) => h.score && Number(h.score) > 0));
+  const totalHoles = scoredHoles.length;
+  const totalRounds = roundSlice.length;
+  if (totalHoles === 0 || totalRounds === 0) return null;
+
+  const totalScore = scoredHoles.reduce((s, h: any) => s + Number(h.score), 0);
+  const totalPar = scoredHoles.reduce((s, h: any) => s + (h.par || 0), 0);
+  const avgScoreToPar = (totalScore - totalPar) / totalRounds;
+
+  const totalPutts = scoredHoles.reduce((s, h: any) => s + (Number(h.putts) || 0), 0);
+  const avgPuttsPer18 = totalHoles > 0 ? (totalPutts / totalHoles) * 18 : null;
+
+  const drivingHoles = scoredHoles.filter((h: any) => h.par === 4 || h.par === 5);
+  const fairwaysHit = drivingHoles.filter((h: any) => h.tee_accuracy === "Hit").length;
+  const drivingPct = drivingHoles.length > 0 ? fairwaysHit / drivingHoles.length : null;
+
+  const girsHit = scoredHoles.filter((h: any) => h.gir).length;
+  const girPct = totalHoles > 0 ? girsHit / totalHoles : null;
+
+  const chipHoles = scoredHoles.filter((h: any) =>
+    Number(h.chips) > 0 && h.first_putt_distance && PUTT_DIST_MAP[h.first_putt_distance] !== undefined
+  );
+  const avgPuttAfterChip = chipHoles.length > 0
+    ? chipHoles.reduce((s, h: any) => s + PUTT_DIST_MAP[h.first_putt_distance], 0) / chipHoles.length
+    : null;
+
+  return { avgScoreToPar, avgPuttsPer18, drivingPct, girPct, avgPuttAfterChip };
+}
+
 export default function ProfilePage() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [courseInfoMap, setCourseInfoMap] = useState<Record<string, CourseInfo>>({});
@@ -73,7 +108,6 @@ export default function ProfilePage() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [changeLogOpen, setChangeLogOpen] = useState(false);
 
-  // Load player_data from Supabase
   useEffect(() => {
     supabase.from("player_data").select("*").eq("id", "singleton").single()
       .then(({ data }) => {
@@ -84,7 +118,6 @@ export default function ProfilePage() {
       });
   }, []);
 
-  // Load rounds and course info
   useEffect(() => {
     supabase.from("rounds").select("*").order("date", { ascending: true })
       .then(async ({ data, error }) => {
@@ -140,21 +173,14 @@ export default function ProfilePage() {
   const last20Diffs = diffs.slice(-20);
   const handicapIndex = computeHandicapIndex(diffs);
 
-  const last20Rounds = rounds.slice(-20);
-  const totalHoles = last20Rounds.reduce((s, r) => s + r.holes.filter((h: any) => h.score && Number(h.score) > 0).length, 0);
-  const totalScore = last20Rounds.reduce((s, r) => s + r.holes.reduce((hs: number, h: any) => hs + (Number(h.score) || 0), 0), 0);
-  const totalPar = last20Rounds.reduce((s, r) => s + r.holes.reduce((hs: number, h: any) => hs + (h.par || 0), 0), 0);
-  const avgScoreToPar = totalHoles > 0 ? (totalScore - totalPar) / last20Rounds.length : null;
-  const totalPutts = last20Rounds.reduce((s, r) => s + r.holes.reduce((hs: number, h: any) => hs + (Number(h.putts) || 0), 0), 0);
-  const avgPutts = totalHoles > 0 ? totalPutts / totalHoles : null;
-  const drivingHoles = last20Rounds.reduce((s, r) => s + r.holes.filter((h: any) => (h.par === 4 || h.par === 5) && h.score).length, 0);
-  const fairwaysHit = last20Rounds.reduce((s, r) => s + r.holes.filter((h: any) => (h.par === 4 || h.par === 5) && h.tee_accuracy === "Hit").length, 0);
-  const girsHit = last20Rounds.reduce((s, r) => s + r.holes.filter((h: any) => h.gir).length, 0);
-  const drivingPct = drivingHoles > 0 ? fairwaysHit / drivingHoles : null;
-  const girPct = totalHoles > 0 ? girsHit / totalHoles : null;
+  const stats5   = calcStats(rounds.slice(-5));
+  const stats20  = calcStats(rounds.slice(-20));
+  const statsAll = calcStats(rounds);
 
-  const pct = (n: number) => `${Math.round(n * 100)}%`;
-  const fmt = (n: number) => n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
+  const fmt    = (n: number | null) => n === null ? "—" : n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
+  const pct    = (n: number | null) => n !== null ? `${Math.round(n * 100)}%` : "—";
+  const fmtP   = (n: number | null) => n !== null ? n.toFixed(1) : "—";
+  const fmtFt  = (n: number | null) => n !== null ? `${n.toFixed(1)}ft` : "—";
 
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "10px 12px", fontSize: 14,
@@ -194,20 +220,34 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Stats grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-        {[
-          { label: "Avg Score", value: avgScoreToPar !== null ? fmt(avgScoreToPar) : "—", sub: "per round vs par" },
-          { label: "Avg Putts", value: avgPutts !== null ? avgPutts.toFixed(1) : "—", sub: "per hole" },
-          { label: "Fairways", value: drivingPct !== null ? pct(drivingPct) : "—", sub: "hit (par 4/5)" },
-          { label: "GIR", value: girPct !== null ? pct(girPct) : "—", sub: "greens in regulation" },
-        ].map(({ label, value, sub }) => (
-          <div key={label} style={{ background: "#f6f6f6", borderRadius: 12, padding: "16px", textAlign: "center" }}>
-            <p style={{ fontSize: 11, color: "#999", margin: "0 0 4px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</p>
-            <p style={{ fontSize: 26, fontWeight: 700, color: "#0f6e56", margin: "0 0 2px" }}>{value}</p>
-            <p style={{ fontSize: 11, color: "#bbb", margin: 0 }}>{sub}</p>
-          </div>
-        ))}
+      {/* Stats table */}
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, marginBottom: 20, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: "#f0f0f0" }}>
+              <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 0.8 }}>Stat</th>
+              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: 0.8 }}>Last 5</th>
+              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: 0.8 }}>Last 20</th>
+              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: 0.8 }}>All time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { label: "Avg score",           v5: fmt(stats5?.avgScoreToPar ?? null),   v20: fmt(stats20?.avgScoreToPar ?? null),   vAll: fmt(statsAll?.avgScoreToPar ?? null) },
+              { label: "Putts / 18",          v5: fmtP(stats5?.avgPuttsPer18 ?? null),  v20: fmtP(stats20?.avgPuttsPer18 ?? null),  vAll: fmtP(statsAll?.avgPuttsPer18 ?? null) },
+              { label: "Fairways",            v5: pct(stats5?.drivingPct ?? null),       v20: pct(stats20?.drivingPct ?? null),       vAll: pct(statsAll?.drivingPct ?? null) },
+              { label: "GIR",                 v5: pct(stats5?.girPct ?? null),           v20: pct(stats20?.girPct ?? null),           vAll: pct(statsAll?.girPct ?? null) },
+              { label: "1st putt after chip", v5: fmtFt(stats5?.avgPuttAfterChip ?? null), v20: fmtFt(stats20?.avgPuttAfterChip ?? null), vAll: fmtFt(statsAll?.avgPuttAfterChip ?? null) },
+            ].map(({ label, v5, v20, vAll }, i) => (
+              <tr key={label} style={{ borderTop: i > 0 ? "1px solid #eee" : "none" }}>
+                <td style={{ padding: "10px 14px", fontWeight: 500, color: "#1a1a1a" }}>{label}</td>
+                <td style={{ padding: "10px 8px", textAlign: "center", fontWeight: 700, color: "#0f6e56" }}>{v5}</td>
+                <td style={{ padding: "10px 8px", textAlign: "center", fontWeight: 700, color: "#0f6e56" }}>{v20}</td>
+                <td style={{ padding: "10px 8px", textAlign: "center", fontWeight: 700, color: "#0f6e56" }}>{vAll}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* Recent differentials */}
@@ -307,7 +347,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Change Log — expandable */}
+      {/* Wishlist — expandable */}
       <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, marginBottom: 20, overflow: "hidden" }}>
         <button
           onClick={() => setChangeLogOpen(o => !o)}
