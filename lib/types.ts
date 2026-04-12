@@ -47,6 +47,8 @@ export type HoleData = {
   approach_green_middle_right: boolean;
   approach_green_short_right: boolean;
   approach_green_depth: number;
+  preferred_club?: string;
+  preferred_landing?: "L" | "LF" | "CF" | "RF" | null;
   hole_notes?: string | null;
 visual_analysis?: {
     fairway_width: string;

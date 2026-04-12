@@ -969,8 +969,32 @@ function EditCourseInner() {
           <div><label style={LABEL}>Stroke Index</label>
             <input style={inputStyle} type="number" min={1} max={18} value={hole.stroke_index||""} onChange={e => updateHole("stroke_index", Number(e.target.value))} />
           </div>
-        </div>
 
+          {/* Preferred tee strategy */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginTop:8 }}>
+            <div>
+              <label style={LABEL}>Preferred Club</label>
+              <select style={selectStyle} value={hole.preferred_club ?? ""} onChange={e => updateHole("preferred_club", e.target.value || undefined)}>
+                <option value="">— none —</option>
+                {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={LABEL}>Preferred Landing</label>
+              <select style={selectStyle} value={hole.preferred_landing ?? ""} onChange={e => updateHole("preferred_landing", e.target.value || null)}>
+                <option value="">— none —</option>
+                <option value="L">L — Left rough</option>
+                <option value="LF">LF — Left fairway</option>
+                <option value="CF">CF — Center fairway</option>
+                <option value="RF">RF — Right fairway</option>
+                <option value="R">R — Right rough</option>
+              </select>
+            </div>
+          </div>
+
+        </div>
         {/* Hole Notes */}
         <div>
           <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"4px 0"}}>
