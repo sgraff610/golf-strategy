@@ -60,35 +60,31 @@ function computeHandicapIndex(diffs: number[]): number | null {
   return Math.floor(avg * 10) / 10;
 }
 
-const PROFILE_KEY = "golf_player_profile";
-
 export default function ProfilePage() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [courseInfoMap, setCourseInfoMap] = useState<Record<string, CourseInfo>>({});
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile>({ strengths: "", weaknesses: "" });
+  const [changeLog, setChangeLog] = useState<string[]>([]);
+  const [newItem, setNewItem] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [changeLogOpen, setChangeLogOpen] = useState(false);
-  const [changeLog, setChangeLog] = useState<string[]>([]);
-  const [newItem, setNewItem] = useState("");
 
+  // Load player_data from Supabase
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(PROFILE_KEY);
-      if (stored) setProfile(JSON.parse(stored));
-    } catch {}
+    supabase.from("player_data").select("*").eq("id", "singleton").single()
+      .then(({ data }) => {
+        if (data) {
+          setProfile({ strengths: data.strengths ?? "", weaknesses: data.weaknesses ?? "" });
+          setChangeLog(data.change_log ?? []);
+        }
+      });
   }, []);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(PROFILE_KEY);
-      if (stored) setProfile(JSON.parse(stored));
-    } catch {}
-  }, []);
-
+  // Load rounds and course info
   useEffect(() => {
     supabase.from("rounds").select("*").order("date", { ascending: true })
       .then(async ({ data, error }) => {
@@ -111,15 +107,30 @@ export default function ProfilePage() {
       });
   }, []);
 
-  function saveProfile() {
+  async function saveProfile() {
     setSaving(true);
-    try {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-      setSaved(true);
-      setEditing(false);
-      setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    await supabase.from("player_data").upsert({
+      id: "singleton",
+      strengths: profile.strengths,
+      weaknesses: profile.weaknesses,
+      change_log: changeLog,
+      updated_at: new Date().toISOString(),
+    });
+    setSaved(true);
+    setEditing(false);
     setSaving(false);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveChangeLog(updated: string[]) {
+    setChangeLog(updated);
+    await supabase.from("player_data").upsert({
+      id: "singleton",
+      strengths: profile.strengths,
+      weaknesses: profile.weaknesses,
+      change_log: updated,
+      updated_at: new Date().toISOString(),
+    });
   }
 
   const diffs: number[] = rounds
@@ -150,8 +161,6 @@ export default function ProfilePage() {
     border: "1px solid #ddd", borderRadius: 8, boxSizing: "border-box",
     fontFamily: "sans-serif", lineHeight: 1.5,
   };
-
-  const expandableHeader = (label: string, open: boolean, onToggle: () => void): React.CSSProperties => ({});
 
   if (loading) return (
     <main style={{ maxWidth: 520, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
@@ -254,7 +263,7 @@ export default function ProfilePage() {
                 <textarea
                   value={profile.strengths}
                   onChange={e => setProfile(p => ({ ...p, strengths: e.target.value }))}
-                  placeholder="e.g. Consistent off the tee with driver, good at reading greens, strong in wind..."
+                  placeholder="e.g. Consistent off the tee with driver, good at reading greens..."
                   rows={4}
                   style={{ ...inputStyle, resize: "vertical" as const }}
                 />
@@ -271,7 +280,7 @@ export default function ProfilePage() {
                 <textarea
                   value={profile.weaknesses}
                   onChange={e => setProfile(p => ({ ...p, weaknesses: e.target.value }))}
-                  placeholder="e.g. Struggle with short irons under pressure, tendency to miss right on approach..."
+                  placeholder="e.g. Struggle with short irons under pressure..."
                   rows={4}
                   style={{ ...inputStyle, resize: "vertical" as const }}
                 />
@@ -286,7 +295,7 @@ export default function ProfilePage() {
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                 <button onClick={saveProfile} disabled={saving}
                   style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#0f6e56", color: "white", border: "none", borderRadius: 8, cursor: "pointer", flex: 1 }}>
-                  {saved ? "Saved!" : "Save"}
+                  {saving ? "Saving..." : saved ? "Saved!" : "Save"}
                 </button>
                 <button onClick={() => setEditing(false)}
                   style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#eee", color: "#333", border: "none", borderRadius: 8, cursor: "pointer" }}>
@@ -304,7 +313,7 @@ export default function ProfilePage() {
           onClick={() => setChangeLogOpen(o => !o)}
           style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
         >
-          <span style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1 }}>Change Log</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1 }}>Wishlist</span>
           <span style={{ fontSize: 16, color: "#aaa" }}>{changeLogOpen ? "▲" : "▼"}</span>
         </button>
 
@@ -316,9 +325,7 @@ export default function ProfilePage() {
                 onChange={e => setNewItem(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === "Enter" && newItem.trim()) {
-                    const updated = [...changeLog, newItem.trim()];
-                    setChangeLog(updated);
-                    localStorage.setItem("golf_change_log", JSON.stringify(updated));
+                    saveChangeLog([...changeLog, newItem.trim()]);
                     setNewItem("");
                   }
                 }}
@@ -328,9 +335,7 @@ export default function ProfilePage() {
               <button
                 onClick={() => {
                   if (!newItem.trim()) return;
-                  const updated = [...changeLog, newItem.trim()];
-                  setChangeLog(updated);
-                  localStorage.setItem("golf_change_log", JSON.stringify(updated));
+                  saveChangeLog([...changeLog, newItem.trim()]);
                   setNewItem("");
                 }}
                 style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, background: "#0f6e56", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
@@ -338,7 +343,6 @@ export default function ProfilePage() {
                 Add
               </button>
             </div>
-
             {changeLog.length === 0 && (
               <p style={{ fontSize: 13, color: "#bbb", fontStyle: "italic" }}>No items yet — add desired changes above.</p>
             )}
@@ -347,11 +351,7 @@ export default function ProfilePage() {
                 <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, color: "#444", lineHeight: 1.6, marginBottom: 8, padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
                   <span style={{ flex: 1 }}>{item}</span>
                   <button
-                    onClick={() => {
-                      const updated = changeLog.filter((_, idx) => idx !== i);
-                      setChangeLog(updated);
-                      localStorage.setItem("golf_change_log", JSON.stringify(updated));
-                    }}
+                    onClick={() => saveChangeLog(changeLog.filter((_, idx) => idx !== i))}
                     style={{ fontSize: 11, color: "#c0392b", background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: "2px 6px" }}
                   >
                     ✕
