@@ -70,6 +70,7 @@ type Filters = {
   siTierFilter: string;
   doglegFilter: string;
   apprDistBucket: string;
+  holeCluster: string;
   impactDir: "all" | "positive" | "negative";
   diffBucket: Set<string>;
 };
@@ -88,7 +89,7 @@ const DEFAULT_FILTERS: Filters = {
   years: new Set(), gsBunker: false, girOnly: false, nonGirOnly: false,
   puttsMin: "", puttsMax: "", chipsMin: "", chipsMax: "", firstPutt: "",
   greenDepth: "", greensideFilter: defaultGreensideFilter(),
-  yardsBucket: "", siTierFilter: "", doglegFilter: "", apprDistBucket: "",
+  yardsBucket: "", siTierFilter: "", doglegFilter: "", apprDistBucket: "", holeCluster: "",
   impactDir: "all",
   diffBucket: new Set(),
 };
@@ -217,6 +218,10 @@ function yardsBucket(yards: number): string {
   const low = Math.floor(yards / 25) * 25;
   return `${low}-${low+24}`;
 }
+function holeCluster(hole: number): string {
+  const start = Math.floor((hole - 1) / 3) * 3 + 1;
+  return `${start}–${start + 2}`;
+}
 function apprDistBucket(dist: number): string {
   if (dist <= 0) return "Unknown";
   const low = Math.floor(dist / 10) * 10;
@@ -293,6 +298,7 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
     if (f.yardsBucket && yardsBucket(h.yards) !== f.yardsBucket) return false;
     if (f.siTierFilter && siTier(h.stroke_index) !== f.siTierFilter) return false;
     if (f.doglegFilter && (h.dogleg || "None") !== f.doglegFilter) return false;
+    if (f.holeCluster && holeCluster(h.hole) !== f.holeCluster) return false;
     if (f.apprDistBucket) {
       if (h.appr_dist_num <= 0) return false;
       if (apprDistBucket(h.appr_dist_num) !== f.apprDistBucket) return false;
@@ -549,12 +555,13 @@ export default function RoundsInsights() {
   }));
 
   const yardsBuckets = groupedCorr("Hole Yards", h => yardsBucket(h.yards));
+  const holeClusters = groupedCorr("Hole Cluster", h => holeCluster(h.hole));
   const siBuckets    = groupedCorr("Handicap",   h => siTier(h.stroke_index));
   const doglegBuckets= groupedCorr("Dogleg",     h => h.dogleg || "None");
   const apprBuckets  = groupedCorr("Appr Dist",  h => h.appr_dist_num > 0 ? apprDistBucket(h.appr_dist_num) : "");
 
   const allCorrelations = [
-    ...correlations, ...yardsBuckets, ...siBuckets, ...doglegBuckets, ...apprBuckets,
+    ...correlations, ...yardsBuckets, ...holeClusters, ...siBuckets, ...doglegBuckets, ...apprBuckets,
   ]
     .filter(c => c.count >= MIN_HOLES)
     .filter(c => {
@@ -733,6 +740,14 @@ export default function RoundsInsights() {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {Array.from(new Set(allHoles.map(h => h.dogleg || "None"))).sort().map(d => (
                   <button key={d} style={pill(filters.doglegFilter===d)} onClick={() => setFilters(f => ({ ...f, doglegFilter: f.doglegFilter===d?"":d }))}>{d}</button>
+                ))}
+              </div>
+            </div>
+          <div style={{ marginBottom: 10 }}>
+              <p style={fl}>Hole #</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {["1–3","4–6","7–9","10–12","13–15","16–18"].map(c => (
+                  <button key={c} style={pill(filters.holeCluster===c)} onClick={() => setFilters(f => ({ ...f, holeCluster: f.holeCluster===c?"":c }))}>{c}</button>
                 ))}
               </div>
             </div>
