@@ -553,20 +553,20 @@ function PlayCourseInner() {
     "8i":145,"9i":130,PW:120,SW:100,LW:80,
   };
 
-  function scoreBg(score: number|"", par: number): string {
+function scoreBg(score: number|"", par: number): string {
     if (score === "") return "#e0e0e0";
     const d = Number(score) - par;
-    if (d <= -2) return "#1a6fd4";
-    if (d === -1) return "#27ae60";
-    if (d === 0)  return "#f0f0f0";
-    if (d === 1)  return "#e67e22";
+    if (d <= -2) return "#0096FF";
+    if (d === -1) return "#1a7a3f";
+    if (d === 0)  return "#44cc44";
+    if (d === 1)  return "#d0d0d0";
     if (d === 2)  return "#f97316";
     return "#c0392b";
   }
   function scoreTxtColor(score: number|"", par: number): string {
     if (score === "") return "#aaa";
     const d = Number(score) - par;
-    if (d === 0) return "#333";
+    if (d === 1) return "#1a1a1a";
     return "white";
   }
   function accLabel(v: string): string {
@@ -671,6 +671,18 @@ function PlayCourseInner() {
                   );
                 })}
               </tr>
+              {/* Land */}
+              <tr>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Land</td>
+                {roundHoles.map((h, i) => {
+                  const ch = selectedCourse?.holes.find(x => x.hole === h.hole);
+                  return (
+                    <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#555", fontWeight:600, fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
+                      {(ch as any)?.preferred_landing || "—"}
+                    </td>
+                  );
+                })}
+              </tr>
               {/* Rem */}
               <tr style={{ background:"#f9f9f9" }}>
                 <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Rem</td>
@@ -681,18 +693,6 @@ function PlayCourseInner() {
                   return (
                     <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#555", fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
                       {rem !== null ? rem : "—"}
-                    </td>
-                  );
-                })}
-              </tr>
-              {/* Land */}
-              <tr>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Land</td>
-                {roundHoles.map((h, i) => {
-                  const ch = selectedCourse?.holes.find(x => x.hole === h.hole);
-                  return (
-                    <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#555", fontWeight:600, fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
-                      {(ch as any)?.preferred_landing || "—"}
                     </td>
                   );
                 })}
@@ -756,7 +756,7 @@ function PlayCourseInner() {
 
         {/* Score entry */}
         {currentHole && (
-          <div style={{ background:"#f9f9f9", border:"1px solid #eee", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+          <div key={"hole-" + currentHoleIdx + "-" + currentHole.score} style={{ background:"#f9f9f9", border:"1px solid #eee", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <p style={{ fontSize:13, fontWeight:700, color:"#0f6e56", margin:0 }}>
                 Hole {currentHole.hole} · Par {currentHole.par} · {currentHole.yards} yds · SI {currentHole.stroke_index}
@@ -779,8 +779,8 @@ function PlayCourseInner() {
                 <div key={field}>
                   <label style={{ fontSize:10, color: field==="chips" ? "#b8860b" : "#666", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
                   <input type="number" min={min} max={max}
-                    style={{ width:"100%", padding:"6px 4px", fontSize:15, border: field==="chips" ? "2px solid #f0c040" : "1px solid #ddd", borderRadius:8, textAlign:"center", background: field==="chips" ? "#fffde7" : "white" }}
-                    value={(currentHole as any)[field]}
+                    style={{ width:"100%", padding:"6px 4px", fontSize:15, border: field==="chips" ? "2px solid #f0c040" : "1px solid #ddd", borderRadius:8, textAlign:"center", background: field==="chips" ? "#fffde7" : "white", color:"#1a1a1a" }}
+                    value={(currentHole as any)[field] === "" || (currentHole as any)[field] == null ? "" : Number((currentHole as any)[field])}
                     onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
                 </div>
               ))}
@@ -841,8 +841,8 @@ function PlayCourseInner() {
                 <div key={field}>
                   <label style={{ fontSize:10, color: field==="tree_haz" ? "#b8860b" : "#666", fontWeight: field==="tree_haz" ? 700 : 600, display:"block", marginBottom:3 }}>{label}</label>
                   <input type="number" min={0} max={10}
-                    style={{ width:"100%", padding:"6px 4px", fontSize:14, border: field==="tree_haz" ? "2px solid #f0c040" : "1px solid #ddd", borderRadius:8, textAlign:"center", background: field==="tree_haz" ? "#fffde7" : "white" }}
-                    value={(currentHole as any)[field]}
+                    style={{ width:"100%", padding:"6px 4px", fontSize:14, border: field==="tree_haz" ? "2px solid #f0c040" : "1px solid #ddd", borderRadius:8, textAlign:"center", background: field==="tree_haz" ? "#fffde7" : "white", color:"#1a1a1a" }}
+                    value={(currentHole as any)[field] === "" || (currentHole as any)[field] == null ? "" : Number((currentHole as any)[field])}
                     onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
                 </div>
               ))}

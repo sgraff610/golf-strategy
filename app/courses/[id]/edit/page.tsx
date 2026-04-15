@@ -328,13 +328,9 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
                 <div style={{ fontSize: 10, color: "#666" }}>bunkers</div>
               </div>
               <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "8px 4px", border: "1px solid #eee" }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a" }}>{va.fairway_width_yards ?? "—"}</div>
-                <div style={{ fontSize: 10, color: "#666" }}>fwy yds</div>
               </div>
             </div>
             <ENum path={["visual_difficulty_score"]} label="Difficulty score (1-10)" />
-            <ESel path={["fairway_width"]} label="Fairway width" opts={FWY_WIDTH} />
-            <ENum path={["fairway_width_yards"]} label="Fairway width" unit="yds" />
             <ENum path={["total_bunker_count"]} label="Total bunkers" />
             <ENum path={["fairway_bunker_count"]} label="Fairway bunkers" />
             <ENum path={["greenside_bunker_count"]} label="Greenside bunkers" />
@@ -343,7 +339,6 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               <ESel path={["water_type"]} label="Water type" opts={WATER_T} />
               <ESel path={["water_threat_level"]} label="Water threat" opts={THREAT} />
             </>}
-            <ESel path={["primary_miss_side"]} label="Primary miss side" opts={["left","right","both","long","short","none"]} />
 
             {/* Strategic notes */}
             <span style={sl}>Strategy</span>
@@ -357,12 +352,10 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
                 <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>← Left (fade)</div>
                   <ENum path={["tee_zone","left_buffer_yards"]} label="Buffer" unit="yds" />
-                  <ESel path={["tee_zone","left_buffer_rating"]} label="Rating" opts={BUFFER} />
                 </div>
                 <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>Right (pull) →</div>
                   <ENum path={["tee_zone","right_buffer_yards"]} label="Buffer" unit="yds" />
-                  <ESel path={["tee_zone","right_buffer_rating"]} label="Rating" opts={BUFFER} />
                 </div>
               </div>
               <EText path={["tee_zone","left_notes"]} label="Left notes (fade)" />
@@ -399,7 +392,6 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               </div>
               <ENum path={["landing_zone","estimated_distance_yards"]} label="Distance from tee" unit="yds" />
               <ENum path={["landing_zone","width_yards"]} label="Width" unit="yds" />
-              <ENum path={["landing_zone","depth_yards"]} label="Depth" unit="yds" />
               <ENum path={["landing_zone","remaining_distance_to_green"]} label="Remaining to green" unit="yds" />
               <ESel path={["landing_zone","overall_danger"]} label="Overall danger" opts={DANGER} />
               <CovBar label="Trees left" value={lz.trees_left ?? "none"} />
@@ -431,8 +423,6 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               <EBool path={["pre_landing_zone","water_present"]} label="Water present" />
               {plz.water_present && <EText path={["pre_landing_zone","water_description"]} label="Water description" />}
               <EText path={["pre_landing_zone","other_obstacles"]} label="Other obstacles" />
-              <ESel path={["pre_landing_zone","room_to_recover"]} label="Room to recover" opts={ROOM} />
-              <EText path={["pre_landing_zone","room_to_recover_notes"]} label="Room to recover notes" />
               <EBool path={["pre_landing_zone","safer_than_landing_zone"]} label="Safer than landing zone" />
               <EText path={["pre_landing_zone","description"]} label="Description" />
               <EText path={["pre_landing_zone","recommendation"]} label="Recommendation" />
@@ -511,11 +501,9 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "8px 0" }}>
                   <div style={{ background: "#f0faf6", borderRadius: 8, padding: "8px", border: "1px solid #c8e6c9" }}>
                     <div style={{ fontSize: 10, color: "#0f6e56", fontWeight: 700, marginBottom: 4 }}>Go for green</div>
-                    <ENum path={["pre_green_zone","go_for_green_rating"]} label="Rating (1-5)" />
                   </div>
                   <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
                     <div style={{ fontSize: 10, color: "#666", fontWeight: 700, marginBottom: 4 }}>Layup here</div>
-                    <ENum path={["pre_green_zone","layup_rating"]} label="Rating (1-5)" />
                   </div>
                 </div>
                 <div style={row}>
