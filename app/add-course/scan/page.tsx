@@ -301,7 +301,7 @@ const THREAT_OPTS = ['none','low','moderate','high','severe'];
 function deepSet<T>(obj: T, path: string[], value: unknown): T {
   if (path.length === 0) return value as T;
   const [head, ...rest] = path;
-  return { ...obj as object, [head]: deepSet((obj as Record<string,unknown>)[head], rest, value) } as T;
+  return { ...obj as object, [head]: deepSet((obj as Record<string,any>)[head], rest, value) } as T;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────

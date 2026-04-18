@@ -731,7 +731,7 @@ function EditCourseInner() {
         setSlope(data.slope != null ? String(data.slope) : "");
         setAiSummary(data.ai_summary ?? "");
         setHoles(data.holes ?? []);
-        if (data.holes?.length > 0) setGreenside(flatToGreenside(data.holes[0] as Record<string,unknown>));
+        if (data.holes?.length > 0) setGreenside(flatToGreenside(data.holes[0] as Record<string,any>));
         const allCourses = await loadCourses();
         const versions = allCourses.filter(c => c.name === data.name);
         setAllTeeVersions(versions.length > 0 ? versions : [data]);
@@ -845,13 +845,13 @@ function EditCourseInner() {
   function goToPrevHole() {
     const prev = Math.max(0, currentHole - 1);
     setCurrentHole(prev);
-    setGreenside(flatToGreenside(holes[prev] as Record<string,unknown>));
+    setGreenside(flatToGreenside(holes[prev] as Record<string,any>));
   }
 
   function goToNextHole() {
     const next = Math.min(holes.length-1, currentHole+1);
     setCurrentHole(next);
-    setGreenside(flatToGreenside(holes[next] as Record<string,unknown>));
+    setGreenside(flatToGreenside(holes[next] as Record<string,any>));
   }
 
   async function handleSave() {
