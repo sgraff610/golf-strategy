@@ -78,16 +78,17 @@ type Props = {
   onChange: (next: GreensideState) => void;
 };
 
-// F=bottom (180°), B=top (0°), R=right (90°), L=left (270°). arcPath subtracts 90° internally.
+// F=bottom(180°), B=top(0°), R=right(90°), L=left(270°). arcPath subtracts 90° internally.
+// _left and _right keys are swapped horizontally to match visual orientation.
 const OUTER_SEGMENTS = [
-  { key: 'short_middle', label: 'B',   angle:   0 },
-  { key: 'short_right',  label: 'BR',  angle:  45 },
+  { key: 'long_middle',  label: 'B',   angle:   0 },
+  { key: 'long_right',   label: 'BR',  angle:  45 },
   { key: 'middle_right', label: 'R',   angle:  90 },
-  { key: 'long_right',   label: 'FR',  angle: 135 },
-  { key: 'long_middle',  label: 'F',   angle: 180 },
-  { key: 'long_left',    label: 'FL',  angle: 225 },
+  { key: 'short_right',  label: 'FR',  angle: 135 },
+  { key: 'short_middle', label: 'F',   angle: 180 },
+  { key: 'short_left',   label: 'FL',  angle: 225 },
   { key: 'middle_left',  label: 'L',   angle: 270 },
-  { key: 'short_left',   label: 'BL',  angle: 315 },
+  { key: 'long_left',    label: 'BL',  angle: 315 },
 ] as const;
 
 // Inner aim ring — same cardinal directions
