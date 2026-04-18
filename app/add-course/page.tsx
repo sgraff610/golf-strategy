@@ -209,7 +209,7 @@ function AddCourseInner() {
         setSlope(course.slope != null ? String(course.slope) : "");
         setHoleCount(course.holes.length as 9|18);
         setHoles(course.holes.map(h => ({ ...h })));
-        if (course.holes.length > 0) setGreenside(flatToGreenside(course.holes[0] as Record<string,unknown>));
+        if (course.holes.length > 0) setGreenside(flatToGreenside(course.holes[0] as Record<string, any>));
       }
     });
   }, [copyFromId]);
