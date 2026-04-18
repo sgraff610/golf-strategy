@@ -697,6 +697,26 @@ function scoreBg(score: number|"", par: number): string {
                   );
                 })}
               </tr>
+              {/* Aim */}
+              <tr>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Aim</td>
+                {roundHoles.map((h, i) => {
+                  const ch = selectedCourse?.holes.find(x => x.hole === h.hole);
+                  const aimDir: string = (ch as any)?.aim_dir ?? "";
+                  const aimLevel: number = (ch as any)?.aim_level ?? 0;
+                  const noAim = !aimDir || aimLevel === 0;
+                  const bg = noAim ? "#22c55e" : aimLevel === 1 ? "#f5c842" : "#e03c2d";
+                  const textCol = (!noAim && aimLevel === 2) ? "#fff" : "#000";
+                  const label = noAim ? "🚩" : aimDir;
+                  return (
+                    <td key={i} onClick={() => goToHole(i)} style={{ padding:"3px 4px", textAlign:"center", cursor:"pointer", borderLeft:"1px solid #eee" }}>
+                      <div style={{ background: bg, color: textCol, borderRadius:4, minWidth:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:11, margin:"0 auto" }}>
+                        {label}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
               {/* Score */}
               <tr style={{ borderTop:"2px solid #0f6e56" }}>
                 <td style={{ padding:"3px 8px", fontSize:10, color:"#333", fontWeight:700, position:"sticky", left:0, background:"white", zIndex:2 }}>Score</td>
