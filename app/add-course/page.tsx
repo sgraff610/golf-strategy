@@ -326,13 +326,13 @@ const isScan = searchParams.get("scan") === "1";
   function goToPrevHole() {
     const prev = Math.max(0, currentHole - 1);
     setCurrentHole(prev);
-    setGreenside(flatToGreenside(holes[prev] as Record<string,unknown>));
+    setGreenside(flatToGreenside(holes[prev] as Record<string,any>));
   }
 
   function goToNextHole() {
     const next = currentHole + 1;
     setCurrentHole(next);
-    setGreenside(flatToGreenside(holes[next] as Record<string,unknown>));
+    setGreenside(flatToGreenside(holes[next] as Record<string,any>));
   }
 
   async function finish() {
