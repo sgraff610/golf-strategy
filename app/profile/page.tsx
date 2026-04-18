@@ -9,6 +9,7 @@ type Round = {
   date: string;
   holes_played: number;
   holes: any[];
+  score_differential: number | null;
 };
 
 type CourseInfo = {
@@ -167,8 +168,13 @@ export default function ProfilePage() {
   }
 
   const diffs: number[] = rounds
-    .map(r => computeDiff(r, courseInfoMap[r.course_id]))
-    .filter((d): d is number => d !== null);
+  .map(r => {
+    if (r.score_differential != null) {
+      return r.holes_played <= 9 ? r.score_differential * 2 : r.score_differential;
+    }
+    return computeDiff(r, courseInfoMap[r.course_id]);
+  })
+  .filter((d): d is number => d !== null);
 
   const last20Diffs = diffs.slice(-20);
   const handicapIndex = computeHandicapIndex(diffs);

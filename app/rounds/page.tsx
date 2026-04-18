@@ -11,6 +11,7 @@ type Round = {
   holes_played: number;
   starting_hole: number;
   holes: any[];
+  score_differential: number | null;
 };
 
 type CourseInfo = {
@@ -19,11 +20,18 @@ type CourseInfo = {
   hole_count: number | null;
 };
 
-function adjustedGrossScore(holes: any[]): number {
+function handicapStrokesOnHole(courseHandicap: number, strokeIndex: number): number {
+  const base = Math.floor(courseHandicap / 18);
+  const extra = courseHandicap % 18;
+  return base + (strokeIndex <= extra ? 1 : 0);
+}
+
+function adjustedGrossScore(holes: any[], courseHandicap: number): number {
   return holes.reduce((sum, h) => {
+    const strokes = handicapStrokesOnHole(courseHandicap, h.stroke_index);
+    const ndb = h.par + 2 + strokes;
     const score = Number(h.score) || 0;
-    const maxScore = h.par + 2;
-    return sum + Math.min(score, maxScore);
+    return sum + (score > 0 ? Math.min(score, ndb) : 0);
   }, 0);
 }
 
@@ -31,7 +39,9 @@ function handicapDifferential(round: Round, courseInfo: CourseInfo | undefined):
   if (!courseInfo?.rating || !courseInfo?.slope) return "—";
   const scoredHoles = round.holes.filter(h => h.score !== "" && h.score != null && Number(h.score) > 0);
   if (scoredHoles.length === 0) return "—";
-  const ags = adjustedGrossScore(scoredHoles);
+  const totalPar = scoredHoles.reduce((s: number, h: any) => s + (h.par || 0), 0);
+  const tempCH = Math.round(20 * (courseInfo.slope / 113) + (courseInfo.rating - totalPar));
+  const ags = adjustedGrossScore(scoredHoles, Math.max(0, tempCH));
   const holesPlayed = round.holes_played ?? scoredHoles.length;
   const is9Round = holesPlayed <= 9;
   const is9Course = (courseInfo.hole_count ?? round.holes.length) <= 9;
@@ -182,7 +192,11 @@ export default function RoundsPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {filtered.map((round) => {
-            const diff = handicapDifferential(round, courseInfoMap[round.course_id]);
+            const diff = (() => {
+  if (round.score_differential == null) return "—";
+  const d = round.holes_played <= 9 ? round.score_differential * 2 : round.score_differential;
+  return d >= 0 ? `+${d.toFixed(1)}` : d.toFixed(1);
+})();
 
             return (
               <div key={round.id} style={{ background: "white", border: "1px solid #eee", borderRadius: 12, padding: "16px 20px" }}>

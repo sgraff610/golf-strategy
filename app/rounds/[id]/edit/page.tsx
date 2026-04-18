@@ -23,6 +23,81 @@ function calcGrints(score: number | "", par: number): boolean {
   if (score === "") return false;
   return score <= par;
 }
+function computeHandicapIndexAtDate(allRounds: any[], beforeDate: string): number {
+  // Get rounds before this date, sorted chronologically
+  const prior = allRounds
+    .filter(r => r.date < beforeDate && r.score_differential != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Build list of differentials — pad with 14.0 if fewer than 20
+  const diffs = prior.map(r => r.score_differential as number);
+  while (diffs.length < 20) diffs.unshift(14.0);
+  const last20 = diffs.slice(-20);
+
+  const sorted = [...last20].sort((a, b) => a - b);
+  const count = last20.length <= 6 ? 1
+    : last20.length <= 8 ? 2
+    : last20.length <= 11 ? 3
+    : last20.length <= 14 ? 4
+    : last20.length <= 16 ? 5
+    : last20.length <= 18 ? 6
+    : last20.length === 19 ? 7
+    : 8;
+  const best = sorted.slice(0, count);
+  const avg = best.reduce((s, d) => s + d, 0) / best.length;
+  return Math.floor(avg * 10) / 10;
+}
+
+function computeCourseHandicap(
+  handicapIndex: number,
+  slope: number,
+  rating: number,
+  par: number,
+  holesPlayed: number,
+  courseHoleCount: number = 18
+): number {
+  const is9Course = courseHoleCount <= 9;
+  const is9Round = holesPlayed <= 9;
+
+  let adjRating = rating;
+  if (!is9Round && is9Course) adjRating = rating * 2;
+  else if (is9Round && !is9Course) adjRating = rating / 2;
+
+  if (is9Round) {
+    const halfHI = Math.round(handicapIndex / 2 * 10) / 10;
+    return Math.round(halfHI * (slope / 113) + (adjRating - par));
+  }
+  return Math.round(handicapIndex * (slope / 113) + (adjRating - par));
+}
+
+function handicapStrokesOnHole(courseHandicap: number, strokeIndex: number): number {
+  // strokes = floor(courseHandicap / 18), plus 1 if strokeIndex <= (courseHandicap % 18)
+  const base = Math.floor(courseHandicap / 18);
+  const extra = courseHandicap % 18;
+  return base + (strokeIndex <= extra ? 1 : 0);
+}
+
+function netDoubleBogey(par: number, handicapStrokes: number): number {
+  return par + 2 + handicapStrokes;
+}
+
+function adjustedScore(actualScore: number | "", par: number, handicapStrokes: number): number | "" {
+  if (actualScore === "") return "";
+  const ndb = netDoubleBogey(par, handicapStrokes);
+  return Math.min(Number(actualScore), ndb);
+}
+
+function computeAdjustedGrossScore(holes: any[], courseHandicap: number): number {
+  return holes.reduce((sum, h) => {
+    const strokes = handicapStrokesOnHole(courseHandicap, h.stroke_index);
+    const adj = adjustedScore(h.score, h.par, strokes);
+    return sum + (adj === "" ? 0 : Number(adj));
+  }, 0);
+}
+
+function computeScoreDifferential(ags: number, rating: number, slope: number): number {
+  return Math.round(((ags - rating) * (113 / slope)) * 10) / 10;
+}
 function scoreColor(score:number, par:number):string {
   const d=score-par;
   if(d<=-2)return"#1a6fd4"; if(d===-1)return"#27ae60"; if(d===0)return"#333"; if(d===1)return"#e67e22"; return"#c0392b";
@@ -202,6 +277,11 @@ export default function EditRound() {
   const [courseId, setCourseId] = useState("");
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
+  const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
+  const [courseHandicap, setCourseHandicap] = useState<number | null>(null);
+  const [adjustedGrossScore, setAdjustedGrossScore] = useState<number | null>(null);
+  const [scoreDifferential, setScoreDifferential] = useState<number | null>(null);
+  const [course, setCourse] = useState<CourseRecord | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -223,6 +303,39 @@ export default function EditRound() {
         // Load all tee versions for scorecard
         const allCourses = await loadCourses();
         setAllTeeVersions(allCourses.filter(c => c.name === data.course_name));
+        // Load handicap calculations
+        const courseRecord = allCourses.find(c => c.id === data.course_id) ?? null;
+        setCourse(courseRecord);
+
+        // Load existing stored values if present
+        if (data.handicap_index != null) setHandicapIndex(data.handicap_index);
+        if (data.course_handicap != null) setCourseHandicap(data.course_handicap);
+        if (data.adjusted_gross_score != null) setAdjustedGrossScore(data.adjusted_gross_score);
+        if (data.score_differential != null) setScoreDifferential(data.score_differential);
+
+        // If not stored yet, compute from prior rounds
+        if (data.handicap_index == null && courseRecord?.slope && courseRecord?.rating) {
+          const { data: allRoundsData } = await supabase
+            .from("rounds")
+            .select("date, score_differential")
+            .neq("id", data.id ?? "")
+            .order("date", { ascending: true });
+
+          if (allRoundsData) {
+            const hi = computeHandicapIndexAtDate(allRoundsData, data.date ?? "");
+            const totalPar = (data.holes ?? []).reduce((s: number, h: any) => s + (h.par || 0), 0);
+            const ch = computeCourseHandicap(hi, courseRecord.slope, courseRecord.rating, totalPar, data.holes_played ?? 18, courseRecord.holes?.length ?? 18);
+            const ags = computeAdjustedGrossScore(data.holes ?? [], ch);
+            const is9Course = (courseRecord.holes?.length ?? 18) <= 9;
+            const is9Round = (data.holes_played ?? 18) <= 9;
+            const adjRating = (!is9Round && is9Course) ? courseRecord.rating * 2 : (is9Round && !is9Course) ? courseRecord.rating / 2 : courseRecord.rating;
+            const sd = computeScoreDifferential(ags, adjRating, courseRecord.slope);
+            setHandicapIndex(hi);
+            setCourseHandicap(ch);
+            setAdjustedGrossScore(ags);
+            setScoreDifferential(sd);
+          }
+        }
       }
       setLoading(false);
     });
@@ -255,8 +368,25 @@ export default function EditRound() {
 
   async function handleSave() {
     setSaving(true);
+    // Recompute AGS and differential on save in case scores changed
+    let finalAgs = adjustedGrossScore;
+    let finalSd = scoreDifferential;
+    if (courseHandicap != null && course?.rating && course?.slope) {
+      finalAgs = computeAdjustedGrossScore(roundHoles, courseHandicap);
+      const is9C = (course.holes?.length ?? 18) <= 9;
+      const is9R = holesPlayed <= 9;
+      const adjR = (!is9R && is9C) ? course.rating * 2 : (is9R && !is9C) ? course.rating / 2 : course.rating;
+      finalSd = computeScoreDifferential(finalAgs, adjR, course.slope);
+      setAdjustedGrossScore(finalAgs);
+      setScoreDifferential(finalSd);
+    }
+
     const { error } = await supabase.from("rounds").update({
       date, holes_played: holesPlayed, starting_hole: startingHole, holes: roundHoles,
+      handicap_index: handicapIndex,
+      course_handicap: courseHandicap,
+      adjusted_gross_score: finalAgs,
+      score_differential: finalSd,
     }).eq("id", id);
     setSaving(false);
     if (!error) {
@@ -278,6 +408,7 @@ export default function EditRound() {
 
   const totalScore = roundHoles.reduce((s, h) => s + (Number(h.score) || 0), 0);
   const totalPutts = roundHoles.reduce((s, h) => s + (Number(h.putts) || 0), 0);
+
   const drivingHoles = roundHoles.filter(h => h.par === 4 || h.par === 5);
   const fairways = drivingHoles.filter(h => h.tee_accuracy === "Hit").length;
   const girs = roundHoles.filter(h => h.gir).length;
@@ -329,6 +460,44 @@ export default function EditRound() {
           </div>
         ))}
       </div>
+
+      {/* Per-hole adjusted score indicator */}
+      {courseHandicap != null && roundHoles.map((h, i) => {
+        const strokes = handicapStrokesOnHole(courseHandicap, h.stroke_index);
+        const adj = adjustedScore(h.score, h.par, strokes);
+        const isAdjusted = h.score !== "" && adj !== "" && Number(adj) < Number(h.score);
+        return isAdjusted ? (
+          <div key={i} style={{ fontSize:11, color:"#e67e22", marginBottom:2 }}>
+            Hole {h.hole}: score capped at {adj} (actual {h.score}, max net double bogey = {netDoubleBogey(h.par, strokes)})
+          </div>
+        ) : null;
+      })}
+
+      {/* Handicap calculations */}
+      {(courseHandicap != null || handicapIndex != null) && (
+        <div style={{ background:"#f0faf6", border:"1px solid #c8e6c9", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+          <p style={{ fontSize:11, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1, margin:"0 0 10px" }}>Round Handicap</p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+            {[
+              { label:"HI at round", value: handicapIndex != null ? handicapIndex.toFixed(1) : "—" },
+              { label:"Course HCP", value: courseHandicap != null ? courseHandicap : "—" },
+              { label:"Adj Gross", value: adjustedGrossScore != null && adjustedGrossScore > 0 ? adjustedGrossScore : "—" },
+              { label:"Differential", value: scoreDifferential != null ? (holesPlayed <= 9 ? (scoreDifferential * 2).toFixed(1) : scoreDifferential.toFixed(1)) : "—" },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ textAlign:"center", background:"white", borderRadius:8, padding:"8px 4px", border:"1px solid #e0f0ea" }}>
+                <div style={{ fontSize:18, fontWeight:700, color:"#0f6e56" }}>{value}</div>
+                <div style={{ fontSize:10, color:"#666", marginTop:2 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          {courseHandicap != null && (
+            <p style={{ fontSize:11, color:"#666", margin:"8px 0 0", fontStyle:"italic" }}>
+              Course HCP {courseHandicap}: you receive 1 stroke on holes ranked 1–{Math.min(courseHandicap, 18)}
+              {courseHandicap > 18 ? ` plus 2 strokes on holes ranked 1–${courseHandicap - 18}` : ""}
+            </p>
+          )}
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {roundHoles.map((hole, i) => (
