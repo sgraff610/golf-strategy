@@ -265,6 +265,7 @@ function PlayCourseInner() {
   const [currentHoleIdx, setCurrentHoleIdx] = useState(0);
   const [roundHoles, setRoundHoles] = useState<RoundHole[]>([]);
   const [roundId, setRoundId] = useState<string|null>(initRoundId||null);
+  const [courseHandicap, setCourseHandicap] = useState<number|null>(null);
   const [showScore, setShowScore] = useState(false);
   const [strategy, setStrategy] = useState<any>(null);
   const [loadingStrategy, setLoadingStrategy] = useState(false);
@@ -288,6 +289,8 @@ function PlayCourseInner() {
         setHolesPlayed(data.holes_played ?? 18);
         setStartingHole(data.starting_hole ?? 1);
         setRoundHoles(data.holes ?? []);
+        console.log("round handicap fields:", (data as any).course_handicap, (data as any).handicap_index, (data as any).score_differential);
+        setCourseHandicap((data as any).course_handicap ?? (data as any).handicap_index ?? null);
         setRoundId(initRoundId);
         const allCourses = await loadCourses();
         setAllTeeVersions(allCourses.filter(c => c.name === data.course_name));
@@ -655,9 +658,26 @@ function scoreBg(score: number|"", par: number): string {
               {/* Idx */}
               <tr style={{ background:"#f9f9f9" }}>
                 <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Idx</td>
-                {roundHoles.map((h, i) => (
-                  <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#666", borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>{h.stroke_index}</td>
-                ))}
+                {roundHoles.map((h, i) => {
+                  const ch = courseHandicap ?? 0;
+                  const strokes = ch > 0
+                    ? (h.stroke_index <= (ch % 18) ? Math.floor(ch/18)+1 : Math.floor(ch/18))
+                    : ch < 0
+                    ? (h.stroke_index <= Math.abs(ch) ? -1 : 0)
+                    : 0;
+                  const idxBg = strokes >= 2 ? "#c0392b"
+                    : strokes === 1 ? "#f97316"
+                    : strokes === -1 ? "#22c55e"
+                    : i===currentHoleIdx ? "#e8f5e9" : "transparent";
+                  const idxColor = strokes !== 0 ? "#fff" : "#666";
+                  return (
+                    <td key={i} style={{ padding:"3px 4px", textAlign:"center", borderLeft:"1px solid #eee" }}>
+                      <div style={{ background: idxBg, color: idxColor, borderRadius:4, minWidth:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", fontWeight: strokes !== 0 ? 700 : 400, fontSize:11, margin:"0 auto" }}>
+                        {h.stroke_index}
+                      </div>
+                    </td>
+                  );
+                })}
               </tr>
               {/* Club */}
               <tr>
