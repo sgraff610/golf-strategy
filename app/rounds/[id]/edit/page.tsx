@@ -330,6 +330,7 @@ export default function EditRound() {
             const is9Round = (data.holes_played ?? 18) <= 9;
             const adjRating = (!is9Round && is9Course) ? courseRecord.rating * 2 : (is9Round && !is9Course) ? courseRecord.rating / 2 : courseRecord.rating;
             const sd = computeScoreDifferential(ags, adjRating, courseRecord.slope);
+            console.log("[differential debug]", { ags, adjRating, slope: courseRecord.slope, is9Course, is9Round, courseHoleCount: courseRecord.holes?.length, holesPlayed: data.holes_played, sd });
             setHandicapIndex(hi);
             setCourseHandicap(ch);
             setAdjustedGrossScore(ags);
@@ -356,6 +357,8 @@ export default function EditRound() {
     setSyncing(true);
     const course = await getCourse(courseId);
     if (!course) { alert("Could not find course data."); setSyncing(false); return; }
+    setCourseName(course.name);
+    await supabase.from("rounds").update({ course_name: course.name }).eq("id", id);
     setRoundHoles(prev => prev.map(roundHole => {
       const courseHole = course.holes.find(h => h.hole === roundHole.hole);
       if (!courseHole) return roundHole;
@@ -383,6 +386,7 @@ export default function EditRound() {
 
     const { error } = await supabase.from("rounds").update({
       date, holes_played: holesPlayed, starting_hole: startingHole, holes: roundHoles,
+      course_name: courseName,
       handicap_index: handicapIndex,
       course_handicap: courseHandicap,
       adjusted_gross_score: finalAgs,

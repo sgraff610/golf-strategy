@@ -1,4 +1,6 @@
 "use client";
+// app/components/Nav.tsx
+// REPLACED: adds a "Plan" link next to Strategy/Play.
 import { useState, useEffect } from "react";
 
 export default function Nav() {
@@ -13,71 +15,46 @@ export default function Nav() {
   }, []);
 
   const navLink: React.CSSProperties = {
-    color: "white",
-    textDecoration: "none",
-    fontSize: 14,
-    fontWeight: 500,
-    padding: "10px 24px",
-    display: "block",
+    color: "white", textDecoration: "none", fontSize: 14, fontWeight: 500,
+    padding: "10px 24px", display: "block",
     borderBottom: "1px solid rgba(255,255,255,0.1)",
   };
-
   const desktopNavLink: React.CSSProperties = {
-    color: "white",
-    textDecoration: "none",
-    fontSize: 13,
-    fontWeight: 500,
-    padding: "4px 10px",
-    borderRadius: 6,
-    background: "rgba(255,255,255,0.1)",
+    color: "white", textDecoration: "none", fontSize: 13, fontWeight: 500,
+    padding: "4px 10px", borderRadius: 6, background: "rgba(255,255,255,0.1)",
   };
+
+  const LINKS = [
+    { href: "/",                  label: "Strategy/Play" },
+    { href: "/plan",              label: "Plan" },
+    { href: "/courses",           label: "Courses" },
+    { href: "/rounds",            label: "Rounds" },
+    { href: "/rounds/calc",       label: "Analysis" },
+    { href: "/rounds/insights",   label: "Insights" },
+    { href: "/rounds/chat",       label: "Chat" },
+    { href: "/profile",           label: "Profile" },
+  ];
 
   return (
     <nav style={{ background: "#2f2f2f", position: "sticky", top: 0, zIndex: 100 }}>
-      <div style={{
-        padding: "0 24px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        height: 36,
-      }}>
-        <a href="/" style={{ color: "white", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-          ⛳ Golf Strategy
-        </a>
-
+      <div style={{ padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 36 }}>
+        <a href="/" style={{ color: "white", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>⛳ Golf Strategy</a>
         {isMobile ? (
-          <button
-            onClick={() => setOpen(!open)}
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              color: "white", fontSize: 20, padding: 4, lineHeight: 1,
-            }}
-            aria-label="Menu"
-          >
+          <button onClick={() => setOpen(!open)} aria-label="Menu"
+            style={{ background: "none", border: "none", cursor: "pointer", color: "white", fontSize: 20, padding: 4, lineHeight: 1 }}>
             {open ? "✕" : "☰"}
           </button>
         ) : (
-          <div style={{ display: "flex", gap: 6 }}>
-            <a href="/" style={desktopNavLink}>Strategy/Play</a>
-            <a href="/courses" style={desktopNavLink}>Courses</a>
-            <a href="/rounds" style={desktopNavLink}>Rounds</a>
-            <a href="/rounds/calc" style={desktopNavLink}>Analysis</a>
-            <a href="/rounds/insights" style={desktopNavLink}>Insights</a>
-            <a href="/rounds/chat" style={desktopNavLink}>Chat</a>
-            <a href="/profile" style={desktopNavLink}>Profile</a>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {LINKS.map((l) => (<a key={l.href} href={l.href} style={desktopNavLink}>{l.label}</a>))}
           </div>
         )}
       </div>
-
       {isMobile && open && (
         <div style={{ background: "#222222", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
-          <a href="/" style={navLink} onClick={() => setOpen(false)}>Strategy/Play</a>
-          <a href="/courses" style={navLink} onClick={() => setOpen(false)}>Courses</a>
-          <a href="/rounds" style={navLink} onClick={() => setOpen(false)}>Rounds</a>
-          <a href="/rounds/calc" style={navLink} onClick={() => setOpen(false)}>Analysis</a>
-          <a href="/rounds/insights" style={navLink} onClick={() => setOpen(false)}>Insights</a>
-          <a href="/rounds/chat" style={navLink} onClick={() => setOpen(false)}>Chat</a>
-          <a href="/profile" style={navLink} onClick={() => setOpen(false)}>Profile</a>
+          {LINKS.map((l) => (
+            <a key={l.href} href={l.href} style={navLink} onClick={() => setOpen(false)}>{l.label}</a>
+          ))}
         </div>
       )}
     </nav>
