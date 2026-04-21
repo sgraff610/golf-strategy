@@ -1,8 +1,8 @@
 'use client';
 // app/add-course/scan/page.tsx
 
-import { useState, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const pageStyle: React.CSSProperties = { maxWidth: 700, margin: '0 auto', padding: '24px 16px' };
 const sectionLabel: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: '#0f6e56', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, display: 'block' };
@@ -195,11 +195,20 @@ function EditBool({ label, value, onChange }: { label: string; value: boolean; o
 }
 
 function EditNum({ label, value, onChange, unit }: { label: string; value: number; onChange: (v: number) => void; unit?: string }) {
+  const [localVal, setLocalVal] = useState(String(value));
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (syncedValue !== value) { setSyncedValue(value); setLocalVal(String(value)); }
   return (
     <div style={editRow}>
       <span style={editLabel}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <input type="number" value={value} onChange={e => onChange(Number(e.target.value))} style={{ ...inputStyle, width: 70, textAlign: 'right' }} />
+        <input
+          type="number"
+          value={localVal}
+          onChange={e => setLocalVal(e.target.value)}
+          onBlur={() => { const n = Number(localVal); if (!isNaN(n)) { onChange(n); setLocalVal(String(n)); } else setLocalVal(String(value)); }}
+          style={{ ...inputStyle, width: 70, textAlign: 'right' }}
+        />
         {unit && <span style={{ fontSize: 12, color: '#666' }}>{unit}</span>}
       </div>
     </div>
@@ -306,17 +315,19 @@ function deepSet<T>(obj: T, path: string[], value: unknown): T {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ScanHolePage() {
+function ScanHolePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const holeNum = searchParams.get('holeNum') || '';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
-  const [holeNum, setHoleNum] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const addFiles = useCallback((newFiles: File[]) => {
     const imgs = newFiles.filter(f => f.type.startsWith('image/')).slice(0, 2);
@@ -431,7 +442,7 @@ export default function ScanHolePage() {
     }
   };
 
-  const useResult = () => {
+  const useResult = async () => {
     if (!result) return;
     const scanParams = new URLSearchParams(window.location.search);
     const courseId = scanParams.get('courseId');
@@ -442,8 +453,25 @@ export default function ScanHolePage() {
     if (holeNum) params.set('holeNum', holeNum);
 
     if (existingHole) {
-      // Existing hole — only pass visual_analysis, skip all other fields
-      if (result.visual_analysis) params.set('visual_analysis', JSON.stringify(result.visual_analysis));
+      // Auto-save visual_analysis directly to the course in Supabase
+      const holeNumInt = parseInt(holeNum || '1');
+      if (result.visual_analysis) {
+        setImporting(true);
+        try {
+          const { getCourse, saveCourse } = await import('@/lib/storage');
+          const course = await getCourse(courseId as string);
+          if (course) {
+            const updatedHoles = course.holes.map((h: any) =>
+              h.hole === holeNumInt ? { ...h, visual_analysis: result.visual_analysis } : h
+            );
+            await saveCourse({ ...course, holes: updatedHoles });
+          }
+        } catch (e) {
+          console.error('Auto-save failed:', e);
+        }
+        setImporting(false);
+      }
+      params.set('visual_analysis', JSON.stringify(result.visual_analysis));
       params.set('vaOnly', '1');
       router.push(`/courses/${courseId}/edit?scan=1&${params.toString()}`);
     } else {
@@ -470,6 +498,11 @@ export default function ScanHolePage() {
       <div style={{ marginBottom: 24 }}>
         <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#666', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 12 }}>← back</button>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', marginBottom: 4 }}>Scan hole with AI</h1>
+        {holeNum && (
+          <div style={{ background: '#0f6e56', color: 'white', borderRadius: 8, padding: '6px 14px', display: 'inline-block', fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+            Hole {holeNum}
+          </div>
+        )}
         <p style={{ fontSize: 13, color: '#666', lineHeight: 1.5 }}>Upload 1–2 images — yardage book diagram or satellite view. After scanning, edit any field Claude got wrong before importing.</p>
       </div>
 
@@ -492,11 +525,6 @@ export default function ScanHolePage() {
           ))}
         </div>
       )}
-
-      <div style={{ marginBottom: 16 }}>
-        <span style={sectionLabel}>Hole number (optional)</span>
-        <input type="number" min={1} max={18} placeholder="e.g. 7" value={holeNum} onChange={e => setHoleNum(e.target.value)} style={{ ...inputStyle, width: 120 }} />
-      </div>
 
       <button style={loading || !files.length ? btnDisabled : btnPrimary} onClick={scan} disabled={loading || !files.length}>
         {loading ? 'Analyzing with AI…' : 'Analyze with AI →'}
@@ -763,12 +791,22 @@ export default function ScanHolePage() {
             {refreshing && <p style={{ fontSize: 12, color: '#0f6e56', textAlign: 'center', marginTop: 6 }}>Rewriting text fields based on your corrections — no image re-analysis…</p>}
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-            <button style={{ ...btnPrimary, flex: 1, marginTop: 0 }} onClick={useResult}>Import into hole editor →</button>
-            <button style={{ flex: 1, padding: '10px 20px', fontSize: 14, fontWeight: 600, border: '1px solid #ddd', borderRadius: 8, background: 'white', color: '#444', cursor: 'pointer' }} onClick={() => { setResult(null); setFiles([]); setPreviews([]); setHoleNum(''); }}>Scan another</button>
+            <button style={{ ...btnPrimary, flex: 1, marginTop: 0, opacity: importing ? 0.7 : 1, cursor: importing ? 'not-allowed' : 'pointer' }} onClick={useResult} disabled={importing}>
+              {importing ? 'Saving…' : 'Import into hole editor →'}
+            </button>
+            <button style={{ flex: 1, padding: '10px 20px', fontSize: 14, fontWeight: 600, border: '1px solid #ddd', borderRadius: 8, background: 'white', color: '#444', cursor: 'pointer' }} onClick={() => { setResult(null); setFiles([]); setPreviews([]); }}>Scan another</button>
           </div>
           <div style={successBox}>Edit fields, refresh the AI summary, then import when ready.</div>
         </div>
       )}
     </div>
+  );
+}
+
+export default function ScanHolePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, fontFamily: 'sans-serif' }}>Loading…</div>}>
+      <ScanHolePageInner />
+    </Suspense>
   );
 }

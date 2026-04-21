@@ -133,17 +133,17 @@ function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; im
   const fmtSTP = (s:number) => s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
   if (greyed) return (
     <div style={{ background:"#f0f0f0", borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40 }}>
-      <p style={{ fontSize:9, color:"#bbb", margin:0 }}>N/A</p>
+      <p style={{ fontSize:9, color:"#0f6e56", margin:0 }}>N/A</p>
     </div>
   );
   const lowCount = count <= 2;
-  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#aaa" } : impactColor(impact, lowCount);
+  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#0f6e56" } : impactColor(impact, lowCount);
   return (
     <div style={{ background:colors.bg, borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40, display:"flex", flexDirection:"column", justifyContent:"center" }}>
       {count>0 ? <>
         <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
         <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{count}</p>
-      </> : <p style={{ fontSize:9, color:"#bbb", margin:0 }}>—</p>}
+      </> : <p style={{ fontSize:9, color:"#0f6e56", margin:0 }}>—</p>}
     </div>
   );
 }
@@ -181,8 +181,8 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   return (
     <main style={{maxWidth:960,margin:"40px auto",fontFamily:"sans-serif",padding:"0 24px"}}>
       <div style={{marginBottom:20}}>
-        <h1 style={{fontSize:22,fontWeight:700,color:"#1a1a1a",margin:"0 0 2px"}}>{courseName}</h1>
-        <p style={{fontSize:14,color:"#666",margin:0}}>{teeBox} tees · {date}</p>
+        <h1 style={{fontSize:22,fontWeight:700,color:"#d0d0d0",margin:"0 0 2px"}}>{courseName}</h1>
+        <p style={{fontSize:14,color:"white",margin:0}}>{teeBox} tees · {date}</p>
         <p style={{fontSize:20,fontWeight:700,color:toPar>0?"#c0392b":toPar<0?"#27ae60":"#333",margin:"8px 0 0"}}>
           {totalScore} ({toPar===0?"E":toPar>0?`+${toPar}`:toPar})
         </p>
@@ -191,14 +191,14 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"auto"}}>
           <tbody>
             <tr><td style={lbl}>Hole</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={hdr}>{col.rh.hole}</td>:<td key={ci} style={sp}>{col.label}</td>)}</tr>
-            <tr><td style={lbl}>Index</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={{...c,background:"#fafafa",color:"#555"}}>{col.rh.stroke_index}</td>:<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}</tr>
+            <tr><td style={lbl}>Index</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={{...c,background:"#fafafa",color:"#0f6e56"}}>{col.rh.stroke_index}</td>:<td key={ci} style={{...c,background:"#e8f5f0"}}></td>)}</tr>
             <tr><td style={lbl}>Par</td>{cols.map((col,ci)=>col.type==="hole"?<td key={ci} style={{...c,fontWeight:600}}>{col.rh.par}</td>:<td key={ci} style={sp}>{col.parSum}</td>)}</tr>
             {sortedTees.map((tee,ti)=>(
               <tr key={tee.id} style={{background:ti%2===0?"#fff":"#f9f9f9"}}>
                 <td style={{...lbl,background:ti%2===0?"#fff":"#f9f9f9"}}><span style={{fontSize:10,color:"#0f6e56",fontWeight:600}}>{tee.tee_box}</span></td>
                 {cols.map((col,ci)=>{
-                  if(col.type==="hole"){const th=tee.holes.find((h:any)=>h.hole===col.rh.hole);return<td key={ci} style={c}>{th?.yards||"—"}</td>;}
-                  return<td key={ci} style={{...sp,fontSize:12}}>{col.yardsMap[tee.tee_box]||"—"}</td>;
+                  if(col.type==="hole"){const th=tee.holes.find((h:any)=>h.hole===col.rh.hole);return<td key={ci} style={{...c,color:"#1a1a1a"}}>{th?.yards||"—"}</td>;}
+                  return<td key={ci} style={{...sp,fontSize:12,color:"#1a1a1a"}}>{col.yardsMap[tee.tee_box]||"—"}</td>;
                 })}
               </tr>
             ))}
@@ -236,7 +236,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
       <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
         <a href={`/rounds/${roundId}/edit`} style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"#0f6e56",color:"white",border:"1px solid #0f6e56",borderRadius:8,textDecoration:"none"}}>Edit this round</a>
         <a href="/rounds" style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"white",color:"#1a1a1a",border:"1px solid #1a1a1a",borderRadius:8,textDecoration:"none"}}>All rounds</a>
-        <a href="/" style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"white",color:"#666",border:"1px solid #ccc",borderRadius:8,textDecoration:"none"}}>Strategy</a>
+        <a href="/" style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"white",color:"#0f6e56",border:"1px solid #0f6e56",borderRadius:8,textDecoration:"none"}}>Strategy</a>
       </div>
     </main>
   );
@@ -469,7 +469,7 @@ function PlayCourseInner() {
   const inputStyle: React.CSSProperties = { width:"100%", padding:"6px 8px", fontSize:14, border:"1px solid #ddd", borderRadius:6, boxSizing:"border-box" };
   const selectStyle: React.CSSProperties = { ...inputStyle, background:"white", color:"#0f6e56" };
   const disabledSelectStyle: React.CSSProperties = { ...inputStyle, background:"#f0f0f0", color:"#bbb" };
-  const labelStyle: React.CSSProperties = { fontSize:12, color:"#666", display:"block", marginBottom:3 };
+  const labelStyle: React.CSSProperties = { fontSize:12, color:"white", display:"block", marginBottom:3 };
   const sl: React.CSSProperties = { fontSize:11, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1, margin:"0 0 6px" };
   const card = (bg: string): React.CSSProperties => ({ background:bg, borderRadius:12, padding:"12px 16px" });
   const btnStyle = (primary: boolean, small = false): React.CSSProperties => ({
@@ -483,7 +483,7 @@ function PlayCourseInner() {
 
   if (loadingRound) return (
     <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
-      <p style={{ color:"#666" }}>Loading round...</p>
+      <p style={{ color:"white" }}>Loading round...</p>
     </main>
   );
 
@@ -502,7 +502,7 @@ function PlayCourseInner() {
 
   if (showScorecard && roundId && !scorecardCourse) return (
     <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
-      <p style={{ color:"#666" }}>Loading scorecard...</p>
+      <p style={{ color:"white" }}>Loading scorecard...</p>
     </main>
   );
 
@@ -511,10 +511,10 @@ function PlayCourseInner() {
     return (
       <main style={{ maxWidth:520, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
         <div style={{ marginBottom:24 }}>
-          <a href="/" style={{ fontSize:13, color:"#666" }}>← Back to Strategy</a>
+          <a href="/" style={{ fontSize:13, color:"white" }}>← Back to Strategy</a>
         </div>
-        <h1 style={{ fontSize:22, fontWeight:600, marginBottom:4, color:"#0f6e56" }}>Play Course</h1>
-        <p style={{ color:"#aaa", marginBottom:24, fontSize:13 }}>Set up your round and start playing.</p>
+        <h1 style={{ fontSize:22, fontWeight:600, marginBottom:4, color:"#d0d0d0" }}>Play Course</h1>
+        <p style={{ color:"white", marginBottom:24, fontSize:13 }}>Set up your round and start playing.</p>
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <div>
             <label style={labelStyle}>Course</label>
@@ -576,8 +576,8 @@ function scoreBg(score: number|"", par: number): string {
     if (v === "Hit")   return "C";
     if (v === "Left")  return "L";
     if (v === "Right") return "R";
-    if (v === "Short") return "D";
-    if (v === "Long")  return "U";
+    if (v === "Short") return "Sh";
+    if (v === "Long")  return "Lo";
     return "—";
   }
   function accColor(v: string): string {
@@ -605,13 +605,13 @@ function scoreBg(score: number|"", par: number): string {
 
         {/* Top bar */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px" }}>
-          <a href={isEditMode ? `/rounds/${roundId}/edit` : "/"} style={{ fontSize:12, color:"#666" }}>
+          <a href={isEditMode ? `/rounds/${roundId}/edit` : "/"} style={{ fontSize:12, color:"#0f6e56" }}>
             ← {isEditMode ? "Edit" : "Exit"}
           </a>
           <span style={{ fontSize:12, fontWeight:700, color:"#0f6e56" }}>
             {selectedCourse?.name ?? ""} · Hole {currentHole?.hole}
           </span>
-          <span style={{ fontSize:12, color: saving ? "#e67e22" : "#aaa" }}>
+          <span style={{ fontSize:12, color: saving ? "#e67e22" : "#0f6e56" }}>
             {saving ? "Saving..." : "Auto-saved"}
           </span>
         </div>
@@ -621,7 +621,7 @@ function scoreBg(score: number|"", par: number): string {
           <div style={{ background:"#fff8e1", borderTop:"1px solid #f0c040", padding:"6px 12px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:12, color:"#7a5c00" }}>⚠ Unsaved changes</span>
             <div style={{ display:"flex", gap:8 }}>
-              <button onClick={() => setHasUnsaved(false)} style={{ fontSize:12, color:"#999", background:"none", border:"none", cursor:"pointer" }}>Keep editing</button>
+              <button onClick={() => setHasUnsaved(false)} style={{ fontSize:12, color:"#0f6e56", background:"none", border:"none", cursor:"pointer" }}>Keep editing</button>
               <button onClick={saveAndClear} style={{ fontSize:12, fontWeight:700, color:"#0f6e56", background:"none", border:"1px solid #0f6e56", borderRadius:6, padding:"2px 10px", cursor:"pointer" }}>Save now</button>
             </div>
           </div>
@@ -643,21 +643,21 @@ function scoreBg(score: number|"", par: number): string {
               </tr>
               {/* Yds */}
               <tr style={{ background:"#f9f9f9" }}>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Yds</td>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Yds</td>
                 {roundHoles.map((h, i) => (
                   <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#444", borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>{h.yards}</td>
                 ))}
               </tr>
               {/* Par */}
               <tr>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Par</td>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Par</td>
                 {roundHoles.map((h, i) => (
                   <td key={i} style={{ padding:"3px 6px", textAlign:"center", fontWeight:600, color:"#333", borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>{h.par}</td>
                 ))}
               </tr>
               {/* Idx */}
               <tr style={{ background:"#f9f9f9" }}>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Idx</td>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Idx</td>
                 {roundHoles.map((h, i) => {
                   const ch = courseHandicap ?? 0;
                   const strokes = ch > 0
@@ -697,7 +697,7 @@ function scoreBg(score: number|"", par: number): string {
                 {roundHoles.map((h, i) => {
                   const ch = selectedCourse?.holes.find(x => x.hole === h.hole);
                   return (
-                    <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#555", fontWeight:600, fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
+                    <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#0f6e56", fontWeight:600, fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
                       {(ch as any)?.preferred_landing || "—"}
                     </td>
                   );
@@ -711,7 +711,7 @@ function scoreBg(score: number|"", par: number): string {
                   const club = (ch as any)?.preferred_club ?? "";
                   const rem = club && CLUB_DIST[club] ? h.yards - CLUB_DIST[club] : null;
                   return (
-                    <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#555", fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
+                    <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#0f6e56", fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
                       {rem !== null ? rem : "—"}
                     </td>
                   );
@@ -750,16 +750,16 @@ function scoreBg(score: number|"", par: number): string {
               </tr>
               {/* Appr */}
               <tr style={{ background:"#f9f9f9" }}>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Appr</td>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Appr</td>
                 {roundHoles.map((h, i) => (
-                  <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#555", fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
+                  <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#0f6e56", fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
                     {h.appr_distance || "—"}
                   </td>
                 ))}
               </tr>
               {/* Acc */}
               <tr>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Acc</td>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Acc</td>
                 {roundHoles.map((h, i) => (
                   <td key={i} style={{ padding:"3px 6px", textAlign:"center", borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
                     <span style={{ fontSize:11, fontWeight:700, color: accColor(h.appr_accuracy) }}>
@@ -770,7 +770,7 @@ function scoreBg(score: number|"", par: number): string {
               </tr>
               {/* Chips */}
               <tr style={{ background:"#f9f9f9" }}>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Chips</td>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"#f9f9f9", zIndex:2 }}>Chips</td>
                 {roundHoles.map((h, i) => (
                   <td key={i} style={{ padding:"3px 6px", textAlign:"center", color: Number(h.chips) > 0 ? "#b8860b" : "#aaa", fontWeight: Number(h.chips) > 0 ? 700 : 400, fontSize:10, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
                     {h.chips !== "" ? h.chips : "—"}
@@ -779,7 +779,7 @@ function scoreBg(score: number|"", par: number): string {
               </tr>
               {/* Haz */}
               <tr>
-                <td style={{ padding:"3px 8px", fontSize:10, color:"#666", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Haz</td>
+                <td style={{ padding:"3px 8px", fontSize:10, color:"#0f6e56", fontWeight:600, position:"sticky", left:0, background:"white", zIndex:2 }}>Haz</td>
                 {roundHoles.map((h, i) => (
                   <td key={i} style={{ padding:"3px 6px", textAlign:"center", color:"#e67e22", fontSize:10, fontWeight:600, borderLeft:"1px solid #eee", background: i===currentHoleIdx ? "#e8f5e9" : "transparent" }}>
                     {hazardCode(h)}
@@ -813,11 +813,11 @@ function scoreBg(score: number|"", par: number): string {
               )}
             </div>
 
-            <p style={{ fontSize:10, fontWeight:600, color:"#aaa", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Scoring</p>
+            <p style={{ fontSize:10, fontWeight:600, color:"#0f6e56", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Scoring</p>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
               {[{label:"Score",field:"score",min:1,max:20},{label:"Putts",field:"putts",min:0,max:10},{label:"Chips",field:"chips",min:0,max:10}].map(({label,field,min,max}) => (
                 <div key={field}>
-                  <label style={{ fontSize:10, color: field==="chips" ? "#b8860b" : "#666", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
+                  <label style={{ fontSize:10, color: field==="chips" ? "#b8860b" : "#0f6e56", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
                   <input type="number" min={min} max={max}
                     style={{ width:"100%", padding:"6px 4px", fontSize:15, border: field==="chips" ? "2px solid #f0c040" : "1px solid #ddd", borderRadius:8, textAlign:"center", background: field==="chips" ? "#fffde7" : "white", color:"#1a1a1a" }}
                     value={(currentHole as any)[field] === "" || (currentHole as any)[field] == null ? "" : Number((currentHole as any)[field])}
@@ -825,7 +825,7 @@ function scoreBg(score: number|"", par: number): string {
                 </div>
               ))}
               <div>
-                <label style={{ fontSize:10, color:"#666", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
+                <label style={{ fontSize:10, color:"#0f6e56", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
                 <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1px solid #ddd", borderRadius:8, background:"white", color:"#0f6e56" }}
                   value={currentHole.first_putt_distance}
                   onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
@@ -835,7 +835,7 @@ function scoreBg(score: number|"", par: number): string {
               </div>
             </div>
 
-            <p style={{ fontSize:10, fontWeight:600, color:"#aaa", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Tee & Approach</p>
+            <p style={{ fontSize:10, fontWeight:600, color:"#0f6e56", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Tee & Approach</p>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
               <div>
                 <label style={{ fontSize:10, color: isPar3 ? "#ccc" : "#666", fontWeight:600, display:"block", marginBottom:3 }}>DRIV Club</label>
@@ -875,7 +875,7 @@ function scoreBg(score: number|"", par: number): string {
               </div>
             </div>
 
-            <p style={{ fontSize:10, fontWeight:600, color:"#aaa", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Penalties</p>
+            <p style={{ fontSize:10, fontWeight:600, color:"#0f6e56", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Penalties</p>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
               {[{label:"Water",field:"water_penalty"},{label:"Drop/OB",field:"drop_or_out"},{label:"Tree/Haz",field:"tree_haz"},{label:"FWY Bkr",field:"fairway_bunker"},{label:"GS Bkr",field:"greenside_bunker"}].map(({label,field}) => (
                 <div key={field}>
@@ -890,14 +890,14 @@ function scoreBg(score: number|"", par: number): string {
           </div>
         )}
 
-        {loadingStrategy && <p style={{ color:"#aaa", fontSize:13, textAlign:"center", marginTop:24 }}>Loading strategy...</p>}
+        {loadingStrategy && <p style={{ color:"white", fontSize:13, textAlign:"center", marginTop:24 }}>Loading strategy...</p>}
 
         {!loadingStrategy && strategy && hole && strat && (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontSize:11, fontWeight:700, letterSpacing:1, color:confidenceColor[conf]??"#666", textTransform:"uppercase" }}>{conf} confidence</span>
+              <span style={{ fontSize:11, fontWeight:700, letterSpacing:1, color:confidenceColor[conf]??"#0f6e56", textTransform:"uppercase" }}>{conf} confidence</span>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:11, color:"#aaa" }}>
+                <span style={{ fontSize:11, color:"#0f6e56" }}>
                   {ds?.exact_hole_history>0?`${ds.exact_hole_history}× this hole · `:""}{displayEnriched.length} similar
                 </span>
                 <button onClick={() => setShowThisHoleOnly(v=>!v)}
@@ -908,20 +908,20 @@ function scoreBg(score: number|"", par: number): string {
             </div>
 
             <div style={card("#f0f0f0")}>
-              <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>HOLE INFO</p>
+              <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>HOLE INFO</p>
               <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:4 }}>
                 <span style={{ fontSize:14, color:"#333" }}>Par {hole.par}</span>
                 <span style={{ fontSize:14, color:"#333" }}>{hole.yards} yds</span>
                 <span style={{ fontSize:14, color:"#333" }}>SI {hole.stroke_index}</span>
-                {course?.rating&&<span style={{ fontSize:14, color:"#666" }}>Rating {course.rating}</span>}
-                {course?.slope&&<span style={{ fontSize:14, color:"#666" }}>Slope {course.slope}</span>}
+                {course?.rating&&<span style={{ fontSize:14, color:"#0f6e56" }}>Rating {course.rating}</span>}
+                {course?.slope&&<span style={{ fontSize:14, color:"#0f6e56" }}>Slope {course.slope}</span>}
               </div>
-              {hole.dogleg_direction&&<p style={{ fontSize:13, color:"#555", margin:"4px 0 0" }}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>}
-              {hole.approach_green_depth>0&&<p style={{ fontSize:13, color:"#555", margin:"4px 0 0" }}>Green depth: {hole.approach_green_depth} yds</p>}
+              {hole.dogleg_direction&&<p style={{ fontSize:13, color:"#0f6e56", margin:"4px 0 0" }}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>}
+              {hole.approach_green_depth>0&&<p style={{ fontSize:13, color:"#0f6e56", margin:"4px 0 0" }}>Green depth: {hole.approach_green_depth} yds</p>}
             </div>
 
             <div style={{ ...card("#f0f0f0"), display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 20px" }}>
-              <span style={{ fontSize:13, color:"#aaa" }}>Avg on {showThisHoleOnly?"this hole":"similar holes"}</span>
+              <span style={{ fontSize:13, color:"#0f6e56" }}>Avg on {showThisHoleOnly?"this hole":"similar holes"}</span>
               <span style={{ fontSize:20, fontWeight:700, color:(t?.avgScoreToPar??0)>0?"#c0392b":"#27ae60" }}>
                 {t?fmtSTP(t.avgScoreToPar??0):ds?.avg_score_to_par}
               </span>
@@ -940,21 +940,21 @@ function scoreBg(score: number|"", par: number): string {
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",marginBottom:4}}>
                     {["Date","Sc","Club","Tee","Ap","Pu","Haz","Appr"].map(h=>(
-                      <span key={h} style={{fontSize:9,color:"#aaa",fontWeight:600,textTransform:"uppercase"}}>{h}</span>
+                      <span key={h} style={{fontSize:9,color:"#0f6e56",fontWeight:600,textTransform:"uppercase"}}>{h}</span>
                     ))}
                   </div>
                   {holeHistory.map((h:any,i:number)=>(
                     <div key={i} style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",alignItems:"center",padding:"3px 0",borderTop:i>0?"1px solid #f0f0f0":"none"}}>
-                      <span style={{fontSize:10,color:"#888"}}>{h.date?.slice(2,10)||"—"}</span>
+                      <span style={{fontSize:10,color:"#0f6e56"}}>{h.date?.slice(2,10)||"—"}</span>
                       <span style={{fontSize:13,fontWeight:700,color:scoreColor(Number(h.score),h.par)}}>
                         {Number(h.score)-h.par===0?"E":Number(h.score)-h.par>0?`+${Number(h.score)-h.par}`:Number(h.score)-h.par}
                       </span>
-                      <span style={{fontSize:10,color:"#555"}}>{h.club||"—"}</span>
-                      <span style={{fontSize:10,color:"#555"}}>{h.tee_accuracy?.slice(0,3)||"—"}</span>
-                      <span style={{fontSize:10,color:"#555"}}>{h.appr_accuracy?.slice(0,3)||"—"}</span>
-                      <span style={{fontSize:10,color:"#555"}}>{h.putts||"—"}</span>
+                      <span style={{fontSize:10,color:"#0f6e56"}}>{h.club||"—"}</span>
+                      <span style={{fontSize:10,color:"#0f6e56"}}>{h.tee_accuracy?.slice(0,3)||"—"}</span>
+                      <span style={{fontSize:10,color:"#0f6e56"}}>{h.appr_accuracy?.slice(0,3)||"—"}</span>
+                      <span style={{fontSize:10,color:"#0f6e56"}}>{h.putts||"—"}</span>
                       <span style={{fontSize:10,color:"#e67e22",fontWeight:500}}>{hazardCode(h)}</span>
-                      <span style={{fontSize:10,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.appr_distance||"—"}</span>
+                      <span style={{fontSize:10,color:"#0f6e56",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.appr_distance||"—"}</span>
                     </div>
                   ))}
                 </div>
@@ -965,7 +965,7 @@ function scoreBg(score: number|"", par: number): string {
             <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 16px"}}>
               <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:0}}>
                 <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {holeNotesText?"✓":""}</span>
-                <span style={{fontSize:13,color:"#999"}}>{holeNotesOpen?"▲":"▼"}</span>
+                <span style={{fontSize:13,color:"#0f6e56"}}>{holeNotesOpen?"▲":"▼"}</span>
               </button>
               {holeNotesOpen&&(
                 <div style={{marginTop:10}}>
@@ -984,10 +984,10 @@ function scoreBg(score: number|"", par: number): string {
 
             {hole.par>=4&&(
               <div style={card("#f6f6f6")}>
-                <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE STRATEGY</p>
+                <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE STRATEGY</p>
                 {hazardImpacts.length>0&&(
                   <div style={{ marginBottom:14 }}>
-                    <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:"0 0 6px" }}>TEE SHOT HAZARDS</p>
+                    <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 6px" }}>TEE SHOT HAZARDS</p>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6 }}>
                       {hazardImpacts.map((h,i)=>{
                         const colors=impactColor(h.impact);
@@ -1007,14 +1007,14 @@ function scoreBg(score: number|"", par: number): string {
                 <div style={{ marginTop:8 }}>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:3, marginBottom:3 }}>
                     {["Club","Left","Hit","Right","Unk"].map(h=>(
-                      <div key={h} style={{fontSize:9,fontWeight:600,color:"#aaa",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
+                      <div key={h} style={{fontSize:9,fontWeight:600,color:"#0f6e56",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
                     ))}
                   </div>
                   {gridData.map(row=>(
                     <div key={row.club} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
                       <div style={{background:"#f6f6f6",borderRadius:4,padding:"3px 4px",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"center"}}>
                         <p style={{fontSize:10,fontWeight:600,color:"#1a1a1a",margin:0}}>{row.club}</p>
-                        <p style={{fontSize:9,color:"#aaa",margin:0}}>{row.count}</p>
+                        <p style={{fontSize:9,color:"#0f6e56",margin:0}}>{row.count}</p>
                       </div>
                       {row.cols.map((col,ci)=>{
                         const isLeftCol=ci===0, isRightCol=ci===2;
@@ -1031,10 +1031,10 @@ function scoreBg(score: number|"", par: number): string {
 
             <div style={card("#f6f6f6")}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-                <p style={{ fontSize:11, color:"#aaa", fontWeight:600, letterSpacing:1, margin:0 }}>APPROACH</p>
+                <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:0 }}>APPROACH</p>
                 {approachDist!=null&&(
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                    <span style={{ fontSize:11, color:"#aaa" }}>Distance (yds)</span>
+                    <span style={{ fontSize:11, color:"#0f6e56" }}>Distance (yds)</span>
                     <input type="number" min={0} max={700} value={approachDist}
                       onChange={e=>setApproachDist(Number(e.target.value))}
                       style={{ width:64, padding:"3px 6px", fontSize:13, border:"1px solid #0f6e56", borderRadius:6, color:"#0f6e56", fontWeight:600, textAlign:"center" }} />
@@ -1042,13 +1042,13 @@ function scoreBg(score: number|"", par: number): string {
                 )}
               </div>
               <div style={{ fontSize:22, fontWeight:700, color:"#0f6e56", marginBottom:8 }}>
-                {t?pct(t.girPct):"—"} <span style={{ fontSize:14, color:"#aaa", fontWeight:400 }}>GIR</span>
+                {t?pct(t.girPct):"—"} <span style={{ fontSize:14, color:"#0f6e56", fontWeight:400 }}>GIR</span>
               </div>
               {t&&(
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
                   {[{label:"Hit",v:t.apprHitPct,c:"#27ae60"},{label:"Left",v:t.apprMissLeftPct,c:"#2980b9"},{label:"Right",v:t.apprMissRightPct,c:"#8e44ad"},{label:"Short",v:t.apprMissShortPct,c:"#e67e22"},{label:"Long",v:t.apprMissLongPct,c:"#c0392b"}].map(({label,v,c})=>(
                     <div key={label} style={{background:"#eee",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                      <span style={{color:"#999"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
+                      <span style={{color:"#0f6e56"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
                     </div>
                   ))}
                 </div>
@@ -1057,22 +1057,22 @@ function scoreBg(score: number|"", par: number): string {
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   {(hole.approach_water_out_left||hole.approach_water_out_right||hole.approach_water_out_short||hole.approach_water_out_long)&&(
                     <div style={{background:"#fff3e0",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                      <span style={{color:"#999"}}>OB/Water: </span><span style={{fontWeight:600,color:"#e67e22"}}>{pct(t.apprWaterPct)}</span>
+                      <span style={{color:"#0f6e56"}}>OB/Water: </span><span style={{fontWeight:600,color:"#e67e22"}}>{pct(t.apprWaterPct)}</span>
                     </div>
                   )}
                   {(hole.approach_bunker_short_left||hole.approach_bunker_short_middle||hole.approach_bunker_short_right||hole.approach_bunker_middle_left||hole.approach_bunker_middle_right||hole.approach_bunker_long_left||hole.approach_bunker_long_middle||hole.approach_bunker_long_right)&&(
                     <div style={{background:"#fef9e7",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                      <span style={{color:"#999"}}>Bunker: </span><span style={{fontWeight:600,color:"#c8a84b"}}>{pct(t.apprBunkerPct)}</span>
+                      <span style={{color:"#0f6e56"}}>Bunker: </span><span style={{fontWeight:600,color:"#c8a84b"}}>{pct(t.apprBunkerPct)}</span>
                     </div>
                   )}
                   {(hole.approach_tree_hazard_left||hole.approach_tree_hazard_right||hole.approach_tree_hazard_long)&&(
                     <div style={{background:"#eafaf1",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                      <span style={{color:"#999"}}>Trees/Haz: </span><span style={{fontWeight:600,color:"#27ae60"}}>{pct(t.apprTreePct)}</span>
+                      <span style={{color:"#0f6e56"}}>Trees/Haz: </span><span style={{fontWeight:600,color:"#27ae60"}}>{pct(t.apprTreePct)}</span>
                     </div>
                   )}
                 </div>
               )}
-              <p style={{ fontSize:13, color:"#666", margin:"8px 0 0" }}>{strat.approach_strategy?.reason}</p>
+              <p style={{ fontSize:13, color:"#0f6e56", margin:"8px 0 0" }}>{strat.approach_strategy?.reason}</p>
             </div>
 
             {strat.warning&&(
@@ -1106,7 +1106,7 @@ function scoreBg(score: number|"", par: number): string {
 
 export default function PlayCourse() {
   return (
-    <Suspense fallback={<main style={{maxWidth:520,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><p style={{color:"#666"}}>Loading...</p></main>}>
+    <Suspense fallback={<main style={{maxWidth:520,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><p style={{color:"white"}}>Loading...</p></main>}>
       <PlayCourseInner />
     </Suspense>
   );

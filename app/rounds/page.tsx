@@ -153,14 +153,14 @@ export default function RoundsPage() {
 
   if (loading) return (
     <main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
-      <p style={{ color: "#666" }}>Loading rounds...</p>
+      <p style={{ color: "white" }}>Loading rounds...</p>
     </main>
   );
 
   return (
     <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>My rounds</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0, color: "#d0d0d0" }}>My rounds</h1>
         <a href="/rounds/add" style={{ padding: "8px 16px", fontSize: 14, fontWeight: 600, background: "#1a1a1a", color: "white", border: "1px solid #1a1a1a", borderRadius: 8, cursor: "pointer", textDecoration: "none", display: "inline-block" }}>+ Add round</a>
       </div>
 
@@ -177,18 +177,18 @@ export default function RoundsPage() {
           </select>
           {anyFilter && (
             <button onClick={() => { setCourseFilter(""); setYearFilter(""); }}
-              style={{ fontSize: 12, color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+              style={{ fontSize: 12, color: "white", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
               Reset
             </button>
           )}
         </div>
-        <p style={{ fontSize: 13, color: "#666", margin: 0 }}>
+        <p style={{ fontSize: 13, color: "white", margin: 0 }}>
           {anyFilter ? `${filtered.length} of ${rounds.length} rounds` : `${rounds.length} rounds`}
         </p>
       </div>
 
       {filtered.length === 0 ? (
-        <p style={{ color: "#666" }}>No rounds match your filters.</p>
+        <p style={{ color: "white" }}>No rounds match your filters.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {filtered.map((round) => {
@@ -203,7 +203,7 @@ export default function RoundsPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                   <div>
                     <p style={{ fontSize: 16, fontWeight: 600, margin: "0 0 4px", color: "#0f6e56" }}>{round.course_name}</p>
-                    <p style={{ fontSize: 13, color: "#666", margin: 0 }}>
+                    <p style={{ fontSize: 13, color: "#0f6e56", margin: 0 }}>
                       {round.date} · {round.holes_played} holes · Starting hole {round.starting_hole}
                     </p>
                   </div>
@@ -213,7 +213,7 @@ export default function RoundsPage() {
                         {totalScore(round.holes)}
                       </div>
                       {diff !== "—" && (
-                        <div style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
+                        <div style={{ fontSize: 11, color: "#0f6e56", fontWeight: 500 }}>
                           Diff: <span style={{ color: "#0f6e56", fontWeight: 700 }}>{diff}</span>
                         </div>
                       )}
@@ -246,7 +246,7 @@ export default function RoundsPage() {
                     { label: "GRINTS", value: `${round.holes.filter((h: any) => h.grints).length}/${round.holes.length}` },
                   ].map(({ label, value }) => (
                     <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: "8px 12px", textAlign: "center" as const }}>
-                      <p style={{ fontSize: 11, color: "#666", margin: "0 0 2px" }}>{label}</p>
+                      <p style={{ fontSize: 11, color: "#0f6e56", margin: "0 0 2px" }}>{label}</p>
                       <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{value}</p>
                     </div>
                   ))}
@@ -258,7 +258,7 @@ export default function RoundsPage() {
       )}
 
       <div style={{ marginTop: 24 }}>
-        <a href="/" style={{ fontSize: 13, color: "#666" }}>← Back to strategy</a>
+        <a href="/" style={{ fontSize: 13, color: "white" }}>← Back to strategy</a>
       </div>
 
       {deleteTarget && (

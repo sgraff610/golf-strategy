@@ -64,9 +64,9 @@ function blankHole(n: number): HoleData {
   };
 }
 
-const LABEL: React.CSSProperties  = { fontSize: 13, color: "#aaa", display: "block", marginBottom: 4 };
-const SECTION: React.CSSProperties = { fontSize: 11, color: "#bbb", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
-const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#bbb" };
+const LABEL: React.CSSProperties  = { fontSize: 13, color: "white", display: "block", marginBottom: 4 };
+const SECTION: React.CSSProperties = { fontSize: 11, color: "white", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
+const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#d0d0d0" };
 
 // ─── Scorecard ────────────────────────────────────────────────────────────────
 
@@ -117,8 +117,8 @@ const yardStyle = (isCurrent: boolean): React.CSSProperties => ({ ...c, color: "
   return (
     <main style={{ maxWidth:940, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
       <div style={{ marginBottom:20 }}>
-        <h1 style={{ fontSize:22, fontWeight:700, color:"#1a1a1a", margin:"0 0 4px" }}>{savedCourse.name}</h1>
-        <p style={{ fontSize:14, color:"#666", margin:0 }}>
+        <h1 style={{ fontSize:22, fontWeight:700, color:"#d0d0d0", margin:"0 0 4px" }}>{savedCourse.name}</h1>
+        <p style={{ fontSize:14, color:"white", margin:0 }}>
           {savedCourse.city}, {savedCourse.state}
           {savedCourse.rating && savedCourse.slope ? ` · Rating ${savedCourse.rating} / Slope ${savedCourse.slope}`
             : savedCourse.rating ? ` · Rating ${savedCourse.rating}`
@@ -169,7 +169,7 @@ const yardStyle = (isCurrent: boolean): React.CSSProperties => ({ ...c, color: "
           <a href={`/courses/${savedCourseId}/edit`} style={{ ...btn(false) }}>← Edit this course</a>
         )}
         <a href="/add-course" style={btn(false)}>Add another course</a>
-        <a href="/" style={{ ...btn(false), color:"#666", borderColor:"#ccc" }}>Go to strategy</a>
+        <a href="/" style={{ ...btn(false), color:"#0f6e56", borderColor:"#0f6e56" }}>Go to strategy</a>
       </div>
     </main>
   );
@@ -197,6 +197,7 @@ function AddCourseInner() {
   const [currentHole, setCurrentHole] = useState(0);
   const [holes, setHoles] = useState<HoleData[]>([]);
   const [saving, setSaving] = useState(false);
+  const [midSaved, setMidSaved] = useState(false);
   const [holeNotesOpen, setHoleNotesOpen] = useState(false);
   const [greenside, setGreenside] = useState<GreensideState>(defaultGreensideState());
 
@@ -335,11 +336,11 @@ const isScan = searchParams.get("scan") === "1";
     setGreenside(flatToGreenside(holes[next] as Record<string,any>));
   }
 
-  async function finish() {
+  async function saveNow(andFinish = false) {
     setSaving(true);
-    const newId = `${courseName.trim().toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_-]/g,"")}_${Date.now()}`;
+    const id = savedCourseId ?? `${courseName.trim().toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_-]/g,"")}_${Date.now()}`;
     const course: CourseRecord = {
-      id: newId,
+      id,
       name: courseName.trim(), tee_box: teeBox.trim(), city: city.trim(), state: state.trim(),
       rating: rating !== "" ? parseFloat(rating) : null,
       slope: slope !== "" ? parseInt(slope) : null,
@@ -349,10 +350,19 @@ const isScan = searchParams.get("scan") === "1";
     const allCourses = await loadCourses();
     const versions = allCourses.filter(c => c.name === course.name);
     setSavedCourse(course);
-    setSavedCourseId(newId);
+    setSavedCourseId(id);
     setAllTeeVersions(versions.length > 0 ? versions : [course]);
     setSaving(false);
-    setStep("scorecard");
+    if (andFinish) {
+      setStep("scorecard");
+    } else {
+      setMidSaved(true);
+      setTimeout(() => setMidSaved(false), 2000);
+    }
+  }
+
+  async function finish() {
+    await saveNow(true);
   }
 
   if (step === "scorecard" && savedCourse) {
@@ -361,8 +371,8 @@ const isScan = searchParams.get("scan") === "1";
 
   if (step === "info") return (
     <main style={{ maxWidth:480, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
-      <h1 style={{ fontSize:24, fontWeight:600, marginBottom:8, color:"#bbb" }}>Add a course</h1>
-      <p style={{ color:"#bbb", marginBottom:32 }}>Enter the course details to get started.</p>
+      <h1 style={{ fontSize:24, fontWeight:600, marginBottom:8, color:"#d0d0d0" }}>Add a course</h1>
+      <p style={{ color:"white", marginBottom:32 }}>Enter the course details to get started.</p>
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div><label style={LABEL}>Course name</label><input style={inputStyle} value={courseName} onChange={e => setCourseName(e.target.value)} placeholder="e.g. Augusta National Golf Club" /></div>
         <div><label style={LABEL}>Tee box</label><input style={inputStyle} value={teeBox} onChange={e => setTeeBox(e.target.value)} placeholder="e.g. Blue, White, Red" /></div>
@@ -391,7 +401,7 @@ const isScan = searchParams.get("scan") === "1";
         <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
         <div style={{ textAlign:"center", flex:1 }}>
           <div style={HOLE_NAME}>{courseName} — Hole {hole.hole}</div>
-          <div style={{ fontSize:13, color:"#bbb", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
+          <div style={{ fontSize:13, color:"white", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
 <a href={`/add-course/scan?holeNum=${hole.hole}`} style={{ fontSize:12, color:"#0f6e56", textDecoration:"underline", display:"block", marginTop:4 }}>
             Scan with AI →
           </a>
@@ -418,7 +428,7 @@ const isScan = searchParams.get("scan") === "1";
         <div>
           <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"4px 0"}}>
             <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {hole.hole_notes?"✓":""}</span>
-            <span style={{fontSize:13,color:"#bbb"}}>{holeNotesOpen?"▲":"▼"}</span>
+            <span style={{fontSize:13,color:"white"}}>{holeNotesOpen?"▲":"▼"}</span>
           </button>
           {holeNotesOpen&&(
             <textarea
@@ -435,7 +445,7 @@ const isScan = searchParams.get("scan") === "1";
           <select style={selectStyle} value={hole.dogleg_direction??""} onChange={e => updateHole("dogleg_direction", e.target.value===""?null:e.target.value as DoglegDirection)} disabled={hole.par===3}>
             {DOGLEG_OPTIONS.map(o => <option key={String(o.value)} value={o.value??""}>{o.label}</option>)}
           </select>
-          {hole.par===3 && <p style={{ fontSize:12, color:"#bbb", margin:"4px 0 0" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"rgba(255,255,255,0.5)", margin:"4px 0 0" }}>Disabled for par 3</p>}
         </div>
 
         {/* Tee Shot Hazards */}
@@ -444,7 +454,7 @@ const isScan = searchParams.get("scan") === "1";
           {hole.par===3 && <p style={{ fontSize:12, color:"#bbb", margin:"4px 0 8px" }}>Disabled for par 3</p>}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, opacity:hole.par===3?0.3:1 }}>
             {TEE_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#bbb", cursor:hole.par===3?"not-allowed":"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:hole.par===3?"not-allowed":"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => hole.par!==3&&toggleCheck(key)} disabled={hole.par===3} />
                 {label}
               </label>
@@ -457,7 +467,7 @@ const isScan = searchParams.get("scan") === "1";
           <span style={SECTION}>Approach Hazards</span>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
             {APPROACH_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#bbb", cursor:"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => toggleCheck(key)} />
                 {label}
               </label>
@@ -478,13 +488,17 @@ const isScan = searchParams.get("scan") === "1";
         {/* Bottom nav */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:16, paddingTop:16, borderTop:"1px solid #eee", gap:12 }}>
           <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
-          <span style={{ fontSize:14, fontWeight:600, color:"#bbb" }}>Hole {hole.hole}</span>
-          {currentHole < holes.length-1
-            ? <button style={navBtn(false)} onClick={goToNextHole}>Next →</button>
-            : <button style={{ ...primaryBtn, opacity:saving?0.6:1 }} onClick={finish} disabled={saving}>
-                {saving ? "Saving..." : "Save course"}
-              </button>
-          }
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <button style={{ padding:"8px 14px", fontSize:13, fontWeight:600, background:"white", color:saving?"#aaa":"#0f6e56", border:`1px solid ${saving?"#eee":"#0f6e56"}`, borderRadius:8, cursor:saving?"not-allowed":"pointer", opacity:saving?0.6:1 }} onClick={() => saveNow(false)} disabled={saving}>
+              {midSaved ? "Saved ✓" : saving ? "Saving…" : "Save"}
+            </button>
+            {currentHole < holes.length-1
+              ? <button style={navBtn(false)} onClick={goToNextHole}>Next →</button>
+              : <button style={{ ...primaryBtn, opacity:saving?0.6:1 }} onClick={finish} disabled={saving}>
+                  {saving ? "Saving..." : "Save & Finish"}
+                </button>
+            }
+          </div>
         </div>
       </div>
     </main>

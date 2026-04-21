@@ -42,9 +42,9 @@ const APPROACH_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
 ];
 
 // Shared light-grey label/section styles
-const LABEL: React.CSSProperties   = { fontSize: 13, color: "#aaa", display: "block", marginBottom: 4 };
-const SECTION: React.CSSProperties = { fontSize: 11, color: "#bbb", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
-const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#bbb" };
+const LABEL: React.CSSProperties   = { fontSize: 13, color: "#0f6e56", display: "block", marginBottom: 4 };
+const SECTION: React.CSSProperties = { fontSize: 11, color: "white", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
+const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#d0d0d0" };
 
 // ─── Scorecard ────────────────────────────────────────────────────────────────
 
@@ -191,7 +191,7 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
   // ── Shared styles ──
   const sl: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, display: "block", marginTop: 14 };
   const row: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "4px 0", borderBottom: "1px solid #f0f0f0", gap: 8 };
-  const lbl: React.CSSProperties = { color: "#666", flex: 1 };
+  const lbl: React.CSSProperties = { color: "#0f6e56", flex: 1 };
   const inp: React.CSSProperties = { padding: "3px 7px", fontSize: 12, border: "1px solid #ddd", borderRadius: 5, background: "white", color: "#1a1a1a" };
   const ta: React.CSSProperties = { ...inp, width: "100%", minHeight: 52, resize: "vertical" as const, fontFamily: "inherit", lineHeight: 1.5, marginTop: 3 };
   const note: React.CSSProperties = { fontSize: 12, color: "#555", lineHeight: 1.5, margin: "3px 0 6px", fontStyle: "italic" };
@@ -224,11 +224,20 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
 
   function ENum({ path, label, unit }: { path: string[]; label: string; unit?: string }) {
     const val = path.reduce((o: any, k) => o?.[k], va) as number ?? 0;
+    const [localVal, setLocalVal] = React.useState(String(val));
+    const [syncedVal, setSyncedVal] = React.useState(val);
+    if (syncedVal !== val) { setSyncedVal(val); setLocalVal(String(val)); }
     return (
       <div style={row}>
         <span style={lbl}>{label}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-          <input type="number" value={val} onChange={e => update(path, Number(e.target.value))} style={{ ...inp, width: 62, textAlign: "right" }} />
+          <input
+            type="number"
+            value={localVal}
+            onChange={e => setLocalVal(e.target.value)}
+            onBlur={() => { const n = Number(localVal); if (!isNaN(n)) { update(path, n); setLocalVal(String(n)); } else setLocalVal(String(val)); }}
+            style={{ ...inp, width: 62, textAlign: "right" }}
+          />
           {unit && <span style={{ fontSize: 11, color: "#888" }}>{unit}</span>}
         </div>
       </div>
@@ -272,7 +281,7 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
     const colors = ["#e5e5e5", "#c8e6c9", "#ffcc80", "#ef9a9a", "#b71c1c"];
     return (
       <div style={{ marginBottom: 5 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#666", marginBottom: 2 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#0f6e56", marginBottom: 2 }}>
           <span>{label}</span><span style={{ fontWeight: 600, textTransform: "capitalize" }}>{value}</span>
         </div>
         <div style={{ display: "flex", gap: 2 }}>
@@ -321,11 +330,11 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "8px 4px", border: "1px solid #eee" }}>
                 <div style={{ fontSize: 18, fontWeight: 700, color: diffColor }}>{va.visual_difficulty_score}/10</div>
-                <div style={{ fontSize: 10, color: "#666" }}>difficulty</div>
+                <div style={{ fontSize: 10, color: "#0f6e56" }}>difficulty</div>
               </div>
               <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "8px 4px", border: "1px solid #eee" }}>
                 <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a" }}>{va.total_bunker_count ?? 0}</div>
-                <div style={{ fontSize: 10, color: "#666" }}>bunkers</div>
+                <div style={{ fontSize: 10, color: "#0f6e56" }}>bunkers</div>
               </div>
               <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "8px 4px", border: "1px solid #eee" }}>
               </div>
@@ -350,11 +359,11 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               <EText path={["tee_zone","opening_description"]} label="Opening description" />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "8px 0" }}>
                 <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
-                  <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>← Left (fade)</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56", marginBottom: 4 }}>← Left (fade)</div>
                   <ENum path={["tee_zone","left_buffer_yards"]} label="Buffer" unit="yds" />
                 </div>
                 <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
-                  <div style={{ fontSize: 10, color: "#666", marginBottom: 4 }}>Right (pull) →</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56", marginBottom: 4 }}>Right (pull) →</div>
                   <ENum path={["tee_zone","right_buffer_yards"]} label="Buffer" unit="yds" />
                 </div>
               </div>
@@ -379,15 +388,15 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
                 <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 16, fontWeight: 700, color: "#0f6e56" }}>{lz.estimated_distance_yards}</div>
-                  <div style={{ fontSize: 10, color: "#666" }}>yds out</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56" }}>yds out</div>
                 </div>
                 <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{lz.width_yards}</div>
-                  <div style={{ fontSize: 10, color: "#666" }}>yds wide</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56" }}>yds wide</div>
                 </div>
                 <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{lz.remaining_distance_to_green}</div>
-                  <div style={{ fontSize: 10, color: "#666" }}>yds to green</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56" }}>yds to green</div>
                 </div>
               </div>
               <ENum path={["landing_zone","estimated_distance_yards"]} label="Distance from tee" unit="yds" />
@@ -437,15 +446,15 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
                 <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 16, fontWeight: 700, color: "#0891b2" }}>{az.distance_to_green_center}</div>
-                  <div style={{ fontSize: 10, color: "#666" }}>yds to pin</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56" }}>yds to pin</div>
                 </div>
                 <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{az.green_width_yards}</div>
-                  <div style={{ fontSize: 10, color: "#666" }}>green width</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56" }}>green width</div>
                 </div>
                 <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>{az.green_depth_yards}</div>
-                  <div style={{ fontSize: 10, color: "#666" }}>green depth</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56" }}>green depth</div>
                 </div>
               </div>
               <ENum path={["approach_zone","distance_to_green_center"]} label="Distance to green" unit="yds" />
@@ -477,13 +486,13 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                   <div style={{ textAlign: "center", background: "#fafafa", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                     <div style={{ fontSize: 16, fontWeight: 700, color: "#7c3aed" }}>{pgz.distance_from_green_yards}</div>
-                    <div style={{ fontSize: 10, color: "#666" }}>yds short of green</div>
+                    <div style={{ fontSize: 10, color: "#0f6e56" }}>yds short of green</div>
                   </div>
                   <div style={{ textAlign: "center", background: pgz.recommendation === "go_for_green" ? "#f0faf6" : "#fff8f0", borderRadius: 8, padding: "6px 4px", border: "1px solid #eee" }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: pgz.recommendation === "go_for_green" ? "#0f6e56" : "#f97316" }}>
                       {pgz.recommendation === "go_for_green" ? "✓ Go for it" : "→ Layup"}
                     </div>
-                    <div style={{ fontSize: 10, color: "#666" }}>recommendation</div>
+                    <div style={{ fontSize: 10, color: "#0f6e56" }}>recommendation</div>
                   </div>
                 </div>
                 <ENum path={["pre_green_zone","distance_from_green_yards"]} label="Distance short of green" unit="yds" />
@@ -503,7 +512,7 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
                     <div style={{ fontSize: 10, color: "#0f6e56", fontWeight: 700, marginBottom: 4 }}>Go for green</div>
                   </div>
                   <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
-                    <div style={{ fontSize: 10, color: "#666", fontWeight: 700, marginBottom: 4 }}>Layup here</div>
+                    <div style={{ fontSize: 10, color: "#0f6e56", fontWeight: 700, marginBottom: 4 }}>Layup here</div>
                   </div>
                 </div>
                 <div style={row}>
@@ -532,7 +541,7 @@ function AiAnalysisPanel({ hole, onSave, allTeeVersions, courseId }: { hole: Hol
                   <ENum path={["layup_zone","go_for_green_rating"]} label="Rating (1-5)" />
                 </div>
                 <div style={{ background: "#fafafa", borderRadius: 8, padding: "8px", border: "1px solid #eee" }}>
-                  <div style={{ fontSize: 10, color: "#666", fontWeight: 700, marginBottom: 4 }}>Layup to 50 yds</div>
+                  <div style={{ fontSize: 10, color: "#0f6e56", fontWeight: 700, marginBottom: 4 }}>Layup to 50 yds</div>
                   <ENum path={["layup_zone","layup_rating"]} label="Rating (1-5)" />
                 </div>
               </div>
@@ -638,8 +647,8 @@ function Scorecard({ savedCourse, allVersions, onEditCourse }: {
   return (
     <main style={{ maxWidth:940, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
       <div style={{ marginBottom:20 }}>
-        <h1 style={{ fontSize:22, fontWeight:700, color:"#1a1a1a", margin:"0 0 4px" }}>{savedCourse.name}</h1>
-        <p style={{ fontSize:14, color:"#666", margin:0 }}>
+        <h1 style={{ fontSize:22, fontWeight:700, color:"#d0d0d0", margin:"0 0 4px" }}>{savedCourse.name}</h1>
+        <p style={{ fontSize:14, color:"white", margin:0 }}>
           {savedCourse.city}, {savedCourse.state}
           {savedCourse.rating && savedCourse.slope ? ` · Rating ${savedCourse.rating} / Slope ${savedCourse.slope}`
             : savedCourse.rating ? ` · Rating ${savedCourse.rating}`
@@ -656,7 +665,7 @@ function Scorecard({ savedCourse, allVersions, onEditCourse }: {
             <tr>
               <td style={lbl}>Index</td>
               {cols.map((col,ci) => col.type==="hole"
-                ? <td key={ci} style={{ ...c, background:"#fafafa", color:"#555" }}>{col.hole.stroke_index}</td>
+                ? <td key={ci} style={{ ...c, background:"#fafafa", color:"#0f6e56" }}>{col.hole.stroke_index}</td>
                 : <td key={ci} style={{ ...c, background:"#e8f5f0" }}></td>)}
             </tr>
             <tr>
@@ -686,7 +695,7 @@ function Scorecard({ savedCourse, allVersions, onEditCourse }: {
         <a href={`/rounds/add?course=${savedCourse.id}`} style={btn(true)}>+ Add a round</a>
         <button onClick={onEditCourse} style={btn(false)}>← Edit this course</button>
         <a href="/courses" style={btn(false)}>Back to courses</a>
-        <a href="/" style={{ ...btn(false), color:"#666", borderColor:"#ccc" }}>Go to strategy</a>
+        <a href="/" style={btn(false)}>Go to strategy</a>
       </div>
     </main>
   );
@@ -874,8 +883,8 @@ function EditCourseInner() {
     setShowScorecard(true);
   }
 
-  if (loading) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"#666" }}>Loading course...</p></main>;
-  if (!course) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"red" }}>Course not found.</p><a href="/courses" style={{ fontSize:13, color:"#666" }}>← Back to courses</a></main>;
+  if (loading) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"white" }}>Loading course...</p></main>;
+  if (!course) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"red" }}>Course not found.</p><a href="/courses" style={{ fontSize:13, color:"white" }}>← Back to courses</a></main>;
 
   if (showScorecard && course) {
     return (
@@ -892,13 +901,13 @@ function EditCourseInner() {
   return (
     <main style={{ maxWidth:520, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
       <div style={{ marginBottom:16 }}>
-        <a href="/courses" style={{ fontSize:13, color:"#bbb" }}>← Back to courses</a>
+        <a href="/courses" style={{ fontSize:13, color:"white" }}>← Back to courses</a>
       </div>
-      <h1 style={{ fontSize:20, fontWeight:600, marginBottom:20, color:"#bbb" }}>Edit course</h1>
+      <h1 style={{ fontSize:20, fontWeight:600, marginBottom:20, color:"#d0d0d0" }}>Edit course</h1>
 
       {/* Course details */}
       <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:28, padding:20, background:"#f6f6f6", borderRadius:12 }}>
-        <p style={{ fontSize:12, color:"#bbb", margin:"0 0 4px", fontWeight:600, letterSpacing:1 }}>COURSE DETAILS</p>
+        <p style={{ fontSize:12, color:"#0f6e56", margin:"0 0 4px", fontWeight:600, letterSpacing:1 }}>COURSE DETAILS</p>
         <div><label style={LABEL}>Course name</label><input style={inputStyle} value={courseName} onChange={e => setCourseName(e.target.value)} /></div>
         <div><label style={LABEL}>Tee box</label><input style={inputStyle} value={teeBox} onChange={e => setTeeBox(e.target.value)} /></div>
         <div><label style={LABEL}>Course Rating</label><input style={inputStyle} value={rating} type="number" step="0.1" min="60" max="80" onChange={e => setRating(e.target.value)} placeholder="e.g. 71.4" /></div>
@@ -914,7 +923,7 @@ function EditCourseInner() {
             <span style={{ fontSize:12, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1 }}>
               AI Course Summary {aiSummary ? "✓" : ""}
             </span>
-            <span style={{ fontSize:13, color:"#999" }}>{summaryOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize:13, color:"#0f6e56" }}>{summaryOpen ? "▲" : "▼"}</span>
           </button>
           {summaryOpen && (
             <div style={{ marginTop:10 }}>
@@ -936,7 +945,7 @@ function EditCourseInner() {
         <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
         <div style={{ textAlign:"center", flex:1 }}>
           <div style={HOLE_NAME}>Hole {hole.hole}</div>
-          <div style={{ fontSize:13, color:"#bbb", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
+          <div style={{ fontSize:13, color:"white", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
 <a href={`/add-course/scan?holeNum=${hole.hole}&courseId=${id}&returnTo=edit`} style={{ fontSize:12, color:"#0f6e56", textDecoration:"underline", display:"block", marginTop:4 }}>
             Scan with AI →
           </a>
@@ -959,7 +968,7 @@ function EditCourseInner() {
           </div>
 
           {/* Preferred tee strategy */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginTop:8 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:12, marginTop:8 }}>
             <div>
               <label style={LABEL}>Preferred Club</label>
               <select style={selectStyle} value={hole.preferred_club ?? ""} onChange={e => updateHole("preferred_club", e.target.value || undefined)}>
@@ -987,7 +996,7 @@ function EditCourseInner() {
         <div>
           <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"4px 0"}}>
             <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {hole.hole_notes?"✓":""}</span>
-            <span style={{fontSize:13,color:"#bbb"}}>{holeNotesOpen?"▲":"▼"}</span>
+            <span style={{fontSize:13,color:"white"}}>{holeNotesOpen?"▲":"▼"}</span>
           </button>
           {holeNotesOpen&&(
             <textarea
@@ -1004,16 +1013,16 @@ function EditCourseInner() {
           <select style={selectStyle} value={hole.dogleg_direction??""} onChange={e => updateHole("dogleg_direction", e.target.value===""?null:e.target.value as DoglegDirection)} disabled={hole.par===3}>
             {DOGLEG_OPTIONS.map(o => <option key={String(o.value)} value={o.value??""}>{o.label}</option>)}
           </select>
-          {hole.par===3 && <p style={{ fontSize:12, color:"#bbb", margin:"4px 0 0" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"rgba(255,255,255,0.5)", margin:"4px 0 0" }}>Disabled for par 3</p>}
         </div>
 
         {/* Tee Shot Hazards — 2 columns */}
         <div>
           <span style={SECTION}>Tee Shot Hazards</span>
-          {hole.par===3 && <p style={{ fontSize:12, color:"#bbb", margin:"4px 0 8px" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"rgba(255,255,255,0.5)", margin:"4px 0 8px" }}>Disabled for par 3</p>}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, opacity:hole.par===3?0.3:1 }}>
             {TEE_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#bbb", cursor:hole.par===3?"not-allowed":"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:hole.par===3?"not-allowed":"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => hole.par!==3&&toggleCheck(key)} disabled={hole.par===3} />
                 {label}
               </label>
@@ -1026,7 +1035,7 @@ function EditCourseInner() {
           <span style={SECTION}>Approach Hazards</span>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
             {APPROACH_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#bbb", cursor:"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => toggleCheck(key)} />
                 {label}
               </label>
@@ -1051,7 +1060,7 @@ function EditCourseInner() {
         {/* Bottom nav */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:8, paddingTop:16, borderTop:"1px solid #eee", gap:12 }}>
           <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
-          <span style={{ fontSize:14, fontWeight:600, color:"#bbb" }}>Hole {hole.hole}</span>
+          <span style={{ fontSize:14, fontWeight:600, color:"#d0d0d0" }}>Hole {hole.hole}</span>
           <button style={navBtn(currentHole>=holes.length-1)} onClick={goToNextHole} disabled={currentHole>=holes.length-1}>Next →</button>
         </div>
 

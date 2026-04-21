@@ -58,7 +58,7 @@ export default function ChatPage() {
       {/* Header */}
       <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #eee", background: "white", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href="/rounds" style={{ fontSize: 13, color: "#666", textDecoration: "none" }}>← Rounds</a>
+          <a href="/rounds" style={{ fontSize: 13, color: "#0f6e56", textDecoration: "none" }}>← Rounds</a>
           <span style={{ color: "#ddd" }}>|</span>
           <h1 style={{ fontSize: 16, fontWeight: 700, color: "#0f6e56", margin: 0 }}>⛳ Golf AI Analyst</h1>
         </div>

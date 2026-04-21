@@ -120,7 +120,7 @@ export default function RoundsCalc() {
     });
   }, [selectedRoundId, refreshKey]);
 
-  const labelStyle = { fontSize: 12, color: "#666", display: "block" as const, marginBottom: 3 };
+  const labelStyle = { fontSize: 12, color: "#0f6e56", display: "block" as const, marginBottom: 3 };
   const calcStyle: React.CSSProperties = {
     padding: "6px 8px", fontSize: 14, borderRadius: 6,
     background: "#f0f9f6", color: "#0f6e56", fontWeight: 600,
@@ -141,10 +141,10 @@ export default function RoundsCalc() {
   return (
     <main style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
       <div style={{ marginBottom: 24 }}>
-        <a href="/rounds" style={{ fontSize: 13, color: "#666" }}>← Back to rounds</a>
+        <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Drive Analysis</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: "#d0d0d0" }}>Drive Analysis</h1>
         {selectedRoundId && (
           <button onClick={() => setRefreshKey(k => k + 1)}
             style={{ fontSize: 13, padding: "6px 14px", borderRadius: 8, border: "1px solid #0f6e56", background: "white", color: "#0f6e56", cursor: "pointer", fontWeight: 600 }}>
@@ -152,7 +152,7 @@ export default function RoundsCalc() {
           </button>
         )}
       </div>
-      <p style={{ color: "#666", marginBottom: 24, fontSize: 14 }}>Select a round to analyze drive penalty likelihood per hole.</p>
+      <p style={{ color: "white", marginBottom: 24, fontSize: 14 }}>Select a round to analyze drive penalty likelihood per hole.</p>
 
       <div style={{ marginBottom: 24 }}>
         <label style={labelStyle}>Round</label>
@@ -162,7 +162,7 @@ export default function RoundsCalc() {
         </select>
       </div>
 
-      {loading && <p style={{ color: "#666" }}>Loading...</p>}
+      {loading && <p style={{ color: "white" }}>Loading...</p>}
 
       {!loading && roundHoles.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -187,7 +187,7 @@ export default function RoundsCalc() {
               <div key={i} style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "14px 16px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <span style={{ fontSize: 15, fontWeight: 600, color: "#0f6e56" }}>Hole {hole.hole}</span>
-                  <span style={{ fontSize: 13, color: "#666" }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
+                  <span style={{ fontSize: 13, color: "#0f6e56" }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
                 </div>
 
                 {/* Row 1: Score, DRIV Club */}
@@ -296,7 +296,7 @@ export default function RoundsCalc() {
       )}
 
       {!loading && selectedRoundId && roundHoles.length === 0 && (
-        <p style={{ color: "#666" }}>No hole data found for this round.</p>
+        <p style={{ color: "white" }}>No hole data found for this round.</p>
       )}
     </main>
   );

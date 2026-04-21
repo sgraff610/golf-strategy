@@ -72,9 +72,19 @@ function calcStats(roundSlice: Round[]) {
   const totalRounds = roundSlice.length;
   if (totalHoles === 0 || totalRounds === 0) return null;
 
-  const totalScore = scoredHoles.reduce((s, h: any) => s + Number(h.score), 0);
-  const totalPar = scoredHoles.reduce((s, h: any) => s + (h.par || 0), 0);
-  const avgScoreToPar = (totalScore - totalPar) / totalRounds;
+  // Avg score on 18-hole basis: double 9-hole rounds
+  const roundScoresPar = roundSlice
+    .map(r => {
+      const scored = r.holes.filter((h: any) => h.score && Number(h.score) > 0);
+      if (!scored.length) return null;
+      const stp = scored.reduce((s: number, h: any) => s + Number(h.score) - (h.par || 0), 0);
+      const is9 = (r.holes_played ?? scored.length) <= 9;
+      return is9 ? stp * 2 : stp;
+    })
+    .filter((v): v is number => v !== null);
+  const avgScoreToPar = roundScoresPar.length > 0
+    ? roundScoresPar.reduce((s, v) => s + v, 0) / roundScoresPar.length
+    : 0;
 
   const totalPutts = scoredHoles.reduce((s, h: any) => s + (Number(h.putts) || 0), 0);
   const avgPuttsPer18 = totalHoles > 0 ? (totalPutts / totalHoles) * 18 : null;
@@ -108,6 +118,7 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [changeLogOpen, setChangeLogOpen] = useState(false);
+  const [activeDiffIdx, setActiveDiffIdx] = useState<number | null>(null);
 
   useEffect(() => {
     supabase.from("player_data").select("*").eq("id", "singleton").single()
@@ -167,16 +178,18 @@ export default function ProfilePage() {
     });
   }
 
-  const diffs: number[] = rounds
-  .map(r => {
-    if (r.score_differential != null) {
-      return r.holes_played <= 9 ? r.score_differential * 2 : r.score_differential;
-    }
-    return computeDiff(r, courseInfoMap[r.course_id]);
-  })
-  .filter((d): d is number => d !== null);
+  const diffsWithInfo = rounds
+    .map(r => {
+      const diff = r.score_differential != null
+        ? (r.holes_played <= 9 ? r.score_differential * 2 : r.score_differential)
+        : computeDiff(r, courseInfoMap[r.course_id]);
+      return diff !== null ? { diff, course_name: r.course_name, date: r.date } : null;
+    })
+    .filter((d): d is { diff: number; course_name: string; date: string } => d !== null);
 
-  const last20Diffs = diffs.slice(-20);
+  const diffs = diffsWithInfo.map(d => d.diff);
+  const last20DiffsWithInfo = diffsWithInfo.slice(-20);
+  const last20Diffs = last20DiffsWithInfo.map(d => d.diff);
   const handicapIndex = computeHandicapIndex(diffs);
 
   const stats5   = calcStats(rounds.slice(-5));
@@ -196,18 +209,18 @@ export default function ProfilePage() {
 
   if (loading) return (
     <main style={{ maxWidth: 520, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
-      <p style={{ color: "#666" }}>Loading profile...</p>
+      <p style={{ color: "white" }}>Loading profile...</p>
     </main>
   );
 
   return (
     <main style={{ maxWidth: 520, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
       <div style={{ marginBottom: 24 }}>
-        <a href="/" style={{ fontSize: 13, color: "#666" }}>← Strategy</a>
+        <a href="/" style={{ fontSize: 13, color: "white" }}>← Strategy</a>
       </div>
 
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a1a1a", margin: "0 0 4px" }}>My Profile</h1>
-      <p style={{ fontSize: 13, color: "#999", marginBottom: 28 }}>Based on your last {Math.min(rounds.length, 20)} rounds</p>
+      <h1 style={{ fontSize: 24, fontWeight: 700, color: "#d0d0d0", margin: "0 0 4px" }}>My Profile</h1>
+      <p style={{ fontSize: 13, color: "white", marginBottom: 28 }}>Based on your last {Math.min(rounds.length, 20)} rounds</p>
 
       {/* Handicap hero */}
       <div style={{ background: "#0f6e56", borderRadius: 16, padding: "28px 24px", marginBottom: 20, textAlign: "center" }}>
@@ -232,9 +245,9 @@ export default function ProfilePage() {
           <thead>
             <tr style={{ background: "#f0f0f0" }}>
               <th style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 0.8 }}>Stat</th>
-              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: 0.8 }}>Last 5</th>
-              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: 0.8 }}>Last 20</th>
-              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#666", textTransform: "uppercase", letterSpacing: 0.8 }}>All time</th>
+              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 0.8 }}>Last 5</th>
+              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 0.8 }}>Last 20</th>
+              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 0.8 }}>All time</th>
             </tr>
           </thead>
           <tbody>
@@ -257,28 +270,44 @@ export default function ProfilePage() {
       </div>
 
       {/* Recent differentials */}
-      {last20Diffs.length > 0 && (
+      {last20DiffsWithInfo.length > 0 && (
         <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "16px", marginBottom: 20 }}>
           <p style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 12px" }}>
-            Recent Differentials (last {last20Diffs.length})
+            Recent Differentials (last {last20DiffsWithInfo.length})
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {last20Diffs.map((d, i) => {
+            {last20DiffsWithInfo.map((item, i) => {
               const sorted = [...last20Diffs].sort((a, b) => a - b);
               const threshold = sorted[Math.min(7, sorted.length - 1)];
-              const isUsed = d <= threshold;
+              const isUsed = item.diff <= threshold;
+              const isActive = activeDiffIdx === i;
               return (
-                <div key={i} style={{
-                  padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                  background: isUsed ? "#0f6e56" : "#eee",
-                  color: isUsed ? "white" : "#666",
-                }}>
-                  {d.toFixed(1)}
+                <div key={i} style={{ position: "relative" }}>
+                  <div
+                    onClick={() => setActiveDiffIdx(isActive ? null : i)}
+                    style={{
+                      padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      background: isUsed ? "#0f6e56" : "#eee",
+                      color: isUsed ? "white" : "#0f6e56",
+                    }}
+                  >
+                    {item.diff.toFixed(1)}
+                  </div>
+                  {isActive && (
+                    <div style={{
+                      position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+                      background: "#1a1a1a", color: "white", borderRadius: 8, padding: "6px 10px",
+                      fontSize: 11, whiteSpace: "nowrap", zIndex: 10, pointerEvents: "none",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                    }}>
+                      {item.course_name}<br />{item.date}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-          <p style={{ fontSize: 11, color: "#bbb", margin: "8px 0 0", fontStyle: "italic" }}>Teal = used in handicap calculation</p>
+          <p style={{ fontSize: 11, color: "#0f6e56", margin: "8px 0 0", fontStyle: "italic" }}>Teal = used in handicap calculation · tap to see course</p>
         </div>
       )}
 
@@ -410,7 +439,7 @@ export default function ProfilePage() {
       </div>
 
       <div style={{ marginTop: 8 }}>
-        <a href="/rounds" style={{ fontSize: 13, color: "#666" }}>← Back to rounds</a>
+        <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
       </div>
     </main>
   );

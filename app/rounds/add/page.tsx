@@ -125,8 +125,8 @@ export default function AddRound() {
     color: "#bbb",
     cursor: "not-allowed" as const,
   };
-  const labelStyle = { fontSize: 12, color: "#666", display: "block" as const, marginBottom: 3 };
-  const disabledLabelStyle = { ...labelStyle, color: "#bbb" };
+  const labelStyle = { fontSize: 12, color: "white", display: "block" as const, marginBottom: 3 };
+  const disabledLabelStyle = { ...labelStyle, color: "rgba(255,255,255,0.4)" };
   const sectionLabel = { fontSize: 11, fontWeight: 600 as const, color: "#0f6e56", textTransform: "uppercase" as const, letterSpacing: 1, margin: "0 0 6px" };
   const btnStyle = (primary: boolean) => ({
     padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,
@@ -145,9 +145,9 @@ export default function AddRound() {
   return (
     <main style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
       <div style={{ marginBottom: 24 }}>
-        <a href="/rounds" style={{ fontSize: 13, color: "#666" }}>← Back to rounds</a>
+        <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
       </div>
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 24 }}>Add a round</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 24, color: "#d0d0d0" }}>Add a round</h1>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
         <div>
@@ -186,7 +186,7 @@ export default function AddRound() {
           { label: "GRINTS", value: `${grints}/${roundHoles.length}` },
         ].map(({ label, value }) => (
           <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: 8, textAlign: "center" }}>
-            <p style={{ fontSize: 11, color: "#666", margin: "0 0 2px" }}>{label}</p>
+            <p style={{ fontSize: 11, color: "#0f6e56", margin: "0 0 2px" }}>{label}</p>
             <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{value}</p>
           </div>
         ))}
@@ -200,7 +200,7 @@ export default function AddRound() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div>
                   <span style={{ fontSize: 15, fontWeight: 600, color: "#0f6e56" }}>Hole {hole.hole}</span>
-                  <span style={{ fontSize: 13, color: "#666", marginLeft: 8 }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
+                  <span style={{ fontSize: 13, color: "#0f6e56", marginLeft: 8 }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   {hole.gir && <span style={{ fontSize: 11, background: "#e8f5e9", color: "#2e7d32", padding: "2px 8px", borderRadius: 20 }}>GIR</span>}
@@ -303,7 +303,7 @@ export default function AddRound() {
                     </div>
                   </div>
                   {isPar3 && (
-                    <p style={{ fontSize: 11, color: "#bbb", margin: "4px 0 0" }}>DRIV Club &amp; Acc not applicable for par 3</p>
+                    <p style={{ fontSize: 11, color: "#0f6e56", margin: "4px 0 0" }}>DRIV Club &amp; Acc not applicable for par 3</p>
                   )}
                 </div>
 

@@ -150,8 +150,8 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   return (
     <div style={{ marginTop:32 }}>
       <div style={{ marginBottom:16 }}>
-        <h2 style={{ fontSize:20, fontWeight:700, color:"#1a1a1a", margin:"0 0 2px" }}>{courseName}</h2>
-        <p style={{ fontSize:13, color:"#666", margin:0 }}>{teeBox} tees · {date}</p>
+        <h2 style={{ fontSize:20, fontWeight:700, color:"#d0d0d0", margin:"0 0 2px" }}>{courseName}</h2>
+        <p style={{ fontSize:13, color:"white", margin:0 }}>{teeBox} tees · {date}</p>
         <p style={{ fontSize:18, fontWeight:700, color:toPar>0?"#c0392b":toPar<0?"#27ae60":"#333", margin:"6px 0 0" }}>
           {totalScore} ({toPar===0?"E":toPar>0?`+${toPar}`:toPar})
         </p>
@@ -397,7 +397,7 @@ export default function EditRound() {
 
   const inputStyle = { width: "100%", padding: "6px 8px", fontSize: 14, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" as const };
   const selectStyle = { ...inputStyle, background: "white", color: "#0f6e56" };
-  const labelStyle = { fontSize: 12, color: "#666", display: "block" as const, marginBottom: 3 };
+  const labelStyle = { fontSize: 12, color: "white", display: "block" as const, marginBottom: 3 };
   const sectionLabel = { fontSize: 11, fontWeight: 600 as const, color: "#0f6e56", textTransform: "uppercase" as const, letterSpacing: 1, margin: "0 0 6px" };
   const btnStyle = (primary: boolean) => ({
     padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,
@@ -416,18 +416,18 @@ export default function EditRound() {
 
   if (loading) return (
     <main style={{ maxWidth: 700, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
-      <p style={{ color: "#666" }}>Loading round...</p>
+      <p style={{ color: "white" }}>Loading round...</p>
     </main>
   );
 
   return (
     <main style={{ maxWidth: 960, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
       <div style={{ marginBottom: 24 }}>
-        <a href="/rounds" style={{ fontSize: 13, color: "#666" }}>← Back to rounds</a>
+        <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
       </div>
 
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>Edit round</h1>
-      <p style={{ color: "#666", marginBottom: 24, fontSize: 14 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4, color: "#d0d0d0" }}>Edit round</h1>
+      <p style={{ color: "white", marginBottom: 24, fontSize: 14 }}>
         {courseName}{teeBox ? ` — ${teeBox} tees` : ""}
       </p>
 
@@ -455,7 +455,7 @@ export default function EditRound() {
           { label: "GRINTS", value: `${grints}/${roundHoles.length}` },
         ].map(({ label, value }) => (
           <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: 8, textAlign: "center" }}>
-            <p style={{ fontSize: 11, color: "#666", margin: "0 0 2px" }}>{label}</p>
+            <p style={{ fontSize: 11, color: "#0f6e56", margin: "0 0 2px" }}>{label}</p>
             <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{value}</p>
           </div>
         ))}
@@ -486,12 +486,12 @@ export default function EditRound() {
             ].map(({ label, value }) => (
               <div key={label} style={{ textAlign:"center", background:"white", borderRadius:8, padding:"8px 4px", border:"1px solid #e0f0ea" }}>
                 <div style={{ fontSize:18, fontWeight:700, color:"#0f6e56" }}>{value}</div>
-                <div style={{ fontSize:10, color:"#666", marginTop:2 }}>{label}</div>
+                <div style={{ fontSize:10, color:"#0f6e56", marginTop:2 }}>{label}</div>
               </div>
             ))}
           </div>
           {courseHandicap != null && (
-            <p style={{ fontSize:11, color:"#666", margin:"8px 0 0", fontStyle:"italic" }}>
+            <p style={{ fontSize:11, color:"#0f6e56", margin:"8px 0 0", fontStyle:"italic" }}>
               Course HCP {courseHandicap}: you receive 1 stroke on holes ranked 1–{Math.min(courseHandicap, 18)}
               {courseHandicap > 18 ? ` plus 2 strokes on holes ranked 1–${courseHandicap - 18}` : ""}
             </p>
@@ -505,7 +505,7 @@ export default function EditRound() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div>
                 <span style={{ fontSize: 15, fontWeight: 600, color: "#0f6e56" }}>Hole {hole.hole}</span>
-                <span style={{ fontSize: 13, color: "#666", marginLeft: 8 }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
+                <span style={{ fontSize: 13, color: "#0f6e56", marginLeft: 8 }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 {hole.gir && <span style={{ fontSize: 11, background: "#e8f5e9", color: "#2e7d32", padding: "2px 8px", borderRadius: 20 }}>GIR</span>}

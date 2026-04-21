@@ -102,7 +102,7 @@ function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; im
   const fmtSTP = (s:number) => s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
   if (greyed) return (
     <div style={{ background:"#f0f0f0", borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40 }}>
-      <p style={{ fontSize:9, color:"#bbb", margin:0 }}>N/A</p>
+      <p style={{ fontSize:9, color:"#0f6e56", margin:0 }}>N/A</p>
     </div>
   );
   const lowCount = count <= 2;
@@ -112,7 +112,7 @@ function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; im
       {count>0 ? <>
         <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
         <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{count}</p>
-      </> : <p style={{ fontSize:9, color:"#bbb", margin:0 }}>—</p>}
+      </> : <p style={{ fontSize:9, color:"#0f6e56", margin:0 }}>—</p>}
     </div>
   );
 }
@@ -307,7 +307,7 @@ const pill=(active:boolean):React.CSSProperties=>({
   padding:"4px 10px",borderRadius:20,fontSize:12,fontWeight:500,cursor:"pointer",border:"1px solid",
   background:active?"#0f6e56":"white",color:active?"white":"#0f6e56",borderColor:"#0f6e56",whiteSpace:"nowrap",
 });
-const fl:React.CSSProperties={fontSize:11,color:"#999",margin:"0 0 6px",fontWeight:600};
+const fl:React.CSSProperties={fontSize:11,color:"#0f6e56",margin:"0 0 6px",fontWeight:600};
 
 function hazardCode(h:any):string{
   const parts:string[]=[];
@@ -340,12 +340,12 @@ function HoleHistorySection({history}:{history:any[]}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",marginBottom:4}}>
         {["Date","Sc","Club","Tee","Ap","Pu","Haz","Appr"].map(h=>(
-          <span key={h} style={{fontSize:9,color:"#aaa",fontWeight:600,textTransform:"uppercase"}}>{h}</span>
+          <span key={h} style={{fontSize:9,color:"#0f6e56",fontWeight:600,textTransform:"uppercase"}}>{h}</span>
         ))}
       </div>
       {history.map((h:any,i:number)=>(
         <div key={i} style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",alignItems:"center",padding:"3px 0",borderTop:i>0?"1px solid #f0f0f0":"none"}}>
-          <span style={{fontSize:10,color:"#888"}}>{h.date?.slice(2,10)||"—"}</span>
+          <span style={{fontSize:10,color:"#0f6e56"}}>{h.date?.slice(2,10)||"—"}</span>
           <span style={{fontSize:13,fontWeight:700,color:scoreColor(Number(h.score),h.par)}}>
             {Number(h.score)-h.par===0?"E":Number(h.score)-h.par>0?`+${Number(h.score)-h.par}`:Number(h.score)-h.par}
           </span>
@@ -378,9 +378,42 @@ export default function Home(){
   const [error,setError]=useState("");
   const [filters,setFilters]=useState<StratFilters>(DEFAULT_FILTERS(0));
   const [totalRounds,setTotalRounds]=useState(0);
+  const [hiAgs,setHiAgs]=useState<string>("");
+  const [hiRating,setHiRating]=useState<string>("");
+  const [hiSlope,setHiSlope]=useState<string>("");
+  const [existingDiffs,setExistingDiffs]=useState<number[]|null>(null);
 
   useEffect(()=>{
     loadCourses().then(data=>{setCourses(data);if(data.length>0)setCourseId(data[0].id);setLoadingCourses(false);});
+  },[]);
+
+  useEffect(()=>{
+    import("@/lib/supabase").then(({supabase})=>{
+      supabase.from("rounds").select("holes_played,score_differential,holes,course_id").order("date",{ascending:true}).then(async({data})=>{
+        if(!data)return;
+        const courseIds=[...new Set(data.map((r:any)=>r.course_id).filter(Boolean))];
+        let courseMap:Record<string,{rating:number|null;slope:number|null;hole_count:number|null}>={};
+        if(courseIds.length>0){
+          const {data:cs}=await supabase.from("courses").select("id,rating,slope,hole_count").in("id",courseIds);
+          (cs??[]).forEach((c:any)=>{courseMap[c.id]={rating:c.rating,slope:c.slope,hole_count:c.hole_count};});
+        }
+        const diffs=data.map((r:any)=>{
+          if(r.score_differential!=null) return r.holes_played<=9?r.score_differential*2:r.score_differential;
+          const ci=courseMap[r.course_id];
+          if(!ci?.rating||!ci?.slope)return null;
+          const scored=(r.holes??[]).filter((h:any)=>h.score&&Number(h.score)>0);
+          if(!scored.length)return null;
+          const ags=scored.reduce((s:number,h:any)=>s+Math.min(Number(h.score)||0,(h.par||4)+2),0);
+          const is9=(r.holes_played??scored.length)<=9;
+          const is9C=(ci.hole_count??18)<=9;
+          let rat=ci.rating;
+          if(is9&&!is9C)rat/=2;else if(!is9&&is9C)rat*=2;
+          const diff=is9?(113/ci.slope*(ags-rat))*2:(ags-rat)*113/ci.slope;
+          return diff;
+        }).filter((d:any):d is number=>d!==null);
+        setExistingDiffs(diffs);
+      });
+    });
   },[]);
 
   const selectedCourse=courses.find(c=>c.id===courseId);
@@ -477,7 +510,7 @@ export default function Home(){
     (Object.values(filters.greensideFilter).some(v=>v!==0)?1:0);
 
   const selectStyle:React.CSSProperties={width:"100%",padding:"8px 12px",fontSize:15,border:"1px solid #ddd",borderRadius:8,background:"white",boxSizing:"border-box",color:"#0f6e56"};
-  const labelStyle:React.CSSProperties={fontSize:13,color:"#aaa",display:"block",marginBottom:4};
+  const labelStyle:React.CSSProperties={fontSize:13,color:"white",display:"block",marginBottom:4};
   const card=(bg:string):React.CSSProperties=>({background:bg,borderRadius:12,padding:"16px 20px"});
   const pct=(n:number)=>`${Math.round(n*100)}%`;
   const fmtSTP=(s:number)=>s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
@@ -491,13 +524,13 @@ export default function Home(){
   const confidenceColor:Record<string,string>={high:"#27ae60",medium:"#e67e22",low:"#95a5a6"};
   const aimColors:Record<string,string>={left:"#2980b9",right:"#8e44ad",center:"#27ae60",short:"#e67e22",long:"#c0392b"};
 
-  if(loadingCourses)return <main style={{maxWidth:480,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><p style={{color:"#666"}}>Loading courses...</p></main>;
-  if(!courses.length)return <main style={{maxWidth:480,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><h1 style={{fontSize:24,fontWeight:600,marginBottom:8}}>Golf Strategy Engine</h1><p style={{color:"#666",marginBottom:24}}>No courses found. Add one first.</p><a href="/add-course" style={{padding:"10px 20px",fontSize:15,fontWeight:600,background:"#1a1a1a",color:"white",borderRadius:8,textDecoration:"none"}}>Add a course</a></main>;
+  if(loadingCourses)return <main style={{maxWidth:480,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><p style={{color:"white"}}>Loading courses...</p></main>;
+  if(!courses.length)return <main style={{maxWidth:480,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><h1 style={{fontSize:24,fontWeight:600,marginBottom:8,color:"#d0d0d0"}}>Golf Strategy Engine</h1><p style={{color:"white",marginBottom:24}}>No courses found. Add one first.</p><a href="/add-course" style={{padding:"10px 20px",fontSize:15,fontWeight:600,background:"#1a1a1a",color:"white",borderRadius:8,textDecoration:"none"}}>Add a course</a></main>;
 
   return(
     <main style={{maxWidth:520,margin:"40px auto",fontFamily:"sans-serif",padding:"0 24px"}}>
-      <h1 style={{fontSize:22,fontWeight:600,marginBottom:4,color:"#0f6e56"}}>Strategy Engine</h1>
-      <p style={{color:"#aaa",marginBottom:24,fontSize:13}}>Select a course and hole to get your personalised strategy.</p>
+      <h1 style={{fontSize:22,fontWeight:600,marginBottom:4,color:"#d0d0d0"}}>Strategy Engine</h1>
+      <p style={{color:"white",marginBottom:24,fontSize:13}}>Select a course and hole to get your personalised strategy.</p>
 
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
@@ -549,14 +582,14 @@ export default function Home(){
         {/* Confidence badge */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span style={{fontSize:11,fontWeight:700,letterSpacing:1,color:confidenceColor[conf]??"#666",textTransform:"uppercase"}}>{conf} confidence</span>
-          <span style={{fontSize:11,color:"#aaa"}}>
+          <span style={{fontSize:11,color:"white"}}>
             {filterCount>0?`${filteredEnriched.length} holes (filtered)`:(ds?.exact_hole_history>0?`${ds.exact_hole_history}× this hole · ${ds.similar_holes_used} similar`:`${ds?.similar_holes_used} similar holes`)}
           </span>
         </div>
 
         {/* Hole info */}
         <div style={card("#f0f0f0")}>
-          <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 8px"}}>HOLE INFO</p>
+          <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 8px"}}>HOLE INFO</p>
           <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:4}}>
             <span style={{fontSize:14,color:"#333"}}>Par {hole.par}</span>
             <span style={{fontSize:14,color:"#333"}}>{hole.yards} yds</span>
@@ -570,7 +603,7 @@ export default function Home(){
 
         {/* Avg score */}
         <div style={{...card("#f0f0f0"),display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px"}}>
-          <span style={{fontSize:13,color:"#aaa"}}>Avg on {filterCount>0?"filtered":"similar"} holes</span>
+          <span style={{fontSize:13,color:"#0f6e56"}}>Avg on {filterCount>0?"filtered":"similar"} holes</span>
           <span style={{fontSize:20,fontWeight:700,color:(t?.avgScoreToPar??0)>0?"#c0392b":"#27ae60"}}>
             {t?fmtSTP(t.avgScoreToPar??0):ds?.avg_score_to_par}
           </span>
@@ -600,12 +633,12 @@ export default function Home(){
         {/* Tee strategy — grid + hazards (par 4/5 only) */}
         {hole.par>=4&&(
           <div style={card("#f6f6f6")}>
-            <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 12px"}}>TEE STRATEGY</p>
+            <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 12px"}}>TEE STRATEGY</p>
 
             {/* Tee Shot Hazards */}
             {hazardImpacts.length>0&&(
               <div style={{marginBottom:14}}>
-                <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>TEE SHOT HAZARDS</p>
+                <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>TEE SHOT HAZARDS</p>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
                   {hazardImpacts.map((h,i)=>{
                     const colors=impactColor(h.impact);
@@ -626,14 +659,14 @@ export default function Home(){
             {/* Tee Shot Grid */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
               {["Club","Left","Hit","Right","Unk"].map(h=>(
-                <div key={h} style={{fontSize:9,fontWeight:600,color:"#aaa",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
+                <div key={h} style={{fontSize:9,fontWeight:600,color:"#0f6e56",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
               ))}
             </div>
             {gridData.map(row=>(
               <div key={row.club} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
                 <div style={{background:"#f6f6f6",borderRadius:4,padding:"3px 4px",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"center"}}>
                   <p style={{fontSize:10,fontWeight:600,color:"#1a1a1a",margin:0}}>{row.club}</p>
-                  <p style={{fontSize:9,color:"#aaa",margin:0}}>{row.count}</p>
+                  <p style={{fontSize:9,color:"#0f6e56",margin:0}}>{row.count}</p>
                 </div>
                 {row.cols.map((col,ci)=>{
                   const isLeftCol=ci===0;
@@ -651,10 +684,10 @@ export default function Home(){
         {/* Approach strategy */}
         <div style={card("#f6f6f6")}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-            <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:0}}>APPROACH</p>
+            <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:0}}>APPROACH</p>
             {approachDist!=null&&(
               <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:11,color:"#aaa"}}>Distance (yds)</span>
+                <span style={{fontSize:11,color:"#0f6e56"}}>Distance (yds)</span>
                 <input type="number" min={0} max={700}
                   value={approachDistOverride??approachDist}
                   onChange={e=>{setApproachDistOverride(Number(e.target.value));}}
@@ -666,13 +699,13 @@ export default function Home(){
             )}
           </div>
           <div style={{fontSize:22,fontWeight:700,color:"#0f6e56",marginBottom:8}}>
-            {t?pct(t.girPct):"—"} <span style={{fontSize:14,color:"#aaa",fontWeight:400}}>GIR</span>
+            {t?pct(t.girPct):"—"} <span style={{fontSize:14,color:"#0f6e56",fontWeight:400}}>GIR</span>
           </div>
           {t&&(
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
               {[{label:"Hit",v:t.apprHitPct,c:"#27ae60"},{label:"Left",v:t.apprMissLeftPct,c:"#2980b9"},{label:"Right",v:t.apprMissRightPct,c:"#8e44ad"},{label:"Short",v:t.apprMissShortPct,c:"#e67e22"},{label:"Long",v:t.apprMissLongPct,c:"#c0392b"}].map(({label,v,c})=>(
                 <div key={label} style={{background:"#eee",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
+                  <span style={{color:"#0f6e56"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
                 </div>
               ))}
             </div>
@@ -681,17 +714,17 @@ export default function Home(){
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {(hole.approach_water_out_left||hole.approach_water_out_right||hole.approach_water_out_short||hole.approach_water_out_long)&&(
                 <div style={{background:"#fff3e0",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>OB/Water: </span><span style={{fontWeight:600,color:"#e67e22"}}>{pct(t.apprWaterPct)}</span>
+                  <span style={{color:"#0f6e56"}}>OB/Water: </span><span style={{fontWeight:600,color:"#e67e22"}}>{pct(t.apprWaterPct)}</span>
                 </div>
               )}
               {(hole.approach_bunker_short_left||hole.approach_bunker_short_middle||hole.approach_bunker_short_right||hole.approach_bunker_middle_left||hole.approach_bunker_middle_right||hole.approach_bunker_long_left||hole.approach_bunker_long_middle||hole.approach_bunker_long_right)&&(
                 <div style={{background:"#fef9e7",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>Bunker: </span><span style={{fontWeight:600,color:"#c8a84b"}}>{pct(t.apprBunkerPct)}</span>
+                  <span style={{color:"#0f6e56"}}>Bunker: </span><span style={{fontWeight:600,color:"#c8a84b"}}>{pct(t.apprBunkerPct)}</span>
                 </div>
               )}
               {(hole.approach_tree_hazard_left||hole.approach_tree_hazard_right||hole.approach_tree_hazard_long)&&(
                 <div style={{background:"#eafaf1",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#999"}}>Trees/Haz: </span><span style={{fontWeight:600,color:"#27ae60"}}>{pct(t.apprTreePct)}</span>
+                  <span style={{color:"#0f6e56"}}>Trees/Haz: </span><span style={{fontWeight:600,color:"#27ae60"}}>{pct(t.apprTreePct)}</span>
                 </div>
               )}
             </div>
@@ -729,7 +762,7 @@ export default function Home(){
               {label:"Water/OB right",v:hole.tee_water_out_right},{label:"Water/OB across",v:hole.tee_water_out_across},
             ].some(x=>x.v)&&(
               <div style={{marginBottom:12}}>
-                <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>TEE SHOT HAZARDS</p>
+                <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>TEE SHOT HAZARDS</p>
                 {[
                   {label:"Trees/Haz left",v:hole.tee_tree_hazard_left},{label:"Bunkers left",v:hole.tee_bunkers_left},{label:"Water/OB left",v:hole.tee_water_out_left},
                   {label:"Trees/Haz right",v:hole.tee_tree_hazard_right},{label:"Bunkers right",v:hole.tee_bunkers_right},{label:"Water/OB right",v:hole.tee_water_out_right},
@@ -741,7 +774,7 @@ export default function Home(){
             )}
             {[hole.approach_tree_hazard_left,hole.approach_tree_hazard_right,hole.approach_tree_hazard_long,hole.approach_water_out_left,hole.approach_water_out_right,hole.approach_water_out_short,hole.approach_water_out_long].some(Boolean)&&(
               <div style={{marginBottom:12}}>
-                <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>APPROACH HAZARDS</p>
+                <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>APPROACH HAZARDS</p>
                 {[
                   {label:"Trees/Haz left",v:hole.approach_tree_hazard_left},{label:"Water/OB left",v:hole.approach_water_out_left},
                   {label:"Trees/Haz right",v:hole.approach_tree_hazard_right},{label:"Water/OB right",v:hole.approach_water_out_right},
@@ -753,7 +786,7 @@ export default function Home(){
               </div>
             )}
             <div>
-              <p style={{fontSize:11,color:"#aaa",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>GREENSIDE</p>
+              <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>GREENSIDE</p>
               <GreensideWidget readOnly value={{
                 long_left:  hole.approach_bunker_long_left?2:hole.approach_green_long_left?1:0,
                 long_middle:hole.approach_bunker_long_middle?2:hole.approach_green_long_middle?1:0,
@@ -774,7 +807,7 @@ export default function Home(){
             <p style={{fontSize:12,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:0}}>
               Filters {filterCount>0&&<span style={{fontSize:10,background:"#0f6e56",color:"#fff",borderRadius:10,padding:"1px 6px",marginLeft:6}}>{filterCount}</span>}
             </p>
-            {filterCount>0&&<button onClick={()=>setFilters(DEFAULT_FILTERS(totalRounds))} style={{fontSize:12,color:"#666",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset</button>}
+            {filterCount>0&&<button onClick={()=>setFilters(DEFAULT_FILTERS(totalRounds))} style={{fontSize:12,color:"#0f6e56",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset</button>}
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:12}}>
             <div style={{flex:"1 1 120px"}}>
@@ -857,19 +890,73 @@ export default function Home(){
             </div>
             <div>
               <p style={fl}>Greenside Position</p>
-              <p style={{fontSize:10,color:"#bbb",margin:"0 0 4px",fontStyle:"italic"}}>Tap to cycle: grey = any · teal = green side · sand = bunker</p>
+              <p style={{fontSize:10,color:"#0f6e56",margin:"0 0 4px",fontStyle:"italic"}}>Tap to cycle: grey = any · teal = green side · sand = bunker</p>
               <GreensideWidget value={filters.greensideFilter} onChange={v=>setFilters(f=>({...f,greensideFilter:v}))}/>
               {Object.values(filters.greensideFilter).some(v=>v!==0)&&(
-                <button onClick={()=>setFilters(f=>({...f,greensideFilter:defaultGS()}))} style={{marginTop:4,fontSize:11,color:"#999",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>Clear greenside</button>
+                <button onClick={()=>setFilters(f=>({...f,greensideFilter:defaultGS()}))} style={{marginTop:4,fontSize:11,color:"#0f6e56",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>Clear greenside</button>
               )}
             </div>
           </Section>
         </div>
 
         {conf==="low"&&(
-          <p style={{fontSize:12,color:"#aaa",textAlign:"center",margin:0}}>Limited data — strategy based on general tendencies. Play more rounds to improve accuracy.</p>
+          <p style={{fontSize:12,color:"white",textAlign:"center",margin:0}}>Limited data — strategy based on general tendencies. Play more rounds to improve accuracy.</p>
         )}
       </div>)}
+
+      {/* HI Estimator */}
+      {(()=>{
+        const rating=selectedCourse?.rating??null;
+        const slope=(selectedCourse?.slope??null)||113;
+        const hiRatingNum=hiRating?parseFloat(hiRating):(rating??0);
+        const hiSlopeNum=hiSlope?parseFloat(hiSlope):(slope??113);
+        const hiAgsNum=parseFloat(hiAgs);
+        const hiDiff=!isNaN(hiAgsNum)&&hiRatingNum&&hiSlopeNum
+          ?(hiAgsNum-hiRatingNum)*113/hiSlopeNum:null;
+        const projectedHI=(()=>{
+          if(hiDiff===null||!existingDiffs)return null;
+          const all=[...existingDiffs,hiDiff].slice(-20);
+          if(all.length<3)return null;
+          const sorted=[...all].sort((a,b)=>a-b);
+          const count=all.length<=6?1:all.length<=8?2:all.length<=11?3:all.length<=14?4:all.length<=16?5:all.length<=18?6:all.length===19?7:8;
+          const best=sorted.slice(0,count);
+          return Math.floor(best.reduce((s,d)=>s+d,0)/best.length*10)/10;
+        })();
+        return(
+          <div style={{marginTop:24,background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"16px 20px"}}>
+            <p style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:"0 0 12px"}}>HI Estimator</p>
+            <p style={{fontSize:12,color:"#0f6e56",margin:"0 0 12px"}}>Enter a score to see what handicap index it would produce.</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+              <div>
+                <label style={labelStyle}>AGS</label>
+                <input type="number" placeholder="e.g. 88" value={hiAgs} onChange={e=>setHiAgs(e.target.value)} style={{...selectStyle,color:"#1a1a1a"}}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Rating</label>
+                <input type="number" step="0.1" placeholder={rating?String(rating):"e.g. 71.4"} value={hiRating} onChange={e=>setHiRating(e.target.value)} style={{...selectStyle,color:"#1a1a1a"}}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Slope</label>
+                <input type="number" placeholder={slope?String(slope):"e.g. 128"} value={hiSlope} onChange={e=>setHiSlope(e.target.value)} style={{...selectStyle,color:"#1a1a1a"}}/>
+              </div>
+            </div>
+            {hiDiff!==null&&(
+              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                <div style={{background:"#eee",borderRadius:8,padding:"8px 14px"}}>
+                  <span style={{fontSize:11,color:"#0f6e56"}}>Differential: </span>
+                  <span style={{fontWeight:700,color:"#0f6e56",fontSize:15}}>{hiDiff.toFixed(1)}</span>
+                </div>
+                {projectedHI!==null&&(
+                  <div style={{background:"#0f6e56",borderRadius:8,padding:"8px 14px"}}>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,0.7)"}}>Projected HI: </span>
+                    <span style={{fontWeight:700,color:"white",fontSize:15}}>{projectedHI.toFixed(1)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </main>
   );
 }

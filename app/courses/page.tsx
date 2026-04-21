@@ -86,19 +86,19 @@ export default function CoursesPage() {
 
   if (loading) return (
     <main style={{ maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
-      <p style={{ color: "#666" }}>Loading courses...</p>
+      <p style={{ color: "white" }}>Loading courses...</p>
     </main>
   );
 
   return (
     <main style={{ maxWidth: 600, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>My courses</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0, color: "#d0d0d0" }}>My courses</h1>
         <a href="/add-course" style={addCourseBtn}>+ Add course</a>
       </div>
 
       {Object.keys(grouped).length === 0 ? (
-        <p style={{ color: "#666" }}>No courses yet. Add one to get started.</p>
+        <p style={{ color: "white" }}>No courses yet. Add one to get started.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {Object.entries(grouped).map(([name, teeBoxes]) => {
@@ -109,7 +109,7 @@ export default function CoursesPage() {
                   <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{name}</p>
                   <a href={"/add-course?copyFrom=" + first.id} style={addTeeBtn}>+ Tees</a>
                 </div>
-                <p style={{ fontSize: 13, color: "#666", margin: "0 0 10px" }}>{first.city}, {first.state}</p>
+                <p style={{ fontSize: 13, color: "#0f6e56", margin: "0 0 10px" }}>{first.city}, {first.state}</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {teeBoxes.map(course => (
                     <div key={course.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#f9f9f9", borderRadius: 8 }}>
@@ -160,7 +160,7 @@ export default function CoursesPage() {
       )}
 
       <div style={{ marginTop: 24 }}>
-        <a href="/" style={{ fontSize: 13, color: "#666" }}>← Back to strategy</a>
+        <a href="/" style={{ fontSize: 13, color: "white" }}>← Back to strategy</a>
       </div>
 
       {/* Delete modal */}

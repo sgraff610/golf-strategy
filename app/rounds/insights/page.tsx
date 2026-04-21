@@ -376,6 +376,7 @@ export default function RoundsInsights() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [useLastN, setUseLastN] = useState(false);
   const [lastN, setLastN] = useState(10);
+  const [lastNInput, setLastNInput] = useState("10");
 
   useEffect(() => {
     async function loadAll() {
@@ -586,7 +587,7 @@ export default function RoundsInsights() {
     padding: "5px 6px", borderRadius: 8, border: "1px solid #0f6e56",
     fontSize: 12, color: "#0f6e56", width: 54,
   };
-  const fl: React.CSSProperties = { fontSize: 11, color: "#999", margin: "0 0 6px", fontWeight: 600 };
+  const fl: React.CSSProperties = { fontSize: 11, color: "#0f6e56", margin: "0 0 6px", fontWeight: 600 };
 
   const driveActive = filters.driveAcc.size + filters.drivingClubs.size +
     (filters.highWater?1:0) + (filters.highTree?1:0) + (filters.highBunker?1:0) +
@@ -612,13 +613,13 @@ export default function RoundsInsights() {
   return (
     <main style={{ maxWidth: 520, margin: "40px auto", fontFamily: "sans-serif", padding: "0 16px" }}>
       <div style={{ marginBottom: 20 }}>
-        <a href="/rounds" style={{ fontSize: 13, color: "#666" }}>← Back to rounds</a>
+        <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
       </div>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Insights</h1>
-      <p style={{ color: "#666", marginBottom: 20, fontSize: 13 }}>Analyze how different factors impact your score vs par.</p>
+      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4, color: "#d0d0d0" }}>Insights</h1>
+      <p style={{ color: "white", marginBottom: 20, fontSize: 13 }}>Analyze how different factors impact your score vs par.</p>
 
-      {loading && <p style={{ color: "#666" }}>Loading rounds...</p>}
-      {!loading && allHoles.length === 0 && <p style={{ color: "#666" }}>No hole data found. Add some rounds first.</p>}
+      {loading && <p style={{ color: "white" }}>Loading rounds...</p>}
+      {!loading && allHoles.length === 0 && <p style={{ color: "white" }}>No hole data found. Add some rounds first.</p>}
 
       {!loading && allHoles.length > 0 && (<>
         <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
@@ -626,7 +627,7 @@ export default function RoundsInsights() {
             <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Filters</p>
             {(anyActive || useLastN) && (
               <button onClick={() => { setFilters(DEFAULT_FILTERS); setUseLastN(false); setLastN(10); }}
-                style={{ fontSize: 12, color: "#666", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Reset</button>
+                style={{ fontSize: 12, color: "#0f6e56", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Reset</button>
             )}
           </div>
 
@@ -641,10 +642,11 @@ export default function RoundsInsights() {
                 <button style={pill(!useLastN)} onClick={() => setUseLastN(false)}>All</button>
                 <button style={pill(useLastN)} onClick={() => setUseLastN(true)}>Last</button>
                 {useLastN && (<>
-                  <input type="number" min={1} max={totalRounds} value={lastN}
-                    onChange={e => setLastN(Math.max(1, Math.min(totalRounds, Number(e.target.value))))}
+                  <input type="number" min={1} max={totalRounds} value={lastNInput}
+                    onChange={e => setLastNInput(e.target.value)}
+                    onBlur={e => { const v = Math.max(1, Math.min(totalRounds, Number(e.target.value) || 1)); setLastN(v); setLastNInput(String(v)); }}
                     style={{ width: 44, padding: "4px 5px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 12, color: "#0f6e56", textAlign: "center" }} />
-                  <span style={{ fontSize: 10, color: "#999" }}>of {totalRounds}</span>
+                  <span style={{ fontSize: 10, color: "#0f6e56" }}>of {totalRounds}</span>
                 </>)}
               </div>
             </div>
@@ -884,7 +886,7 @@ export default function RoundsInsights() {
               <p style={fl}>Greenside Position</p>
               <GreensideFilterWidget value={filters.greensideFilter} onChange={v => setFilters(f => ({ ...f, greensideFilter: v }))} />
               <button onClick={() => setFilters(f => ({ ...f, greensideFilter: defaultGreensideFilter() }))}
-                style={{ marginTop: 6, fontSize: 11, color: "#999", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                style={{ marginTop: 6, fontSize: 11, color: "#0f6e56", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
                 Clear greenside
               </button>
             </div>
@@ -898,9 +900,9 @@ export default function RoundsInsights() {
             { label: "Impact",       val: filtered.length>0?fmt(impact):"—", color: clr(impact), sub: "vs baseline" },
           ].map(({ label, val, color, sub }) => (
             <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: 10, textAlign: "center" }}>
-              <p style={{ fontSize: 10, color: "#666", margin: "0 0 3px" }}>{label}</p>
+              <p style={{ fontSize: 10, color: "#0f6e56", margin: "0 0 3px" }}>{label}</p>
               <p style={{ fontSize: 18, fontWeight: 700, margin: 0, color }}>{val}</p>
-              <p style={{ fontSize: 10, color: "#999", margin: "3px 0 0" }}>{sub}</p>
+              <p style={{ fontSize: 10, color: "#0f6e56", margin: "3px 0 0" }}>{sub}</p>
             </div>
           ))}
         </div>
@@ -908,7 +910,7 @@ export default function RoundsInsights() {
         <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "12px 14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Factor Correlations</p>
-            <p style={{ fontSize: 10, color: "#aaa", margin: 0 }}>≥{MIN_HOLES} holes only · sorted by impact</p>
+            <p style={{ fontSize: 10, color: "#0f6e56", margin: 0 }}>≥{MIN_HOLES} holes only · sorted by impact</p>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             {(["all","positive","negative"] as const).map(dir => (
@@ -925,10 +927,10 @@ export default function RoundsInsights() {
             <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 280 }}>
               <thead>
                 <tr>
-                  <th style={{ fontSize: 11, color: "#999", fontWeight: 600, textAlign: "left",  padding: "0 8px 6px 0" }}>Factor</th>
-                  <th style={{ fontSize: 11, color: "#999", fontWeight: 600, textAlign: "right", padding: "0 0 6px 8px" }}>Holes</th>
-                  <th style={{ fontSize: 11, color: "#999", fontWeight: 600, textAlign: "right", padding: "0 0 6px 8px" }}>Avg</th>
-                  <th style={{ fontSize: 11, color: "#999", fontWeight: 600, textAlign: "right", padding: "0 0 6px 8px" }}>Impact</th>
+                  <th style={{ fontSize: 11, color: "#0f6e56", fontWeight: 600, textAlign: "left",  padding: "0 8px 6px 0" }}>Factor</th>
+                  <th style={{ fontSize: 11, color: "#0f6e56", fontWeight: 600, textAlign: "right", padding: "0 0 6px 8px" }}>Holes</th>
+                  <th style={{ fontSize: 11, color: "#0f6e56", fontWeight: 600, textAlign: "right", padding: "0 0 6px 8px" }}>Avg</th>
+                  <th style={{ fontSize: 11, color: "#0f6e56", fontWeight: 600, textAlign: "right", padding: "0 0 6px 8px" }}>Impact</th>
                 </tr>
               </thead>
               <tbody>
@@ -941,7 +943,7 @@ export default function RoundsInsights() {
                   </tr>
                 ))}
                 {allCorrelations.length === 0 && (
-                  <tr><td colSpan={4} style={{ fontSize: 12, color: "#aaa", padding: "8px 0" }}>Not enough data yet — need ≥{MIN_HOLES} holes per factor</td></tr>
+                  <tr><td colSpan={4} style={{ fontSize: 12, color: "#0f6e56", padding: "8px 0" }}>Not enough data yet — need ≥{MIN_HOLES} holes per factor</td></tr>
                 )}
               </tbody>
             </table>
