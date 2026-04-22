@@ -2,7 +2,8 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { loadCourses } from "@/lib/storage";
+import { loadCourses, getClubDistances } from "@/lib/storage";
+import type { ClubDistances } from "@/lib/planTypes";
 import { CourseRecord } from "@/lib/types";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
@@ -274,10 +275,12 @@ function PlayCourseInner() {
   const [approachDist, setApproachDist] = useState<number|null>(null);
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
+  const [clubDistances, setClubDistances] = useState<ClubDistances | null>(null);
 
   // ── ALL useEffect hooks ───────────────────────────────────────────────────────
   useEffect(() => {
     loadCourses().then(data => { setCourses(data); });
+    getClubDistances().then(setClubDistances);
   }, []);
 
   useEffect(() => {
@@ -549,12 +552,10 @@ function PlayCourseInner() {
     );
   }
 
-  // ── Club distance map ─────────────────────────────────────────────────────
-  const CLUB_DIST: Record<string,number> = {
-    Driver:230,"3W":210,"5W":195,"7W":180,
-    "4i":185,"5i":175,"6i":165,"7i":155,
-    "8i":145,"9i":130,PW:120,SW:100,LW:80,
-  };
+  // ── Club distance map (midpoint of saved ranges) ──────────────────────────
+  const CLUB_DIST: Record<string,number> = Object.fromEntries(
+    Object.entries(clubDistances ?? {}).map(([k, v]) => [k, Math.round((v.min + v.max) / 2)])
+  );
 
 function scoreBg(score: number|"", par: number): string {
     if (score === "") return "#e0e0e0";

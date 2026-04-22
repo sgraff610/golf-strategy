@@ -1,5 +1,41 @@
 import { supabase } from "./supabase";
 import { CourseRecord } from "./types";
+import type { ClubDistances, PlayerForm } from "./planTypes";
+import { DEFAULT_CLUB_DISTANCES } from "./planTypes";
+
+export async function getClubDistances(): Promise<ClubDistances> {
+  const { data } = await supabase
+    .from("player_data")
+    .select("club_distances")
+    .eq("id", "singleton")
+    .single();
+  return (data?.club_distances as ClubDistances | null) ?? DEFAULT_CLUB_DISTANCES;
+}
+
+export async function saveClubDistances(distances: ClubDistances): Promise<void> {
+  await supabase.from("player_data").upsert({
+    id: "singleton",
+    club_distances: distances,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export async function getClubForm(): Promise<PlayerForm | null> {
+  const { data } = await supabase
+    .from("player_data")
+    .select("club_form")
+    .eq("id", "singleton")
+    .single();
+  return (data?.club_form as PlayerForm | null) ?? null;
+}
+
+export async function saveClubForm(form: PlayerForm): Promise<void> {
+  await supabase.from("player_data").upsert({
+    id: "singleton",
+    club_form: form,
+    updated_at: new Date().toISOString(),
+  });
+}
 
 export async function loadCourses(): Promise<CourseRecord[]> {
   const { data, error } = await supabase

@@ -1,109 +1,167 @@
 "use client";
 // app/plan/page.tsx
 // Pre-Round Planner — 4-stage flow (Setup → Questions → Review → Plan).
-//
-// TODO(data):
-//   - Load real course via supabase (see commented block in useEffect)
-//   - Load real CourseHistorySummary (aggregation; see HANDOFF.md §5)
-//   - Save resulting RoundPlan on "Tee it up" (see HANDOFF.md §4)
 
 import { useEffect, useMemo, useState } from "react";
-import type { HoleData, CourseRecord } from "@/lib/types";
+import type { CourseRecord } from "@/lib/types";
 import type {
   PlayerForm,
   PlanAnswers,
   CourseHistorySummary,
+  CourseInsight,
+  Correlation,
   RoundPlan,
+  ClubDistances,
+  PlanEnrichedHole,
 } from "@/lib/planTypes";
+import { supabase } from "@/lib/supabase";
+import { loadCourses, getCourse, getClubDistances, getClubForm, saveClubForm } from "@/lib/storage";
 import { FORM_CLUBS, QUESTIONS } from "./questions";
 import { FormRanger } from "./FormRanger";
 import { PlanHoleCard } from "./PlanHoleCard";
-import { buildPosture, buildStrategies, targetScore } from "./planEngine";
+import { buildPosture, buildStrategies, targetScore, leavesYardage } from "./planEngine";
 
-// ─── Mock course + history — replace with Supabase fetches ───────────────────
-const MOCK_COURSE: CourseRecord = {
-  id: "mock-pebble-creek",
-  name: "Pebble Creek Golf Club",
-  tee_box: "Blue",
-  city: "Cardiff",
-  state: "CA",
-  rating: 71.2,
-  slope: 129,
-  holes: Array.from({ length: 18 }, (_, i): HoleData => {
-    const hole = i + 1;
-    const pars = [4, 3, 5, 4, 3, 5, 4, 3, 4, 4, 5, 3, 4, 4, 5, 3, 4, 4] as const;
-    const yds = [398, 168, 522, 412, 204, 538, 372, 148, 434, 408, 548, 132, 422, 368, 512, 182, 444, 458];
-    const prefClubs = ["3W","6i","Driver","Driver","4i","3W","5W","8i","3W","Driver","3W","9i","5W","3W","Driver","5i","Driver","3W"];
-    return {
-      hole,
-      par: pars[i],
-      yards: yds[i],
-      stroke_index: [9,15,3,5,13,1,11,17,7,10,4,18,6,12,2,14,8,16][i],
-      dogleg_direction: null,
-      tee_tree_hazard_left: hole === 13,
-      tee_tree_hazard_right: false,
-      tee_tree_hazard_across: false,
-      tee_bunkers_left: false,
-      tee_bunkers_right: hole === 1 || hole === 14,
-      tee_water_out_left: hole === 6,
-      tee_water_out_right: hole === 11 || hole === 17,
-      tee_water_out_across: false,
-      approach_tree_hazard_left: false,
-      approach_tree_hazard_right: false,
-      approach_tree_hazard_long: false,
-      approach_tree_hazard_across: false,
-      approach_bunkers_left: false,
-      approach_bunkers_right: false,
-      approach_water_out_left: false,
-      approach_water_out_right: false,
-      approach_water_out_short: hole === 16,
-      approach_water_out_long: hole === 2,
-      approach_bunker_short_middle: false,
-      approach_bunker_short_left: false,
-      approach_bunker_middle_left: false,
-      approach_bunker_long_left: false,
-      approach_bunker_long_middle: false,
-      approach_bunker_long_right: false,
-      approach_bunker_middle_right: false,
-      approach_bunker_short_right: hole === 8,
-      approach_green_short_middle: false,
-      approach_green_short_left: false,
-      approach_green_middle_left: false,
-      approach_green_long_left: false,
-      approach_green_long_middle: false,
-      approach_green_long_right: false,
-      approach_green_middle_right: false,
-      approach_green_short_right: false,
-      approach_green_depth: 28,
-      preferred_club: prefClubs[i],
-      preferred_landing: "CF",
-    };
-  }),
-};
+export type HoleClubStat = { club: string; count: number; avgOverPar: number };
+export type { PlanEnrichedHole } from "@/lib/planTypes";
+const PLAN_CLUBS = ["Driver", "3W", "5W", "7W", "Irons"] as const;
+function clubGroup(club: string): string {
+  if (!club) return "";
+  if (club === "Driver") return "Driver";
+  if (club === "3W") return "3W";
+  if (club === "5W") return "5W";
+  if (["4i","5i","6i","7i","8i","9i","PW","SW","LW"].includes(club)) return "Irons";
+  return "";
+}
 
-const MOCK_HISTORY: CourseHistorySummary = {
-  course_id: "mock-pebble-creek",
-  rounds_played: 4,
-  best_score: 79, best_to_par: "+7", best_date: "Jun 2025",
-  avg_score: 84.5, avg_to_par: "+12.5",
-  strongholds: [
-    { hole: 12, note: "3/4 pars here — your short-iron accuracy shows up", confidence: "high",   sample: "4 of 4 rounds" },
-    { hole: 4,  note: "Driver + wedge = consistent 2-putt pars",            confidence: "medium", sample: "3 of 4 rounds" },
-  ],
-  trouble: [
-    { hole: 6,  note: "Avg +1.75 on this par 5 — laying up to 100y scored 0.6 better than going for green", confidence: "medium", sample: "4 rounds · 3 layups vs 1 go" },
-    { hole: 9,  note: "OB right costs you here (2 of 4). Tee shot left of center is your pattern",           confidence: "high",   sample: "4 of 4 rounds" },
-    { hole: 13, note: "Severe left dogleg — Driver hasn't worked (0/3 fairways). 5W is new territory",      confidence: "high",   sample: "3 of 3 driver attempts" },
-  ],
-  correlations: [
-    { key: "Fairway hit → score",           value: "−0.8/hole when you hit",                       sample: "18 fairways sampled",     direction: "good" },
-    { key: "Bogey on hole 1 → front 9",     value: "+2.4 front when you open w/ bogey",            sample: "3 of 4 rounds",           direction: "bad"  },
-    { key: "Putts from 6–10 ft",            value: "52% made (vs 38% tour avg for your handicap)", sample: "24 attempts",             direction: "good" },
-    { key: "Par 5s — going for it in 2",    value: "avg +0.8 vs layup",                            sample: "6 attempts",              direction: "bad"  },
-  ],
-};
+export type HolesMode = "all" | "front9" | "back9" | "loop18";
 
-// ─── Design tokens injected once (scoped to /plan) ───────────────────────────
+// ─── History aggregation ──────────────────────────────────────────────────────
+
+/** Fetch all rounds for a course once; recompute history locally when mode changes. */
+async function fetchRawRounds(courseId: string): Promise<any[]> {
+  const { data } = await supabase
+    .from("rounds")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("date", { ascending: false });
+  return data ?? [];
+}
+
+/** Pure: build a CourseHistorySummary from cached rounds filtered to the selected holes mode. */
+function buildHistory(
+  courseId: string,
+  allRounds: any[],
+  courseHoleCount: number,
+  holesMode: HolesMode
+): CourseHistorySummary {
+  const empty: CourseHistorySummary = {
+    course_id: courseId, rounds_played: 0,
+    best_score: null, best_to_par: null, best_date: null,
+    avg_score: null, avg_to_par: null,
+    strongholds: [], trouble: [], correlations: [],
+  };
+  if (allRounds.length === 0) return empty;
+
+  // Determine which holes_played value to match
+  const targetHolesPlayed: number =
+    holesMode === "loop18" ? 18
+    : (holesMode === "front9" || holesMode === "back9") ? 9
+    : courseHoleCount; // "all" → native course count (9 or 18)
+
+  const rounds = allRounds.filter((r: any) => (r.holes_played ?? courseHoleCount) === targetHolesPlayed);
+
+  if (rounds.length === 0) return { ...empty, course_id: courseId };
+
+  const scores = rounds
+    .map((r: any) => (r.holes ?? []).reduce((s: number, h: any) => s + (Number(h.score) || 0), 0))
+    .filter((s: number) => s > 0);
+
+  const bestScore = scores.length ? Math.min(...scores) : null;
+  const avgScore = scores.length
+    ? Math.round((scores.reduce((a: number, b: number) => a + b, 0) / scores.length) * 10) / 10
+    : null;
+
+  // Par from first matching round
+  const sampleHoles: any[] = rounds[0]?.holes ?? [];
+  const totalPar = sampleHoles.reduce((s: number, h: any) => s + (Number(h.par) || 4), 0) || (targetHolesPlayed === 9 ? 36 : 72);
+
+  const toParStr = (score: number | null) => {
+    if (score === null) return null;
+    const d = Math.round(score - totalPar);
+    return d >= 0 ? `+${d}` : `${d}`;
+  };
+
+  const bestRoundIdx = bestScore !== null ? scores.indexOf(bestScore) : -1;
+  const bestDate =
+    bestScore !== null && rounds[bestRoundIdx]?.date
+      ? new Date(rounds[bestRoundIdx].date).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+      : null;
+
+  // Per-hole avg over par — only from matching rounds
+  const holeSums: Record<number, { totalOverPar: number; count: number }> = {};
+  for (const round of rounds) {
+    for (const h of round.holes ?? []) {
+      const holeNum = Number(h.hole);
+      const score = Number(h.score) || 0;
+      const par = Number(h.par) || 4;
+      if (score > 0 && holeNum) {
+        if (!holeSums[holeNum]) holeSums[holeNum] = { totalOverPar: 0, count: 0 };
+        holeSums[holeNum].totalOverPar += score - par;
+        holeSums[holeNum].count++;
+      }
+    }
+  }
+
+  const trouble: CourseInsight[] = [];
+  const strongholds: CourseInsight[] = [];
+
+  for (const [holeStr, { totalOverPar, count }] of Object.entries(holeSums)) {
+    if (count < 2) continue;
+    const holeNum = Number(holeStr);
+    const avg = totalOverPar / count;
+    const conf: CourseInsight["confidence"] = count >= 4 ? "high" : count >= 3 ? "medium" : "low";
+    const sample = `${count} of ${rounds.length} rounds`;
+    if (avg > 1.1) {
+      trouble.push({ hole: holeNum, note: `Avg +${avg.toFixed(1)} over par — this hole costs you strokes`, confidence: conf, sample });
+    } else if (avg <= 0.2) {
+      strongholds.push({ hole: holeNum, note: `Avg ${avg <= 0 ? avg.toFixed(1) : "E"} here — you manage this hole well`, confidence: conf, sample });
+    }
+  }
+
+  trouble.sort((a, b) => holeSums[b.hole].totalOverPar / holeSums[b.hole].count - holeSums[a.hole].totalOverPar / holeSums[a.hole].count);
+  strongholds.sort((a, b) => holeSums[a.hole].totalOverPar / holeSums[a.hole].count - holeSums[b.hole].totalOverPar / holeSums[b.hole].count);
+
+  // Correlations
+  const correlations: Correlation[] = [];
+  let girHit = 0, girTotal = 0, puttSum = 0, puttCount = 0;
+  for (const round of rounds) {
+    for (const h of round.holes ?? []) {
+      if (h.gir != null) { girTotal++; if (h.gir) girHit++; }
+      if (h.putts != null && Number(h.putts) > 0) { puttSum += Number(h.putts); puttCount++; }
+    }
+  }
+  if (girTotal >= 9) {
+    const pct = Math.round((girHit / girTotal) * 100);
+    correlations.push({ key: "Greens in regulation", value: `${pct}% GIR rate here`, sample: `${girTotal} holes sampled`, direction: pct >= 40 ? "good" : "bad" });
+  }
+  if (puttCount >= 9) {
+    const avg = (puttSum / puttCount).toFixed(1);
+    correlations.push({ key: "Avg putts per hole", value: `${avg} putts/hole`, sample: `${puttCount} holes sampled`, direction: Number(avg) <= 2.0 ? "good" : "bad" });
+  }
+
+  return {
+    course_id: courseId,
+    rounds_played: rounds.length,
+    best_score: bestScore, best_to_par: toParStr(bestScore), best_date: bestDate,
+    avg_score: avgScore, avg_to_par: toParStr(avgScore),
+    strongholds: strongholds.slice(0, 3),
+    trouble: trouble.slice(0, 3),
+    correlations,
+  };
+}
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+
 const TOKENS = `
   .plan-root {
     --bg:#f4efe6; --paper:#fbf7ef; --paper-alt:#f0eadc;
@@ -120,8 +178,9 @@ const TOKENS = `
   }
 `;
 
-// ─── Stages ──────────────────────────────────────────────────────────────────
-const STAGES = ["setup","questions","review","plan"] as const;
+// ─── Stages ───────────────────────────────────────────────────────────────────
+
+const STAGES = ["setup", "questions", "review", "plan"] as const;
 type Stage = typeof STAGES[number];
 
 export default function PlanPage() {
@@ -131,45 +190,155 @@ export default function PlanPage() {
     Object.fromEntries(FORM_CLUBS.map((c) => [c.k, c.default])) as PlayerForm
   );
 
-  // TODO: replace with real fetches
-  const [course] = useState<CourseRecord>(MOCK_COURSE);
-  const [history] = useState<CourseHistorySummary>(MOCK_HISTORY);
+  const [courseList, setCourseList] = useState<CourseRecord[]>([]);
+  const [courseId, setCourseId] = useState<string>("");
+  const [course, setCourse] = useState<CourseRecord | null>(null);
+  const [rawRounds, setRawRounds] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [holesMode, setHolesMode] = useState<HolesMode>("all");
+  const [overrides, setOverrides] = useState<Record<number, { pref?: string; aim?: import("@/lib/planTypes").HoleStrategy["aim"] }>>({});
+  const [clubDistances, setClubDistances] = useState<ClubDistances | undefined>(undefined);
+  const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
+  const [planEnrichedMap, setPlanEnrichedMap] = useState<Record<number, PlanEnrichedHole[]>>({});
+  const [planEnrichedReady, setPlanEnrichedReady] = useState(false);
 
-  // ─── replace block below with real Supabase fetch ──────────────────────────
-  // useEffect(() => {
-  //   (async () => {
-  //     const { data } = await supabase
-  //       .from("courses").select("*").eq("id", courseId).single();
-  //     setCourse(data as CourseRecord);
-  //     const history = await fetchCourseHistory(courseId);  // HANDOFF §5
-  //     setHistory(history);
-  //   })();
-  // }, [courseId]);
+  useEffect(() => {
+    loadCourses().then(setCourseList);
+    getClubDistances().then(setClubDistances);
+    getClubForm().then(saved => { if (saved) setForm(saved); });
+    // Compute handicap index from all rounds
+    supabase.from("rounds").select("score_differential, holes_played").order("date", { ascending: true })
+      .then(({ data }) => {
+        if (!data) return;
+        const diffs = data
+          .filter((r: any) => r.score_differential != null)
+          .map((r: any) => (r.holes_played ?? 18) <= 9 ? r.score_differential * 2 : r.score_differential);
+        if (diffs.length < 3) return;
+        const last20 = diffs.slice(-20);
+        const count = last20.length <= 6 ? 1 : last20.length <= 8 ? 2 : last20.length <= 11 ? 3
+          : last20.length <= 14 ? 4 : last20.length <= 16 ? 5 : last20.length <= 18 ? 6
+          : last20.length === 19 ? 7 : 8;
+        const best = [...last20].sort((a, b) => a - b).slice(0, count);
+        setHandicapIndex(Math.floor(best.reduce((s, d) => s + d, 0) / best.length * 10) / 10);
+      });
+  }, []);
 
-  const strategies = useMemo(
-    () => buildStrategies(course.holes, form, answers, history),
-    [course.holes, form, answers, history]
-  );
+  useEffect(() => {
+    if (!courseId) return;
+    setLoading(true);
+    setCourse(null);
+    setRawRounds([]);
+    setHolesMode("all");
+    setOverrides({});
+    Promise.all([getCourse(courseId), fetchRawRounds(courseId)]).then(([courseData, rounds]) => {
+      setCourse(courseData);
+      setRawRounds(rounds);
+      setLoading(false);
+    });
+  }, [courseId]);
+
+  const history = useMemo<CourseHistorySummary | null>(() => {
+    if (!course || loading) return null;
+    return buildHistory(courseId, rawRounds, course.holes.length, holesMode);
+  }, [courseId, rawRounds, course, holesMode, loading]);
+
+  const planHoles = useMemo(() => {
+    if (!course) return [];
+    if (holesMode === "front9") return course.holes.slice(0, 9);
+    if (holesMode === "back9") return course.holes.slice(9);
+    return course.holes; // "all" or "loop18" — same 9 holes, strategy repeats
+  }, [course, holesMode]);
+
+  // Expected score for this course given player's HI
+  const defaultGoalScore = useMemo(() => {
+    const par = course?.holes.reduce((s, h) => s + h.par, 0) ?? 72;
+    if (handicapIndex === null) return par + 18;
+    const slope = course?.slope ?? 113;
+    const rating = course?.rating ?? par;
+    const ch = Math.round(handicapIndex * (slope / 113) + (rating - par));
+    return par + Math.max(0, ch);
+  }, [course, handicapIndex]);
+
+  const strategies = useMemo(() => {
+    if (!course) return {};
+    const base = buildStrategies(planHoles, form, answers, history ?? undefined, clubDistances);
+    const out: typeof base = {};
+    for (const h of planHoles) {
+      const ov = overrides[h.hole];
+      if (!ov) { out[h.hole] = base[h.hole]; continue; }
+      const merged = { ...base[h.hole], ...ov };
+      if (ov.pref) merged.remaining = leavesYardage(h, ov.pref, clubDistances);
+      out[h.hole] = merged;
+    }
+    return out;
+  }, [planHoles, form, answers, history, overrides, course, clubDistances]);
+
+  // Per-hole club stats from raw rounds (filtered to current holesMode)
+  const holeHistMap = useMemo<Record<number, HoleClubStat[]>>(() => {
+    if (!course) return {};
+    const courseHoleCount = course.holes.length;
+    const targetHolesPlayed =
+      holesMode === "loop18" ? 18
+      : (holesMode === "front9" || holesMode === "back9") ? 9
+      : courseHoleCount;
+    const rounds = rawRounds.filter((r: any) => (r.holes_played ?? courseHoleCount) === targetHolesPlayed);
+    const sums: Record<number, Record<string, { total: number; count: number }>> = {};
+    for (const round of rounds) {
+      for (const h of round.holes ?? []) {
+        const holeNum = Number(h.hole);
+        const score = Number(h.score) || 0;
+        const par = Number(h.par) || 4;
+        const grp = clubGroup(h.club ?? "");
+        if (!score || !holeNum || !grp) continue;
+        if (!sums[holeNum]) sums[holeNum] = {};
+        if (!sums[holeNum][grp]) sums[holeNum][grp] = { total: 0, count: 0 };
+        sums[holeNum][grp].total += score - par;
+        sums[holeNum][grp].count++;
+      }
+    }
+    const result: Record<number, HoleClubStat[]> = {};
+    for (const [holeStr, clubs] of Object.entries(sums)) {
+      result[Number(holeStr)] = PLAN_CLUBS.map(club => {
+        const d = clubs[club];
+        return d ? { club, count: d.count, avgOverPar: d.total / d.count } : { club, count: 0, avgOverPar: NaN };
+      });
+    }
+    return result;
+  }, [rawRounds, holesMode, course]);
   const posture = useMemo(() => buildPosture(answers), [answers]);
   const target = useMemo(() => targetScore(answers), [answers]);
 
   const onTeeItUp = async () => {
+    if (!course) return;
     const plan: RoundPlan = {
       course_id: course.id,
       round_date: new Date().toISOString().slice(0, 10),
-      answers, form, posture,
-      strategies,
-      target_score: target,
+      answers, form, posture, strategies, target_score: target,
     };
     // TODO (HANDOFF §4): persist plan
     // await supabase.from("round_plans").insert(plan);
     // router.push(`/rounds/play?plan=${inserted.id}`);
     console.log("Ready to save plan:", plan);
-    alert("Plan ready — wire up supabase insert in page.tsx onTeeItUp()");
+    alert("Plan ready — wire up supabase insert in onTeeItUp()");
   };
 
-  const answered = (["how_feeling","focus","weather","goal"] as const)
-    .every((k) => answers[k]);
+  function prefetchEnriched(cId: string) {
+    setPlanEnrichedReady(false);
+    setPlanEnrichedMap({});
+    fetch("/api/plan-enriched", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseId: cId }),
+    })
+      .then(r => r.json())
+      .then(data => { setPlanEnrichedMap(data ?? {}); setPlanEnrichedReady(true); })
+      .catch(() => setPlanEnrichedReady(true));
+  }
+
+  const answered =
+    (["how_feeling", "focus", "weather"] as const).every((k) => answers[k]) &&
+    answers.goal !== undefined;
+  const courseReady = !!course && !!history;
 
   return (
     <>
@@ -177,15 +346,27 @@ export default function PlanPage() {
       <div className="plan-root">
         <div style={{ padding: "0 40px" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-            <StageNav stage={stage} setStage={setStage} answered={answered} />
+            <StageNav stage={stage} setStage={setStage} answered={answered} courseReady={courseReady} />
             <div style={{ padding: "40px 0 60px" }}>
               {stage === "setup" && (
-                <StageSetup course={course} history={history} onNext={() => setStage("questions")} />
+                <StageSetup
+                  courseList={courseList}
+                  courseId={courseId}
+                  setCourseId={setCourseId}
+                  course={course}
+                  history={history}
+                  loading={loading}
+                  holesMode={holesMode}
+                  setHolesMode={setHolesMode}
+                  onNext={() => { setStage("questions"); if (courseId) prefetchEnriched(courseId); }}
+                />
               )}
               {stage === "questions" && (
                 <StageQuestions
                   answers={answers} setAnswers={setAnswers}
                   form={form} setForm={setForm}
+                  defaultGoalScore={defaultGoalScore}
+                  onSaveForm={saveClubForm}
                   onNext={() => setStage("review")}
                 />
               )}
@@ -195,10 +376,15 @@ export default function PlanPage() {
                   onNext={() => setStage("plan")}
                 />
               )}
-              {stage === "plan" && (
+              {stage === "plan" && course && (
                 <StagePlan
-                  course={course} strategies={strategies} form={form}
+                  course={course} planHoles={planHoles} strategies={strategies} form={form}
                   answers={answers} target={target}
+                  holeHistMap={holeHistMap}
+                  planEnrichedMap={planEnrichedMap}
+                  planEnrichedReady={planEnrichedReady}
+                  onClubChange={(hole, club) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], pref: club } }))}
+                  onAimChange={(hole, aim) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], aim } }))}
                   onTeeItUp={onTeeItUp}
                   onRestart={() => { setStage("setup"); setAnswers({}); }}
                 />
@@ -211,9 +397,11 @@ export default function PlanPage() {
   );
 }
 
-// ─── Stage nav, setup, questions, review, plan ────────────────────────────────
+// ─── Stage nav ────────────────────────────────────────────────────────────────
 
-function StageNav({ stage, setStage, answered }: { stage: Stage; setStage: (s: Stage) => void; answered: boolean }) {
+function StageNav({ stage, setStage, answered, courseReady }: {
+  stage: Stage; setStage: (s: Stage) => void; answered: boolean; courseReady: boolean;
+}) {
   const labels: { k: Stage; n: string; t: string }[] = [
     { k: "setup", n: "01", t: "Setup" },
     { k: "questions", n: "02", t: "Questions" },
@@ -226,7 +414,12 @@ function StageNav({ stage, setStage, answered }: { stage: Stage; setStage: (s: S
       {labels.map((l, i) => {
         const active = l.k === stage;
         const done = i < idx;
-        const reachable = i <= idx || (i === idx + 1 && answered);
+        const reachable =
+          i === 0 ||
+          (i <= idx) ||
+          (i === 1 && courseReady) ||
+          (i === 2 && courseReady && answered) ||
+          (i === 3 && courseReady && answered);
         return (
           <button key={l.k} onClick={() => reachable && setStage(l.k)} disabled={!reachable}
             style={{
@@ -249,7 +442,42 @@ function StageNav({ stage, setStage, answered }: { stage: Stage; setStage: (s: S
   );
 }
 
-function StageSetup({ course, history, onNext }: { course: CourseRecord; history: CourseHistorySummary; onNext: () => void }) {
+// ─── Setup stage ──────────────────────────────────────────────────────────────
+
+function StageSetup({ courseList, courseId, setCourseId, course, history, loading, holesMode, setHolesMode, onNext }: {
+  courseList: CourseRecord[];
+  courseId: string;
+  setCourseId: (id: string) => void;
+  course: CourseRecord | null;
+  history: CourseHistorySummary | null;
+  loading: boolean;
+  holesMode: HolesMode;
+  setHolesMode: (m: HolesMode) => void;
+  onNext: () => void;
+}) {
+  const [selectedName, setSelectedName] = useState("");
+
+  // Unique course names in alphabetical order
+  const uniqueNames = Array.from(new Set(courseList.map((c) => c.name))).sort();
+
+  // All records matching the selected name
+  const teeOptions = courseList.filter((c) => c.name === selectedName);
+
+  const handleNameChange = (name: string) => {
+    setSelectedName(name);
+    setCourseId(""); // clear until tee box chosen (or auto-select below)
+    const matches = courseList.filter((c) => c.name === name);
+    if (matches.length === 1) setCourseId(matches[0].id);
+  };
+
+  const selectStyle = {
+    width: "100%", maxWidth: 480,
+    padding: "12px 14px", fontSize: 15, fontWeight: 500,
+    background: "var(--paper)", color: "var(--ink)",
+    border: "1px solid var(--line)", borderRadius: 8,
+    appearance: "none" as const, cursor: "pointer",
+  };
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 56, alignItems: "start", minHeight: 520 }}>
       <div>
@@ -257,62 +485,258 @@ function StageSetup({ course, history, onNext }: { course: CourseRecord; history
           Let&apos;s build <em style={{ fontStyle: "italic", color: "var(--green-deep)" }}>your</em> strategy
           <br />for today&apos;s round.
         </h1>
-        <p style={{ fontSize: 17, lineHeight: 1.5, color: "var(--ink-soft)", maxWidth: 520, margin: "0 0 32px" }}>
-          We&apos;ll ask a few quick questions, look at what&apos;s worked for you here, and hand you an 18-hole plan.
+        <p style={{ fontSize: 17, lineHeight: 1.5, color: "var(--ink-soft)", maxWidth: 520, margin: "0 0 28px" }}>
+          Pick your course, answer a few questions, and we&apos;ll hand you an 18-hole plan.
         </p>
-        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "14px 16px", maxWidth: 480, marginBottom: 28 }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, fontStyle: "italic" }}>{course.name}</div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-            {course.tee_box} tees · {course.city}, {course.state} · Rating {course.rating} / Slope {course.slope}
+
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>
+            Where are you playing?
           </div>
+          {courseList.length === 0 ? (
+            <div style={{ fontSize: 13, color: "var(--muted)" }}>Loading courses…</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 480 }}>
+              <select value={selectedName} onChange={(e) => handleNameChange(e.target.value)} style={selectStyle}>
+                <option value="">— Select a course —</option>
+                {uniqueNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+
+              {teeOptions.length > 1 && (
+                <select
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="">— Select tee box —</option>
+                  {teeOptions.map((c) => (
+                    <option key={c.id} value={c.id}>{c.tee_box} tees</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
         </div>
-        <button onClick={onNext} style={{
-          background: "var(--ink)", color: "var(--paper)", border: "none", borderRadius: 8,
-          padding: "14px 28px", fontSize: 15, fontWeight: 600, cursor: "pointer",
-        }}>
+
+        {loading && (
+          <div style={{ fontSize: 13, color: "var(--muted)", fontStyle: "italic", marginBottom: 24 }}>Loading course data…</div>
+        )}
+        {course && !loading && (
+          <>
+            <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "14px 16px", maxWidth: 480, marginBottom: 14 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 600, fontStyle: "italic" }}>{course.name}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                {course.tee_box} tees · {course.city}, {course.state}
+                {course.rating && course.slope ? ` · Rating ${course.rating} / Slope ${course.slope}` : ""}
+              </div>
+            </div>
+
+            {/* Holes picker */}
+            {(() => {
+              const holeCount = course.holes.length;
+              const opts: { value: HolesMode; label: string }[] =
+                holeCount >= 18
+                  ? [
+                      { value: "all", label: "18 holes" },
+                      { value: "front9", label: "Front 9 (1–9)" },
+                      { value: "back9", label: "Back 9 (10–18)" },
+                    ]
+                  : [
+                      { value: "all", label: "9 holes" },
+                      { value: "loop18", label: "18 holes (2 loops)" },
+                    ];
+
+              return (
+                <div style={{ maxWidth: 480, marginBottom: 28 }}>
+                  <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>
+                    How many holes?
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {opts.map((o) => {
+                      const active = holesMode === o.value;
+                      return (
+                        <button
+                          key={o.value}
+                          onClick={() => setHolesMode(o.value)}
+                          style={{
+                            flex: 1, padding: "10px 14px", fontSize: 13, fontWeight: 600,
+                            border: "1px solid var(--line)", borderRadius: 8, cursor: "pointer",
+                            background: active ? "var(--ink)" : "var(--paper)",
+                            color: active ? "var(--paper)" : "var(--ink)",
+                          }}
+                        >
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </>
+        )}
+
+        <button
+          onClick={onNext}
+          disabled={!course}
+          style={{
+            background: course ? "var(--ink)" : "var(--line)",
+            color: "var(--paper)", border: "none", borderRadius: 8,
+            padding: "14px 28px", fontSize: 15, fontWeight: 600,
+            cursor: course ? "pointer" : "default",
+          }}
+        >
           Start planning →
         </button>
       </div>
+
+      {/* History panel */}
       <div>
         <div style={{ fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "var(--muted-2)", fontWeight: 600, marginBottom: 14 }}>
           What we know about you here
         </div>
-        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 24 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, paddingBottom: 18, borderBottom: "1px dashed var(--line)", marginBottom: 18 }}>
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Best here</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 500, fontStyle: "italic", color: "var(--green-deep)" }}>{history.best_score ?? "—"}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Avg here</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 500, fontStyle: "italic", color: "var(--ink)" }}>{history.avg_score ?? "—"}</div>
-            </div>
+        {!courseId && !loading && (
+          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 24, color: "var(--muted)", fontSize: 14, fontStyle: "italic" }}>
+            Select a course to see your history.
           </div>
-          <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>Trouble spots</div>
-          {history.trouble.map((s, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--line-soft)" : "none" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontStyle: "italic", fontSize: 20, color: "var(--bad)", width: 30, textAlign: "center" }}>{s.hole}</div>
-              <div style={{ flex: 1, fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.4 }}>
-                {s.note}
-                <div style={{ fontSize: 10, color: "var(--muted-2)", marginTop: 3, fontFamily: "var(--font-mono)" }}>{s.sample}</div>
+        )}
+        {(loading || (courseId && !history)) && (
+          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 24, color: "var(--muted)", fontSize: 14, fontStyle: "italic" }}>
+            Loading history…
+          </div>
+        )}
+        {history && !loading && (
+          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 24 }}>
+            {history.rounds_played === 0 ? (
+              <div style={{ color: "var(--muted)", fontSize: 14, fontStyle: "italic" }}>
+                No rounds recorded here yet — we&apos;ll build your plan from course data.
               </div>
-            </div>
-          ))}
-        </div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, paddingBottom: 18, borderBottom: "1px dashed var(--line)", marginBottom: 18 }}>
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Best here</div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 500, fontStyle: "italic", color: "var(--green-deep)" }}>{history.best_score ?? "—"}</div>
+                    {history.best_date && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{history.best_to_par} · {history.best_date}</div>}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Avg here</div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 500, fontStyle: "italic", color: "var(--ink)" }}>{history.avg_score ?? "—"}</div>
+                    {history.avg_to_par && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{history.avg_to_par} avg · {history.rounds_played} rounds</div>}
+                  </div>
+                </div>
+
+                {history.trouble.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>Trouble spots</div>
+                    {history.trouble.map((s, i) => (
+                      <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--line-soft)" : "none" }}>
+                        <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontStyle: "italic", fontSize: 20, color: "var(--bad)", width: 30, textAlign: "center" }}>{s.hole}</div>
+                        <div style={{ flex: 1, fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.4 }}>
+                          {s.note}
+                          <div style={{ fontSize: 10, color: "var(--muted-2)", marginTop: 3, fontFamily: "var(--font-mono)" }}>{s.sample}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {history.strongholds.length > 0 && (
+                  <div style={{ marginTop: history.trouble.length > 0 ? 16 : 0 }}>
+                    <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>Your strongholds</div>
+                    {history.strongholds.map((s, i) => (
+                      <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--line-soft)" : "none" }}>
+                        <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontStyle: "italic", fontSize: 20, color: "var(--good)", width: 30, textAlign: "center" }}>{s.hole}</div>
+                        <div style={{ flex: 1, fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.4 }}>
+                          {s.note}
+                          <div style={{ fontSize: 10, color: "var(--muted-2)", marginTop: 3, fontFamily: "var(--font-mono)" }}>{s.sample}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {history.correlations.length > 0 && (
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--line)" }}>
+                    {history.correlations.map((c, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "6px 0" }}>
+                        <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{c.key}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: c.direction === "good" ? "var(--good)" : "var(--bad)", whiteSpace: "nowrap" }}>{c.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StageQuestions({ answers, setAnswers, form, setForm, onNext }: {
+// ─── Score dial ───────────────────────────────────────────────────────────────
+
+function ScoreDial({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+        <button
+          onClick={() => onChange(Math.max(min, value - 1))}
+          style={{ width: 52, height: 52, borderRadius: "50%", border: "2px solid var(--line)", background: "var(--paper)", fontSize: 24, fontWeight: 700, cursor: "pointer", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >−</button>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 96, fontWeight: 500, fontStyle: "italic", color: "var(--ink)", lineHeight: 1, minWidth: 160, textAlign: "center" }}>
+          {value}
+        </div>
+        <button
+          onClick={() => onChange(Math.min(max, value + 1))}
+          style={{ width: 52, height: 52, borderRadius: "50%", border: "2px solid var(--line)", background: "var(--paper)", fontSize: 24, fontWeight: 700, cursor: "pointer", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >+</button>
+      </div>
+      <input
+        type="range" min={min} max={max} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ width: "100%", maxWidth: 400, accentColor: "var(--ink)" }}
+      />
+      <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)", letterSpacing: 1 }}>
+        {min} — {max}
+      </div>
+    </div>
+  );
+}
+
+// ─── Questions stage ──────────────────────────────────────────────────────────
+
+function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, onSaveForm, onNext }: {
   answers: PlanAnswers; setAnswers: (a: PlanAnswers) => void;
   form: PlayerForm; setForm: (f: PlayerForm) => void;
+  defaultGoalScore: number;
+  onSaveForm: (f: PlayerForm) => void;
   onNext: () => void;
 }) {
   const [step, setStep] = useState(0);
   const q = QUESTIONS[step];
+
+  // Auto-initialize goal to expected score when player reaches that step
+  useEffect(() => {
+    if (q.id === "goal" && answers.goal === undefined) {
+      setAnswers({ ...answers, goal: defaultGoalScore });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   const isLast = step === QUESTIONS.length - 1;
-  const canAdvance = q.kind === "form" || !!(answers as Record<string, string | undefined>)[q.id];
+
+  function advance() {
+    if (q.id === "form") onSaveForm(form);
+    if (isLast) { onNext(); } else { setStep(step + 1); }
+  }
+  const canAdvance =
+    q.kind === "form" ||
+    q.kind === "score_dial" ||
+    !!(answers as Record<string, string | undefined>)[q.id];
 
   return (
     <div style={{ maxWidth: 740, margin: "20px auto 0" }}>
@@ -355,12 +779,21 @@ function StageQuestions({ answers, setAnswers, form, setForm, onNext }: {
         </div>
       )}
 
+      {q.kind === "score_dial" && (
+        <ScoreDial
+          value={answers.goal ?? defaultGoalScore}
+          min={defaultGoalScore - 20}
+          max={defaultGoalScore + 20}
+          onChange={(v) => setAnswers({ ...answers, goal: v })}
+        />
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 40 }}>
         <button onClick={() => step > 0 && setStep(step - 1)} disabled={step === 0}
           style={{ background: "transparent", border: "none", color: step === 0 ? "var(--line)" : "var(--muted)", cursor: step === 0 ? "default" : "pointer", fontSize: 14, fontWeight: 600 }}>
           ← Back
         </button>
-        <button onClick={() => (isLast ? onNext() : setStep(step + 1))} disabled={!canAdvance}
+        <button onClick={advance} disabled={!canAdvance}
           style={{
             background: canAdvance ? "var(--ink)" : "var(--line)",
             color: "var(--paper)", border: "none", borderRadius: 8,
@@ -374,13 +807,15 @@ function StageQuestions({ answers, setAnswers, form, setForm, onNext }: {
   );
 }
 
+// ─── Review stage ─────────────────────────────────────────────────────────────
+
 function StageReview({ answers, form, posture, onNext }: {
   answers: PlanAnswers; form: PlayerForm; posture: string; onNext: () => void;
 }) {
   const feeling = { dialed: "Dialed in", steady: "Steady", rusty: "A bit rusty" }[answers.how_feeling!];
   const focus = { doubles: "No doubles", pace: "Steady pace", lowest: "Lowest score" }[answers.focus!];
   const weather = { calm: "Calm & dry", windy: "Breezy", wet: "Wet / soft" }[answers.weather!];
-  const goal = { break80: "Break 80", sub90: "Post under 90", practice: "Practice round" }[answers.goal!];
+  const goal = answers.goal !== undefined ? String(answers.goal) : "—";
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
@@ -390,12 +825,29 @@ function StageReview({ answers, form, posture, onNext }: {
       <p style={{ fontSize: 16, color: "var(--muted)", margin: "0 0 32px" }}>A quick recap before we lock in the plan.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-        {[{k:"Feeling",v:feeling},{k:"Protect",v:focus},{k:"Weather",v:weather},{k:"Goal",v:goal}].map((x,i) => (
+        {[{ k: "Feeling", v: feeling }, { k: "Protect", v: focus }, { k: "Weather", v: weather }, { k: "Goal", v: goal }].map((x, i) => (
           <div key={i} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "16px 18px" }}>
             <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>{x.k}</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 500, fontStyle: "italic" }}>{x.v}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "16px 18px", marginBottom: 20 }}>
+        <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>Club form today</div>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          {FORM_CLUBS.map((c) => {
+            const v = form[c.k];
+            const color = v >= 75 ? "var(--good)" : v >= 55 ? "var(--ink-soft)" : v >= 35 ? "var(--muted)" : "var(--bad)";
+            const label = v >= 75 ? "hot" : v >= 55 ? "solid" : v >= 35 ? "neutral" : "cold";
+            return (
+              <div key={c.k} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "var(--muted-2)", marginBottom: 2 }}>{c.k}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color }}>{label}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{ background: "var(--green-soft)", border: "1px solid var(--green)", borderRadius: 12, padding: "22px 26px", marginBottom: 24 }}>
@@ -415,15 +867,23 @@ function StageReview({ answers, form, posture, onNext }: {
   );
 }
 
-function StagePlan({ course, strategies, form, answers, target, onTeeItUp, onRestart }: {
+// ─── Plan stage ───────────────────────────────────────────────────────────────
+
+function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, planEnrichedMap, planEnrichedReady, onClubChange, onAimChange, onTeeItUp, onRestart }: {
   course: CourseRecord;
+  planHoles: import("@/lib/types").HoleData[];
   strategies: Record<number, import("@/lib/planTypes").HoleStrategy>;
   form: PlayerForm; answers: PlanAnswers; target: number;
+  holeHistMap: Record<number, HoleClubStat[]>;
+  planEnrichedMap: Record<number, PlanEnrichedHole[]>;
+  planEnrichedReady: boolean;
+  onClubChange: (hole: number, club: string) => void;
+  onAimChange: (hole: number, aim: import("@/lib/planTypes").HoleStrategy["aim"]) => void;
   onTeeItUp: () => void; onRestart: () => void;
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const totalYards = course.holes.reduce((s, h) => s + h.yards, 0);
-  const totalPar = course.holes.reduce((s, h) => s + h.par, 0);
+  const totalYards = planHoles.reduce((s, h) => s + h.yards, 0);
+  const totalPar = planHoles.reduce((s, h) => s + h.par, 0);
 
   return (
     <div>
@@ -443,9 +903,13 @@ function StagePlan({ course, strategies, form, answers, target, onTeeItUp, onRes
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>
-        {course.holes.map((h) => (
+        {planHoles.map((h) => (
           <PlanHoleCard key={h.hole} hole={h} strategy={strategies[h.hole]}
-            expanded={expanded.has(h.hole)} highlight={strategies[h.hole].trouble}
+            expanded={expanded.has(h.hole)} highlight={strategies[h.hole]?.trouble}
+            clubStats={holeHistMap[h.hole]}
+            enriched={planEnrichedReady ? (planEnrichedMap[h.hole] ?? []) : undefined}
+            onClubChange={(club) => onClubChange(h.hole, club)}
+            onAimChange={(aim) => onAimChange(h.hole, aim)}
             onToggle={() => {
               const n = new Set(expanded);
               n.has(h.hole) ? n.delete(h.hole) : n.add(h.hole);

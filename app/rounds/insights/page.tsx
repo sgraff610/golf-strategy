@@ -374,6 +374,7 @@ export default function RoundsInsights() {
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [factorTypeFilter, setFactorTypeFilter] = useState("");
   const [useLastN, setUseLastN] = useState(false);
   const [lastN, setLastN] = useState(10);
   const [lastNInput, setLastNInput] = useState("10");
@@ -560,9 +561,29 @@ export default function RoundsInsights() {
   const siBuckets    = groupedCorr("Handicap",   h => siTier(h.stroke_index));
   const doglegBuckets= groupedCorr("Dogleg",     h => h.dogleg || "None");
   const apprBuckets  = groupedCorr("Appr Dist",  h => h.appr_dist_num > 0 ? apprDistBucket(h.appr_dist_num) : "");
+  const parBuckets   = groupedCorr("Par",         h => `Par ${h.par}`);
+
+  function getFactorType(label: string): string {
+    if (label.startsWith("Par:")) return "Par";
+    if (label.startsWith("Hole Yards:")) return "Hole Yards";
+    if (label.startsWith("Hole Cluster:")) return "Hole Cluster";
+    if (label.startsWith("Handicap:")) return "Handicap Tier";
+    if (label.startsWith("Dogleg:")) return "Dogleg";
+    if (label.startsWith("Appr Dist:")) return "Approach Distance";
+    if (label.startsWith("Drive ")) return "Drive Accuracy";
+    if (label.startsWith("Approach ")) return "Approach Accuracy";
+    if (label === "GIR" || label === "Non-GIR") return "GIR";
+    if (label.endsWith("Putt") || label.endsWith("Putts")) return "Putting";
+    if (label.startsWith("Tee:") || label.startsWith("High ")) return "Tee Hazards";
+    if (label.startsWith("Appr:")) return "Approach Hazards";
+    if (label.startsWith("GS Bunker:") || label.startsWith("GS Green:") || label === "GS Bunker") return "Greenside";
+    if (label.startsWith("Green Depth")) return "Green Depth";
+    if (label === "1+ Chips") return "Short Game";
+    return "Other";
+  }
 
   const allCorrelations = [
-    ...correlations, ...yardsBuckets, ...holeClusters, ...siBuckets, ...doglegBuckets, ...apprBuckets,
+    ...correlations, ...yardsBuckets, ...holeClusters, ...siBuckets, ...doglegBuckets, ...apprBuckets, ...parBuckets,
   ]
     .filter(c => c.count >= MIN_HOLES)
     .filter(c => {
@@ -570,6 +591,7 @@ export default function RoundsInsights() {
       if (filters.impactDir === "negative") return c.impact < 0;
       return true;
     })
+    .filter(c => !factorTypeFilter || getFactorType(c.label) === factorTypeFilter)
     .sort((a,b) => Math.abs(b.impact) - Math.abs(a.impact));
 
   const pill = (active: boolean): React.CSSProperties => ({
@@ -911,6 +933,19 @@ export default function RoundsInsights() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Factor Correlations</p>
             <p style={{ fontSize: 10, color: "#0f6e56", margin: 0 }}>≥{MIN_HOLES} holes only · sorted by impact</p>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <select
+              value={factorTypeFilter}
+              onChange={e => setFactorTypeFilter(e.target.value)}
+              style={{ padding: "5px 8px", borderRadius: 8, border: "1px solid #0f6e56", fontSize: 12, color: "#0f6e56", background: "white", cursor: "pointer", width: "100%" }}
+            >
+              <option value="">All factor types</option>
+              {["Par","Hole Yards","Hole Cluster","Handicap Tier","Dogleg","Approach Distance",
+                "Drive Accuracy","Approach Accuracy","GIR","Putting","Tee Hazards","Approach Hazards",
+                "Greenside","Green Depth","Short Game"
+              ].map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             {(["all","positive","negative"] as const).map(dir => (

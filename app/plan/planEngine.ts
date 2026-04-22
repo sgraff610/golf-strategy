@@ -7,9 +7,11 @@ import type {
   PlayerForm,
   PlanAnswers,
   HoleStrategy,
-  CourseInsight,
   CourseHistorySummary,
+  ClubDistances,
+  DEFAULT_CLUB_DISTANCES,
 } from "@/lib/planTypes";
+import { DEFAULT_CLUB_DISTANCES as DEFAULTS } from "@/lib/planTypes";
 
 export function buildPosture(answers: PlanAnswers): string {
   if (answers.focus === "doubles" && answers.how_feeling === "rusty") {
@@ -22,21 +24,18 @@ export function buildPosture(answers: PlanAnswers): string {
 }
 
 export function targetScore(answers: PlanAnswers): number {
-  if (answers.goal === "break80") return 79;
-  if (answers.goal === "sub90") return 89;
-  return 84;
+  return answers.goal ?? 90;
 }
 
-/** Rough yardage-to-green after a stock drive from this tee club.
- * Replace with real player distances from profile.
- */
-function leavesYardage(h: HoleData, club: string): number {
+/** Yardage-to-green after a tee shot with the given club, using profile distances. */
+export function leavesYardage(h: HoleData, club: string, distances?: ClubDistances): number {
   if (h.par === 3) return 0;
-  const carry: Record<string, number> = {
-    Driver: 230, "3W": 210, "5W": 195, "3i": 180, "5i": 165, "7i": 150, "9i": 130,
-  };
-  const c = carry[club] ?? 200;
-  return Math.max(0, h.yards - c);
+  const d = distances ?? DEFAULTS;
+  // Map grouped labels ("Long Irons", "Irons", "Short Irons") to representative irons
+  const key = club === "Long Irons" ? "5i" : club === "Short Irons" ? "9i" : club === "Irons" ? "7i" : club;
+  const dist = d[key] ?? DEFAULTS[key];
+  const carry = dist ? (dist.min + dist.max) / 2 : 200;
+  return Math.max(0, h.yards - carry);
 }
 
 /** Does this hole look like trouble for this player? We use historical trouble
@@ -61,7 +60,8 @@ export function strategyFor(
   h: HoleData,
   form: PlayerForm,
   answers: PlanAnswers,
-  history?: CourseHistorySummary
+  history?: CourseHistorySummary,
+  distances?: ClubDistances
 ): HoleStrategy {
   const driverHot = form.Driver >= 70;
   const driverCold = form.Driver < 45;
@@ -113,7 +113,7 @@ export function strategyFor(
   }
 
   const aim = (h.preferred_landing ?? "CF") as HoleStrategy["aim"];
-  const remaining = leavesYardage(h, pref);
+  const remaining = leavesYardage(h, pref, distances);
 
   return {
     hole: h.hole,
@@ -134,9 +134,10 @@ export function buildStrategies(
   holes: HoleData[],
   form: PlayerForm,
   answers: PlanAnswers,
-  history?: CourseHistorySummary
+  history?: CourseHistorySummary,
+  distances?: ClubDistances
 ): Record<number, HoleStrategy> {
   const out: Record<number, HoleStrategy> = {};
-  for (const h of holes) out[h.hole] = strategyFor(h, form, answers, history);
+  for (const h of holes) out[h.hole] = strategyFor(h, form, answers, history, distances);
   return out;
 }

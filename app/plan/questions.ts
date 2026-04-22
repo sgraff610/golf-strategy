@@ -10,7 +10,7 @@ export type QuestionOption = {
 
 export type Question =
   | {
-      id: "how_feeling" | "focus" | "weather" | "goal";
+      id: "how_feeling" | "focus" | "weather";
       q: string;
       sub: string;
       kind: "choice";
@@ -21,6 +21,12 @@ export type Question =
       q: string;
       sub: string;
       kind: "form";
+    }
+  | {
+      id: "goal";
+      q: string;
+      sub: string;
+      kind: "score_dial";
     };
 
 export const QUESTIONS: Question[] = [
@@ -65,21 +71,17 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "goal",
-    q: "What's the goal for today's round?",
-    sub: "Not a scoreline, a posture.",
-    kind: "choice",
-    opts: [
-      { v: "break80",  label: "Break 80",       sub: "Aggressive where I can",  emoji: "🏆" },
-      { v: "sub90",    label: "Post under 90",  sub: "Just keep it in play",    emoji: "✅" },
-      { v: "practice", label: "Practice round", sub: "Experiment freely",        emoji: "🧪" },
-    ],
+    q: "What's your target score today?",
+    sub: "Drag or tap ± to set your goal. Defaults to your expected score for this course.",
+    kind: "score_dial",
   },
 ];
 
 export const FORM_CLUBS = [
-  { k: "Driver" as const, default: 65 },
-  { k: "3W" as const,     default: 72 },
-  { k: "Irons" as const,  default: 68 },
-  { k: "Wedges" as const, default: 58 },
-  { k: "Putter" as const, default: 55 },
+  { k: "Driver" as const,      default: 65 },
+  { k: "3W" as const,          default: 70 },
+  { k: "5W" as const,          default: 68 },
+  { k: "7W" as const,          default: 65 },
+  { k: "Long Irons" as const,  default: 62 },
+  { k: "Short Irons" as const, default: 63 },
 ];

@@ -4,7 +4,7 @@
 
 import type { HoleData } from "./types";
 
-export type ClubKey = "Driver" | "3W" | "Irons" | "Wedges" | "Putter";
+export type ClubKey = "Driver" | "3W" | "5W" | "7W" | "Long Irons" | "Short Irons";
 
 /** 0–100 self-rated feel per club group. 75+ hot, 55+ solid, 35+ neutral, <35 cold */
 export type PlayerForm = Record<ClubKey, number>;
@@ -12,13 +12,34 @@ export type PlayerForm = Record<ClubKey, number>;
 export type FeelingAnswer = "dialed" | "steady" | "rusty";
 export type FocusAnswer = "doubles" | "pace" | "lowest";
 export type WeatherAnswer = "calm" | "windy" | "wet";
-export type GoalAnswer = "break80" | "sub90" | "practice";
+/** Target gross score for the round (replaces the old break80/sub90/practice enum) */
+export type GoalAnswer = number;
 
 export type PlanAnswers = {
   how_feeling?: FeelingAnswer;
   focus?: FocusAnswer;
   weather?: WeatherAnswer;
   goal?: GoalAnswer;
+};
+
+/** Per-club carry distance range (yards), stored in player_data.club_distances */
+export type ClubDistance = { min: number; max: number };
+export type ClubDistances = Record<string, ClubDistance>;
+
+export const DEFAULT_CLUB_DISTANCES: ClubDistances = {
+  Driver: { min: 220, max: 240 },
+  "3W":   { min: 205, max: 215 },
+  "5W":   { min: 190, max: 200 },
+  "7W":   { min: 175, max: 185 },
+  "4i":   { min: 170, max: 180 },
+  "5i":   { min: 160, max: 170 },
+  "6i":   { min: 150, max: 160 },
+  "7i":   { min: 140, max: 150 },
+  "8i":   { min: 130, max: 140 },
+  "9i":   { min: 120, max: 130 },
+  PW:     { min: 110, max: 120 },
+  SW:     { min: 80,  max: 90  },
+  LW:     { min: 60,  max: 70  },
 };
 
 /** A single hole's strategy recommendation, derived from form + answers + history. */
@@ -70,6 +91,15 @@ export type CourseHistorySummary = {
   strongholds: CourseInsight[];
   trouble: CourseInsight[];
   correlations: Correlation[];
+};
+
+/** Per similar-hole record returned by /api/plan-enriched, used for tee strategy grid. */
+export type PlanEnrichedHole = {
+  club: string;
+  teeAccuracy: string;
+  stp: number;        // score − par
+  simScore: number;
+  isExact: boolean;
 };
 
 /** Final plan saved to DB. One per (user, course, round_date). */

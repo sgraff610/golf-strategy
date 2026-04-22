@@ -1,6 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { getClubDistances, saveClubDistances } from "@/lib/storage";
+import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
+import type { ClubDistances } from "@/lib/planTypes";
 
 type Round = {
   id: string;
@@ -119,6 +122,19 @@ export default function ProfilePage() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [changeLogOpen, setChangeLogOpen] = useState(false);
   const [activeDiffIdx, setActiveDiffIdx] = useState<number | null>(null);
+  const [clubDistances, setClubDistances] = useState<ClubDistances>(DEFAULT_CLUB_DISTANCES);
+  const [distDraft, setDistDraft] = useState<ClubDistances>(DEFAULT_CLUB_DISTANCES);
+  const [distOpen, setDistOpen] = useState(false);
+  const [distEditing, setDistEditing] = useState(false);
+  const [distSaving, setDistSaving] = useState(false);
+  const [distSaved, setDistSaved] = useState(false);
+  const [newClubName, setNewClubName] = useState("");
+  const [newClubMin, setNewClubMin] = useState("");
+  const [newClubMax, setNewClubMax] = useState("");
+
+  useEffect(() => {
+    getClubDistances().then(d => { setClubDistances(d); setDistDraft(d); });
+  }, []);
 
   useEffect(() => {
     supabase.from("player_data").select("*").eq("id", "singleton").single()
@@ -165,6 +181,16 @@ export default function ProfilePage() {
     setEditing(false);
     setSaving(false);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function saveDistances() {
+    setDistSaving(true);
+    await saveClubDistances(distDraft);
+    setClubDistances(distDraft);
+    setDistEditing(false);
+    setDistSaving(false);
+    setDistSaved(true);
+    setTimeout(() => setDistSaved(false), 2000);
   }
 
   async function saveChangeLog(updated: string[]) {
@@ -434,6 +460,114 @@ export default function ProfilePage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Club Distances */}
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, marginBottom: 20, overflow: "hidden" }}>
+        <button
+          onClick={() => { setDistOpen(o => !o); if (distEditing) setDistEditing(false); }}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1 }}>Club Distances</span>
+          <span style={{ fontSize: 16, color: "#aaa" }}>{distOpen ? "▲" : "▼"}</span>
+        </button>
+        {distOpen && (
+          <div style={{ padding: "0 16px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              {!distEditing && (
+                <button onClick={() => { setDistDraft({ ...clubDistances }); setDistEditing(true); }}
+                  style={{ fontSize: 12, color: "#0f6e56", background: "none", border: "1px solid #0f6e56", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
+                  Edit
+                </button>
+              )}
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#f0f0f0" }}>
+                  <th style={{ padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase" }}>Club</th>
+                  <th style={{ padding: "8px 10px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase" }}>Min (yds)</th>
+                  <th style={{ padding: "8px 10px", textAlign: "center", fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase" }}>Max (yds)</th>
+                  {distEditing && <th style={{ width: 32 }} />}
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(distEditing ? distDraft : clubDistances).map(([club, { min, max }], i) => (
+                  <tr key={club} style={{ borderTop: i > 0 ? "1px solid #eee" : "none" }}>
+                    <td style={{ padding: "8px 10px", fontWeight: 600, color: "#1a1a1a" }}>{club}</td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                      {distEditing ? (
+                        <input type="number" value={min}
+                          onChange={e => setDistDraft(d => ({ ...d, [club]: { ...d[club], min: Number(e.target.value) } }))}
+                          style={{ width: 64, textAlign: "center", padding: "4px 6px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13 }} />
+                      ) : (
+                        <span style={{ fontWeight: 700, color: "#0f6e56" }}>{min}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                      {distEditing ? (
+                        <input type="number" value={max}
+                          onChange={e => setDistDraft(d => ({ ...d, [club]: { ...d[club], max: Number(e.target.value) } }))}
+                          style={{ width: 64, textAlign: "center", padding: "4px 6px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13 }} />
+                      ) : (
+                        <span style={{ fontWeight: 700, color: "#0f6e56" }}>{max}</span>
+                      )}
+                    </td>
+                    {distEditing && (
+                      <td style={{ padding: "4px 6px", textAlign: "center" }}>
+                        <button
+                          onClick={() => setDistDraft(d => { const next = { ...d }; delete next[club]; return next; })}
+                          style={{ fontSize: 12, color: "#c0392b", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
+                        >✕</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {distEditing && (
+                  <tr style={{ borderTop: "1px solid #ddd", background: "#fafafa" }}>
+                    <td style={{ padding: "8px 10px" }}>
+                      <input
+                        value={newClubName}
+                        onChange={e => setNewClubName(e.target.value)}
+                        placeholder="Club name"
+                        style={{ width: "100%", padding: "4px 6px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13 }}
+                      />
+                    </td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                      <input type="number" value={newClubMin} onChange={e => setNewClubMin(e.target.value)} placeholder="Min"
+                        style={{ width: 64, textAlign: "center", padding: "4px 6px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13 }} />
+                    </td>
+                    <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                      <input type="number" value={newClubMax} onChange={e => setNewClubMax(e.target.value)} placeholder="Max"
+                        style={{ width: 64, textAlign: "center", padding: "4px 6px", border: "1px solid #ddd", borderRadius: 6, fontSize: 13 }} />
+                    </td>
+                    <td style={{ padding: "4px 6px", textAlign: "center" }}>
+                      <button
+                        onClick={() => {
+                          if (!newClubName.trim() || !newClubMin || !newClubMax) return;
+                          setDistDraft(d => ({ ...d, [newClubName.trim()]: { min: Number(newClubMin), max: Number(newClubMax) } }));
+                          setNewClubName(""); setNewClubMin(""); setNewClubMax("");
+                        }}
+                        style={{ fontSize: 12, color: "#0f6e56", background: "none", border: "1px solid #0f6e56", borderRadius: 6, padding: "2px 8px", cursor: "pointer", whiteSpace: "nowrap" }}
+                      >+ Add</button>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {distEditing && (
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button onClick={saveDistances} disabled={distSaving}
+                  style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#0f6e56", color: "white", border: "none", borderRadius: 8, cursor: "pointer", flex: 1 }}>
+                  {distSaving ? "Saving..." : distSaved ? "Saved!" : "Save"}
+                </button>
+                <button onClick={() => setDistEditing(false)}
+                  style={{ padding: "8px 20px", fontSize: 14, fontWeight: 600, background: "#eee", color: "#333", border: "none", borderRadius: 8, cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
