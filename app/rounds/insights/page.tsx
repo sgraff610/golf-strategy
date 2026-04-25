@@ -634,10 +634,11 @@ export default function RoundsInsights() {
 
   return (
     <main style={{ maxWidth: 520, margin: "40px auto", fontFamily: "sans-serif", padding: "0 16px" }}>
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
+        <a href="/rounds/chat" style={{ fontSize: 13, fontWeight: 600, padding: "6px 14px", borderRadius: 8, background: "#0f6e56", color: "white", textDecoration: "none" }}>Ask Coach →</a>
       </div>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4, color: "#d0d0d0" }}>Insights</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4, color: "#d0d0d0" }}>Coach</h1>
       <p style={{ color: "white", marginBottom: 20, fontSize: 13 }}>Analyze how different factors impact your score vs par.</p>
 
       {loading && <p style={{ color: "white" }}>Loading rounds...</p>}

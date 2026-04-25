@@ -29,9 +29,7 @@ export default function Nav() {
     { href: "/plan",              label: "Plan" },
     { href: "/courses",           label: "Courses" },
     { href: "/rounds",            label: "Rounds" },
-    { href: "/rounds/recap",      label: "Recap" },
-    { href: "/rounds/calc",       label: "Analysis" },
-    { href: "/rounds/insights",   label: "Insights" },
+    { href: "/rounds/insights",   label: "Coach" },
     { href: "/rounds/chat",       label: "Chat" },
     { href: "/profile",           label: "Profile" },
   ];

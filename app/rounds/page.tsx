@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getCourse } from "@/lib/storage";
 
 type Round = {
   id: string;
@@ -76,6 +77,64 @@ export default function RoundsPage() {
   const [yearFilter, setYearFilter] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Round | null>(null);
   const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
+  const [calculatingId, setCalculatingId] = useState<string | null>(null);
+
+  async function addAnalysis(round: Round) {
+    setCalculatingId(round.id);
+    const course = await getCourse(round.course_id);
+    const courseHoles = course?.holes ?? [];
+    const CLUB_DIST: Record<string, number> = {
+      Driver: 230, "3W": 210, "5W": 195, "7W": 180,
+      "4i": 185, "5i": 175, "6i": 165, "7i": 155,
+      "8i": 145, "9i": 130, PW: 120, SW: 100, LW: 80,
+    };
+    const APPR_CLUBS = ["3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
+    const updatedHoles = round.holes.map((hole: any) => {
+      const ch = courseHoles.find((h: any) => h.hole === hole.hole);
+      const driveDist = CLUB_DIST[hole.club] ?? 0;
+      const secondShotDist = driveDist > 0 && hole.yards > 0 ? Math.max(0, hole.yards - driveDist) : null;
+      const score = Number(hole.score) || 0;
+      const putts = Number(hole.putts) || 0;
+      const nonPuttStrokes = score - putts;
+      const approachClubEst = secondShotDist !== null && nonPuttStrokes === 2
+        ? APPR_CLUBS.reduce((best: string, club: string) =>
+            Math.abs((CLUB_DIST[club] ?? 0) - secondShotDist) < Math.abs((CLUB_DIST[best] ?? 0) - secondShotDist) ? club : best,
+            APPR_CLUBS[0])
+        : null;
+      const waterPenalty = (Number(hole.water_penalty) || 0) + (Number(hole.drop_or_out) || 0);
+      let driveWaterPct = 0;
+      if (ch && waterPenalty > 0 && hole.tee_accuracy !== "Hit" && hole.tee_accuracy) {
+        const chips = hole.appr_accuracy === "Hit" ? 0 : (hole.chips !== "" && hole.chips != null ? Number(hole.chips) : 0);
+        const other = score - putts - chips - 1;
+        const match = (hole.tee_accuracy === "Left" && ch.tee_water_out_left) || (hole.tee_accuracy === "Right" && ch.tee_water_out_right);
+        if (match) driveWaterPct = other === 1 ? 100 : other > 1 ? 50 : 0;
+      }
+      let driveTreePct = 0;
+      if (ch && hole.tee_accuracy !== "Hit" && hole.tee_accuracy) {
+        const treeHaz = (Number(hole.tree_haz) || 0) > 0;
+        if (hole.tee_accuracy === "Left"  && ch.tee_tree_hazard_left)  driveTreePct = treeHaz ? 75 : 25;
+        else if (hole.tee_accuracy === "Right" && ch.tee_tree_hazard_right) driveTreePct = treeHaz ? 75 : 25;
+      }
+      let driveBunkerPct = 0;
+      if (ch && hole.tee_accuracy !== "Hit" && hole.tee_accuracy) {
+        const fwyBunker = (Number(hole.fairway_bunker) || 0) > 0;
+        if (hole.tee_accuracy === "Left"  && ch.tee_bunkers_left)  driveBunkerPct = fwyBunker ? 100 : 0;
+        else if (hole.tee_accuracy === "Right" && ch.tee_bunkers_right) driveBunkerPct = fwyBunker ? 100 : 0;
+      }
+      return {
+        ...hole,
+        drive_distance_est: driveDist > 0 ? driveDist : null,
+        second_shot_dist_est: secondShotDist,
+        approach_club_est: approachClubEst,
+        drive_water_ob_pct: driveWaterPct,
+        drive_tree_pct: driveTreePct,
+        drive_bunker_pct: driveBunkerPct,
+      };
+    });
+    await supabase.from("rounds").update({ holes: updatedHoles }).eq("id", round.id);
+    setRounds(prev => prev.map(r => r.id === round.id ? { ...r, holes: updatedHoles } : r));
+    setCalculatingId(null);
+  }
 
   useEffect(() => {
     supabase
@@ -252,7 +311,26 @@ export default function RoundsPage() {
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                  {(() => {
+                    const hasAnalysis = round.holes.some((h: any) => h.drive_water_ob_pct !== undefined);
+                    const isCalc = calculatingId === round.id;
+                    return (
+                      <button
+                        onClick={() => !hasAnalysis && !isCalc && addAnalysis(round)}
+                        disabled={isCalc}
+                        style={{
+                          fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
+                          cursor: hasAnalysis ? "default" : "pointer",
+                          background: hasAnalysis ? "#d8e7df" : "#f6f6f6",
+                          color: hasAnalysis ? "#0a4d3c" : "#888",
+                          border: `1px solid ${hasAnalysis ? "#0f6e56" : "#ddd"}`,
+                        }}
+                      >
+                        {isCalc ? "Calculating…" : hasAnalysis ? "✓ Analysis" : "+ Add analysis"}
+                      </button>
+                    );
+                  })()}
                   <a
                     href={`/rounds/recap?roundId=${round.id}`}
                     style={{
