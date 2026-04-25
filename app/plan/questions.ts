@@ -10,7 +10,7 @@ export type QuestionOption = {
 
 export type Question =
   | {
-      id: "how_feeling" | "focus" | "weather";
+      id: "focus" | "weather";
       q: string;
       sub: string;
       kind: "choice";
@@ -31,30 +31,14 @@ export type Question =
 
 export const QUESTIONS: Question[] = [
   {
-    id: "how_feeling",
-    q: "How's your game feeling going in?",
-    sub: "This tunes how aggressive your plan will be.",
-    kind: "choice",
-    opts: [
-      { v: "dialed", label: "Dialed in", sub: "Last rounds were clean", emoji: "🎯" },
-      { v: "steady", label: "Steady", sub: "Normal, no fireworks", emoji: "⛳" },
-      { v: "rusty",  label: "A bit rusty", sub: "Haven't played in a while", emoji: "🌧" },
-    ],
-  },
-  {
-    id: "focus",
-    q: "What's the one thing you want to protect today?",
-    sub: "We'll weight decisions to minimize this.",
-    kind: "choice",
-    opts: [
-      { v: "doubles", label: "No doubles", sub: "Bogey golf is fine", emoji: "🛡" },
-      { v: "pace",    label: "Steady pace", sub: "No blow-up holes", emoji: "⏱" },
-      { v: "lowest",  label: "Lowest score", sub: "Worth some risk", emoji: "📉" },
-    ],
+    id: "form",
+    q: "The Range: How are your clubs feeling?",
+    sub: "Drag to show what's hot and what's cold. This biases live recommendations.",
+    kind: "form",
   },
   {
     id: "weather",
-    q: "What's the weather doing?",
+    q: "Conditions: What's the weather doing?",
     sub: "Wind + wet cost ~½ club. We'll recalibrate yardages.",
     kind: "choice",
     opts: [
@@ -64,14 +48,19 @@ export const QUESTIONS: Question[] = [
     ],
   },
   {
-    id: "form",
-    q: "Real quick — how are your clubs feeling at the range?",
-    sub: "Drag to show what's hot and what's cold. This biases live recommendations.",
-    kind: "form",
+    id: "focus",
+    q: "Strategy: What do you want to protect?",
+    sub: "We'll weight decisions to minimize this.",
+    kind: "choice",
+    opts: [
+      { v: "pace",    label: "Steady pace", sub: "No blow-up holes", emoji: "⏱" },
+      { v: "doubles", label: "No doubles", sub: "Bogey golf is fine", emoji: "🛡" },
+      { v: "lowest",  label: "Lowest score", sub: "Worth some risk", emoji: "📉" },
+    ],
   },
   {
     id: "goal",
-    q: "What's your target score today?",
+    q: "Goal: What's your target score?",
     sub: "Drag or tap ± to set your goal. Defaults to your expected score for this course.",
     kind: "score_dial",
   },

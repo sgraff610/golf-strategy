@@ -131,9 +131,19 @@ export default function ProfilePage() {
   const [newClubName, setNewClubName] = useState("");
   const [newClubMin, setNewClubMin] = useState("");
   const [newClubMax, setNewClubMax] = useState("");
+  const [recapRounds, setRecapRounds] = useState<any[]>([]);
+  const [adviceOpen, setAdviceOpen] = useState(false);
 
   useEffect(() => {
     getClubDistances().then(d => { setClubDistances(d); setDistDraft(d); });
+  }, []);
+
+  useEffect(() => {
+    supabase.from("rounds").select("id, course_name, date, recap")
+      .not("recap", "is", null)
+      .order("date", { ascending: false })
+      .limit(2)
+      .then(({ data }) => { if (data) setRecapRounds(data); });
   }, []);
 
   useEffect(() => {
@@ -460,6 +470,53 @@ export default function ProfilePage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Club Advice from Recent Recaps */}
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, marginBottom: 12, overflow: "hidden" }}>
+        <button
+          onClick={() => setAdviceOpen(o => !o)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1 }}>Club Advice · Last 2 Recaps</span>
+          <span style={{ fontSize: 16, color: "#aaa" }}>{adviceOpen ? "▲" : "▼"}</span>
+        </button>
+        {adviceOpen && (
+          <div style={{ padding: "0 16px 16px" }}>
+            {recapRounds.length === 0 ? (
+              <p style={{ fontSize: 13, color: "#bbb", fontStyle: "italic" }}>No recaps saved yet.</p>
+            ) : (
+              <div style={{ display: "grid", gap: 20 }}>
+                {[
+                  { key: "Driver",  label: "Driver" },
+                  { key: "3W",      label: "3-wood" },
+                  { key: "5W",      label: "5-wood" },
+                  { key: "7W",      label: "7-wood" },
+                  { key: "4i-7i",   label: "4i – 7i" },
+                  { key: "8i-PW",   label: "8i – PW" },
+                  { key: "SW-LW",   label: "SW – LW / Chip" },
+                  { key: "Putter",  label: "Putter" },
+                ].map(g => {
+                  const notes = recapRounds
+                    .map(r => ({ date: r.date, course: r.course_name, note: (r.recap?.group_notes?.[g.key] ?? "").trim() }))
+                    .filter(n => n.note);
+                  if (notes.length === 0) return null;
+                  return (
+                    <div key={g.key}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{g.label}</div>
+                      {notes.map((n, i) => (
+                        <div key={i} style={{ marginBottom: i < notes.length - 1 ? 8 : 0 }}>
+                          <div style={{ fontSize: 10, color: "#888", marginBottom: 2 }}>{n.course} · {n.date}</div>
+                          <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5 }}>{n.note}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

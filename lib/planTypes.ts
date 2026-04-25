@@ -16,7 +16,6 @@ export type WeatherAnswer = "calm" | "windy" | "wet";
 export type GoalAnswer = number;
 
 export type PlanAnswers = {
-  how_feeling?: FeelingAnswer;
   focus?: FocusAnswer;
   weather?: WeatherAnswer;
   goal?: GoalAnswer;

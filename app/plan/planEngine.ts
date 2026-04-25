@@ -14,10 +14,10 @@ import type {
 import { DEFAULT_CLUB_DISTANCES as DEFAULTS } from "@/lib/planTypes";
 
 export function buildPosture(answers: PlanAnswers): string {
-  if (answers.focus === "doubles" && answers.how_feeling === "rusty") {
+  if (answers.focus === "doubles") {
     return "Conservative posture: the plan leans toward 3W/5W off the tee and plays the fat side of greens. We're trading distance for fewer big numbers.";
   }
-  if (answers.focus === "lowest" && answers.how_feeling === "dialed") {
+  if (answers.focus === "lowest") {
     return "Aggressive posture: driver is the default on par 4/5s, approaches attack middle-of-green, and par 5s are live for 2.";
   }
   return "Balanced posture: driver stays in play when hazards are one-sided, we lay up where math says layup, and approaches aim for the fat quadrant.";

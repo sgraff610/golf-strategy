@@ -22,7 +22,7 @@ export function FormRanger({ values, setValues }: Props) {
           hot: "var(--flag)",
           ok: "var(--green)",
           mid: "var(--muted)",
-          cold: "var(--accent)",
+          cold: "#2e6db4",
         }[heat];
 
         return (

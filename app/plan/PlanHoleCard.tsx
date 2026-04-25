@@ -1,6 +1,6 @@
 // app/plan/PlanHoleCard.tsx
 "use client";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { HoleData } from "@/lib/types";
 import type { HoleStrategy, PlanEnrichedHole } from "@/lib/planTypes";
 import type { HoleClubStat } from "./page";
@@ -232,23 +232,78 @@ function computePlanGrid(enriched: PlanEnrichedHole[]): PlanGridData {
   return { rows, dirOveralls, totalCount: total, baseline };
 }
 
-function impactBg(impact: number, count: number): { bg: string; fg: string } {
-  if (isNaN(impact) || count === 0) return { bg: "transparent", fg: "var(--muted-2)" };
+function pillStyle(impact: number, count: number): { bg: string; fg: string; bd: string } {
+  if (isNaN(impact) || count === 0) return { bg: "var(--paper-alt)", fg: "var(--muted-2)", bd: "var(--line)" };
   const low = count <= 2;
   if (low) {
-    if (impact > 0.1)  return { bg: "#f9e0e0", fg: "var(--ink-soft)" };
-    if (impact < -0.1) return { bg: "#dff0e4", fg: "var(--ink-soft)" };
-    return { bg: "var(--paper-alt)", fg: "var(--ink-soft)" };
+    if (impact > 0.1)  return { bg: "#f9e0e0", fg: "var(--ink-soft)", bd: "#e0a0a0" };
+    if (impact < -0.1) return { bg: "#dff0e4", fg: "var(--ink-soft)", bd: "var(--green)" };
+    return { bg: "var(--paper-alt)", fg: "var(--ink-soft)", bd: "var(--line)" };
   }
-  if (impact >= 0.3)  return { bg: "var(--bad)", fg: "white" };
-  if (impact >= 0.1)  return { bg: "#f1948a", fg: "var(--ink)" };
-  if (impact > -0.1)  return { bg: "var(--paper-alt)", fg: "var(--ink)" };
-  if (impact > -0.3)  return { bg: "var(--green-soft)", fg: "var(--green-deep)" };
-  return { bg: "var(--green)", fg: "white" };
+  if (impact >= 0.3)  return { bg: "var(--bad)",       fg: "white",             bd: "var(--bad)" };
+  if (impact >= 0.1)  return { bg: "#f1948a",           fg: "var(--ink)",        bd: "var(--bad)" };
+  if (impact > -0.1)  return { bg: "var(--paper-alt)",  fg: "var(--ink)",        bd: "var(--line)" };
+  if (impact > -0.3)  return { bg: "var(--green-soft)", fg: "var(--green-deep)", bd: "var(--green)" };
+  return               { bg: "var(--green)",             fg: "white",             bd: "var(--green-deep)" };
+}
+
+/** Width in px based on count: min 36, max 96 at count ≥ 10 */
+// Grid constants — derived so 3 dir pills + 1 overall pill exactly fill 300px total
+// Club=42, gap=5×2, overall=60 → dir area=188 → 3×60+2×3=186 ≈ fills it
+const GRID_CLUB_W  = 50;  // px (42 × 1.2)
+const GRID_TOTAL_W = 420; // px
+const PILL_MAX     = 90;  // px — (420-50-10)/4, fills columns when all maxed
+const PILL_MIN     = 36;  // px — fits "+0.45" at 11px bold
+
+/** Width scales from PILL_MIN (count 0) to PILL_MAX (count ≥ 10) */
+function pillWidth(count: number): number {
+  if (count === 0) return PILL_MIN;
+  return Math.min(Math.round(PILL_MIN + (count / 10) * (PILL_MAX - PILL_MIN)), PILL_MAX);
+}
+
+/** Overall col: same range, driven by usage %, maxes at 25%+ */
+function overallPillWidth(p: number): number {
+  return Math.round(PILL_MIN + Math.min(p / 0.25, 1) * (PILL_MAX - PILL_MIN));
 }
 
 function fmt(n: number): string { return n >= 0 ? `+${n.toFixed(2)}` : n.toFixed(2); }
 function pct(n: number): string { return `${Math.round(n * 100)}%`; }
+
+// ─── Impact pill ───────────────────────────────────────────────────────────────
+
+function ImpactPill({ impact, count, width, hoverText, onClick, ghost }: {
+  impact: number;
+  count: number;
+  width: number;
+  hoverText: string;
+  onClick?: () => void;
+  ghost?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const s = ghost
+    ? { bg: "transparent", fg: "var(--muted-2)", bd: "transparent" }
+    : pillStyle(impact, count);
+  const label = ghost ? "—" : isNaN(impact) ? "—" : fmt(impact);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
+      style={{
+        width, height: 22, borderRadius: 999,
+        background: s.bg, border: `1px solid ${s.bd}`, color: s.fg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 11, fontWeight: 700, letterSpacing: 0.2,
+        cursor: onClick ? "pointer" : "default",
+        overflow: "hidden", whiteSpace: "nowrap", flexShrink: 0,
+        transition: "width 0.15s ease",
+        userSelect: "none",
+      }}
+    >
+      {hovered && hoverText ? hoverText : label}
+    </div>
+  );
+}
 
 const DIR_TO_AIM: Record<string, HoleStrategy["aim"]> = {
   Left: "LF",
@@ -263,7 +318,6 @@ function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }: {
   onChange?: (club: string) => void;
   onAimChange?: (aim: HoleStrategy["aim"]) => void;
 }) {
-  const DIRS = ["Left", "Hit", "Right"] as const;
   const leftHazard = hole.tee_water_out_left || hole.tee_tree_hazard_left || hole.tee_bunkers_left;
   const rightHazard = hole.tee_water_out_right || hole.tee_tree_hazard_right || hole.tee_bunkers_right;
 
@@ -276,138 +330,123 @@ function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }: {
   }
 
   const grid = computePlanGrid(enriched);
-
-  // Normalize selected to a grid row key
   const selRow = clubGroupForGrid(selected) !== "Unknown" ? clubGroupForGrid(selected) : selected;
 
-  const COL_TEMPLATE = "72px 1fr 1fr 1fr 52px";
+  // Directions layout: 1fr auto 1fr keeps Hit anchored at center
+  const DIR_COLS = "1fr auto 1fr";
+  const LABEL_STYLE: React.CSSProperties = {
+    fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)",
+    fontWeight: 600, textTransform: "uppercase",
+  };
+
+  // Three-pill row centered on Hit
+  function DirPills({ cols, clubVal }: {
+    cols: GridCol[];
+    clubVal: string | null; // null = overall row (no click action)
+  }) {
+    const [lCol, hCol, rCol] = cols;
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, alignItems: "center", gap: 3 }}>
+        {/* Left */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          {leftHazard
+            ? <ImpactPill impact={lCol.impact} count={lCol.count} width={pillWidth(lCol.count)}
+                hoverText={`${lCol.count}x`}
+                onClick={clubVal ? () => { onChange?.(clubVal); onAimChange?.("LF"); } : undefined} />
+            : <ImpactPill impact={NaN} count={0} width={PILL_MIN} hoverText="" ghost />}
+        </div>
+        {/* Hit — always shown */}
+        <ImpactPill impact={hCol.impact} count={hCol.count} width={pillWidth(hCol.count)}
+          hoverText={`${hCol.count}x`}
+          onClick={clubVal ? () => { onChange?.(clubVal); onAimChange?.("CF"); } : undefined} />
+        {/* Right */}
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          {rightHazard
+            ? <ImpactPill impact={rCol.impact} count={rCol.count} width={pillWidth(rCol.count)}
+                hoverText={`${rCol.count}x`}
+                onClick={clubVal ? () => { onChange?.(clubVal); onAimChange?.("RF"); } : undefined} />
+            : <ImpactPill impact={NaN} count={0} width={PILL_MIN} hoverText="" ghost />}
+        </div>
+      </div>
+    );
+  }
+
+  const COL_TMPL = `${GRID_CLUB_W}px 1fr ${PILL_MAX}px`;
 
   return (
-    <div>
+    <div style={{ maxWidth: GRID_TOTAL_W }}>
       <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>
         Tee club · {grid.totalCount} similar holes
       </div>
 
       {/* Header */}
-      <div style={{ display: "grid", gridTemplateColumns: COL_TEMPLATE, gap: 3, marginBottom: 3 }}>
-        {["Club", "Left", "Hit", "Right", "Overall"].map((h, i) => (
-          <div key={h} style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", textAlign: i === 0 ? "left" : "center", paddingLeft: i === 0 ? 6 : 0 }}>
-            {h}
-          </div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: COL_TMPL, gap: 5, marginBottom: 5, alignItems: "center" }}>
+        <div style={{ ...LABEL_STYLE, paddingLeft: 4 }}>Club</div>
+        <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, gap: 3, alignItems: "center" }}>
+          <div style={{ ...LABEL_STYLE, textAlign: "right", paddingRight: 2 }}>Left</div>
+          <div style={{ ...LABEL_STYLE, textAlign: "center" }}>Hit</div>
+          <div style={{ ...LABEL_STYLE, textAlign: "left", paddingLeft: 2 }}>Right</div>
+        </div>
+        <div style={{ ...LABEL_STYLE, textAlign: "center" }}>Ovr</div>
       </div>
 
       {/* Data rows */}
       {grid.rows.map(row => {
         const isSelected = selRow === row.club;
         const clubVal = row.club === "Irons" ? "6i" : row.club;
+        const oWidth = overallPillWidth(row.overallPct);
+        const oStyle = pillStyle(row.rowImpact, row.count);
+
         return (
-          <div
-            key={row.club}
-            style={{
-              display: "grid", gridTemplateColumns: COL_TEMPLATE,
-              gap: 3, marginBottom: 3,
-              border: isSelected ? "1px solid var(--ink)" : "1px solid transparent",
-              borderRadius: 6,
-            }}
-          >
-            {/* Club name cell — click to select club only */}
-            <div
-              onClick={() => onChange?.(clubVal)}
-              style={{
-                background: isSelected ? "var(--ink)" : "var(--paper)",
-                borderRadius: 6, padding: "4px 6px", cursor: "pointer",
-                display: "flex", flexDirection: "column", justifyContent: "center",
-              }}
-            >
-              <div style={{ fontSize: 11, fontWeight: 700, color: isSelected ? "var(--paper)" : "var(--ink)" }}>{row.club}</div>
-              <div style={{ fontSize: 9, color: isSelected ? "rgba(255,255,255,0.6)" : "var(--muted-2)" }}>{row.count}</div>
+          <div key={row.club} style={{
+            display: "grid", gridTemplateColumns: COL_TMPL,
+            gap: 5, marginBottom: 3, alignItems: "center",
+            border: isSelected ? "1px solid var(--ink)" : "1px solid transparent",
+            borderRadius: 8, padding: "3px 0",
+          }}>
+            {/* Club name */}
+            <div onClick={() => onChange?.(clubVal)} style={{
+              background: isSelected ? "var(--ink)" : "var(--paper)",
+              borderRadius: 6, padding: "3px 4px", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? "var(--paper)" : "var(--ink)" }}>
+                {row.club}
+              </span>
             </div>
 
-            {/* Direction cells — click to select club + aim */}
-            {row.cols.map((col, ci) => {
-              const dir = DIRS[ci];
-              const greyed = (dir === "Left" && !leftHazard) || (dir === "Right" && !rightHazard);
-              if (greyed) {
-                return (
-                  <div key={ci} style={{ background: "var(--paper-alt)", borderRadius: 4, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 9, color: "var(--muted-2)" }}>N/A</span>
-                  </div>
-                );
-              }
-              const colors = isSelected
-                ? { bg: "var(--green-soft)", fg: "var(--green-deep)" }
-                : impactBg(col.impact, col.count);
-              return (
-                <div
-                  key={ci}
-                  onClick={() => { onChange?.(clubVal); onAimChange?.(DIR_TO_AIM[dir]); }}
-                  style={{ background: colors.bg, borderRadius: 4, minHeight: 36, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}
-                >
-                  {col.count > 0 ? (
-                    <>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: colors.fg }}>{isNaN(col.impact) ? "—" : fmt(col.impact)}</div>
-                      <div style={{ fontSize: 9, color: colors.fg, opacity: 0.75 }}>{col.count}</div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 9, color: "var(--muted-2)" }}>—</div>
-                  )}
-                </div>
-              );
-            })}
+            {/* Direction pills */}
+            <DirPills cols={row.cols} clubVal={clubVal} />
 
-            {/* Overall column — shows avg impact + usage % */}
-            {(() => {
-              const oColors = impactBg(row.rowImpact, row.count);
-              return (
-                <div style={{
-                  background: isSelected ? "var(--ink)" : oColors.bg,
-                  borderRadius: 4, minHeight: 36, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                }}>
-                  {row.count > 0 && !isNaN(row.rowImpact) ? (
-                    <>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: isSelected ? "var(--paper)" : oColors.fg }}>{fmt(row.rowImpact)}</div>
-                      <div style={{ fontSize: 9, color: isSelected ? "rgba(255,255,255,0.6)" : oColors.fg, opacity: 0.75 }}>{pct(row.overallPct)}</div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 11, fontWeight: 700, color: isSelected ? "var(--paper)" : "var(--muted)" }}>{pct(row.overallPct)}</div>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Overall pill — center-justified in its fixed column */}
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <ImpactPill
+                impact={row.rowImpact} count={row.count}
+                width={oWidth}
+                hoverText={pct(row.overallPct)}
+              />
+            </div>
           </div>
         );
       })}
 
       {/* Overall row */}
-      <div style={{ display: "grid", gridTemplateColumns: COL_TEMPLATE, gap: 3, marginTop: 4, borderTop: "1px dashed var(--line)", paddingTop: 4 }}>
-        <div style={{ background: "var(--paper-alt)", borderRadius: 6, padding: "4px 6px", display: "flex", alignItems: "center" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", letterSpacing: 0.5 }}>Overall</div>
+      <div style={{
+        display: "grid", gridTemplateColumns: COL_TMPL,
+        gap: 5, marginTop: 5, paddingTop: 5,
+        borderTop: "1px dashed var(--line)", alignItems: "center",
+      }}>
+        <div style={{ background: "var(--paper-alt)", borderRadius: 6, padding: "5px 4px", display: "flex", justifyContent: "center" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", letterSpacing: 0.5 }}>Overall</span>
         </div>
-        {grid.dirOveralls.map(({ dir, pct: p, impact, count }, i) => {
-          const greyed = (dir === "Left" && !leftHazard) || (dir === "Right" && !rightHazard);
-          if (greyed) {
-            return (
-              <div key={i} style={{ background: "var(--paper-alt)", borderRadius: 4, minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: 9, color: "var(--muted-2)" }}>N/A</span>
-              </div>
-            );
-          }
-          const dColors = impactBg(impact, count);
-          return (
-            <div key={i} style={{ background: dColors.bg, borderRadius: 4, minHeight: 36, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              {count > 0 && !isNaN(impact) ? (
-                <>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: dColors.fg }}>{fmt(impact)}</div>
-                  <div style={{ fontSize: 9, color: dColors.fg, opacity: 0.75 }}>{pct(p)}</div>
-                </>
-              ) : (
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)" }}>{pct(p)}</div>
-              )}
-            </div>
-          );
-        })}
-        {/* Overall × Overall cell — blank */}
+
+        {/* Direction overalls centered on Hit */}
+        <DirPills
+          cols={grid.dirOveralls.map(d => ({ count: d.count, impact: d.impact, likelihood: d.pct }))}
+          clubVal={null}
+        />
+
+        {/* Overall × Overall — blank */}
         <div />
       </div>
     </div>
@@ -508,7 +547,7 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                   <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 24, alignItems: "start" }}>
+                <div style={{ display: "flex", gap: 36, alignItems: "flex-start" }}>
                   <TeeStratGrid
                     enriched={enriched}
                     selected={strategy.pref}
@@ -516,7 +555,7 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                     onChange={onClubChange}
                     onAimChange={onAimChange}
                   />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 160 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 160, flexShrink: 0 }}>
                     <AimDial
                       value={strategy.aim as AimPos}
                       onChange={(aim) => onAimChange?.(aim)}

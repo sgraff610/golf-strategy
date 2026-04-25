@@ -201,11 +201,41 @@ export default function PlanPage() {
   const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
   const [planEnrichedMap, setPlanEnrichedMap] = useState<Record<number, PlanEnrichedHole[]>>({});
   const [planEnrichedReady, setPlanEnrichedReady] = useState(false);
+  const [latestRecap, setLatestRecap] = useState<Record<string, any> | null>(null);
+  const [recapHistory, setRecapHistory] = useState<Record<string, any>[]>([]);
 
   useEffect(() => {
     loadCourses().then(setCourseList);
     getClubDistances().then(setClubDistances);
-    getClubForm().then(saved => { if (saved) setForm(saved); });
+    // Load most recent recap dials as form defaults; fall back to saved form
+    Promise.all([
+      getClubForm(),
+      supabase.from("rounds").select("id, course_name, date, recap").not("recap", "is", null)
+        .order("date", { ascending: false }).limit(2),
+    ]).then(([saved, { data }]) => {
+      const row = data?.[0];
+      const recap = row?.recap as Record<string, any> | null;
+      const d = recap?.dials as Record<string, number> | undefined;
+      if (d) {
+        setForm(prev => ({
+          ...prev,
+          Driver: d["Driver"] ?? prev.Driver,
+          "3W": d["3W"] ?? prev["3W"],
+          "5W": d["5W"] ?? prev["5W"],
+          "7W": d["7W"] ?? prev["7W"],
+          "Long Irons": d["4i-7i"] ?? prev["Long Irons"],
+          "Short Irons": d["8i-PW"] ?? prev["Short Irons"],
+        }));
+      } else if (saved) {
+        setForm(saved);
+      }
+      if (recap) {
+        setLatestRecap({ ...recap, course_name: row?.course_name, date: row?.date });
+      }
+      if (data?.length) {
+        setRecapHistory(data.map((r: any) => ({ ...r.recap, course_name: r.course_name, date: r.date })));
+      }
+    });
     // Compute handicap index from all rounds
     supabase.from("rounds").select("score_differential, holes_played").order("date", { ascending: true })
       .then(({ data }) => {
@@ -336,7 +366,7 @@ export default function PlanPage() {
   }
 
   const answered =
-    (["how_feeling", "focus", "weather"] as const).every((k) => answers[k]) &&
+    (["focus", "weather"] as const).every((k) => answers[k]) &&
     answers.goal !== undefined;
   const courseReady = !!course && !!history;
 
@@ -367,6 +397,7 @@ export default function PlanPage() {
                   form={form} setForm={setForm}
                   defaultGoalScore={defaultGoalScore}
                   onSaveForm={saveClubForm}
+                  recapHistory={recapHistory}
                   onNext={() => setStage("review")}
                 />
               )}
@@ -383,6 +414,7 @@ export default function PlanPage() {
                   holeHistMap={holeHistMap}
                   planEnrichedMap={planEnrichedMap}
                   planEnrichedReady={planEnrichedReady}
+                  latestRecap={latestRecap}
                   onClubChange={(hole, club) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], pref: club } }))}
                   onAimChange={(hole, aim) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], aim } }))}
                   onTeeItUp={onTeeItUp}
@@ -707,13 +739,94 @@ function ScoreDial({ value, min, max, onChange }: { value: number; min: number; 
   );
 }
 
+// ─── Range recap history drawer ───────────────────────────────────────────────
+
+const RANGE_DIAL_GROUPS = [
+  { key: "Driver", label: "Driver" },
+  { key: "3W",     label: "3W" },
+  { key: "5W",     label: "5W" },
+  { key: "7W",     label: "7W" },
+  { key: "4i-7i",  label: "4i–7i" },
+  { key: "8i-PW",  label: "8i–PW" },
+  { key: "SW-LW",  label: "SW–LW" },
+  { key: "Putter", label: "Putter" },
+];
+
+function heatLabel(v: number) {
+  if (v >= 75) return { text: "🔥 hot",     color: "var(--flag)" };
+  if (v >= 55) return { text: "✓ solid",    color: "var(--green)" };
+  if (v >= 35) return { text: "~ neutral",  color: "var(--muted)" };
+  return              { text: "❄ cold",     color: "#2e6db4" };
+}
+
+function RangeRecapHistory({ recaps }: { recaps: Record<string, any>[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          background: "none", border: "none", cursor: "pointer",
+          fontSize: 12, color: "var(--muted)", fontWeight: 600,
+          padding: "6px 0", display: "flex", alignItems: "center", gap: 6,
+        }}
+      >
+        <span style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}>
+          {open ? "▲" : "▼"} Last {recaps.length} recap{recaps.length > 1 ? "s" : ""}
+        </span>
+      </button>
+
+      {open && (
+        <div style={{ display: "grid", gridTemplateColumns: recaps.length > 1 ? "1fr 1fr" : "1fr", gap: 12, marginTop: 4 }}>
+          {recaps.map((r, i) => {
+            const dials = (r.dials ?? {}) as Record<string, number>;
+            const groupNotes = (r.group_notes ?? {}) as Record<string, string>;
+            return (
+              <div key={i} style={{ background: "var(--paper-alt)", border: "1px solid var(--line-soft)", borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-soft)", marginBottom: 8 }}>
+                  {r.course_name} <span style={{ fontWeight: 400, color: "var(--muted)" }}>· {r.date}</span>
+                </div>
+
+                {/* Per-club rows: heat label inline after club name */}
+                <div style={{ display: "grid", gap: 4, marginBottom: r.overall?.trim() ? 8 : 0 }}>
+                  {RANGE_DIAL_GROUPS.map(g => {
+                    const v = dials[g.key];
+                    const note = groupNotes[g.key]?.trim();
+                    if (v === undefined && !note) return null;
+                    const h = v !== undefined ? heatLabel(v) : null;
+                    return (
+                      <div key={g.key} style={{ fontSize: 11, lineHeight: 1.4, color: "var(--ink-soft)" }}>
+                        <span style={{ fontWeight: 700, color: "var(--green-deep)" }}>{g.label}</span>
+                        {h && <span style={{ color: h.color, fontWeight: 700 }}>{" "}{h.text}</span>}
+                        {note && <span style={{ color: "var(--ink-soft)" }}>{" — "}{note}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Overall */}
+                {r.overall?.trim() && (
+                  <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.4, fontStyle: "italic", borderTop: "1px solid var(--line-soft)", paddingTop: 6, marginTop: 6 }}>
+                    {r.overall}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Questions stage ──────────────────────────────────────────────────────────
 
-function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, onSaveForm, onNext }: {
+function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, onSaveForm, recapHistory, onNext }: {
   answers: PlanAnswers; setAnswers: (a: PlanAnswers) => void;
   form: PlayerForm; setForm: (f: PlayerForm) => void;
   defaultGoalScore: number;
   onSaveForm: (f: PlayerForm) => void;
+  recapHistory: Record<string, any>[];
   onNext: () => void;
 }) {
   const [step, setStep] = useState(0);
@@ -779,6 +892,10 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
         </div>
       )}
 
+      {q.kind === "form" && recapHistory.length > 0 && (
+        <RangeRecapHistory recaps={recapHistory} />
+      )}
+
       {q.kind === "score_dial" && (
         <ScoreDial
           value={answers.goal ?? defaultGoalScore}
@@ -812,7 +929,6 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
 function StageReview({ answers, form, posture, onNext }: {
   answers: PlanAnswers; form: PlayerForm; posture: string; onNext: () => void;
 }) {
-  const feeling = { dialed: "Dialed in", steady: "Steady", rusty: "A bit rusty" }[answers.how_feeling!];
   const focus = { doubles: "No doubles", pace: "Steady pace", lowest: "Lowest score" }[answers.focus!];
   const weather = { calm: "Calm & dry", windy: "Breezy", wet: "Wet / soft" }[answers.weather!];
   const goal = answers.goal !== undefined ? String(answers.goal) : "—";
@@ -824,8 +940,8 @@ function StageReview({ answers, form, posture, onNext }: {
       </h2>
       <p style={{ fontSize: 16, color: "var(--muted)", margin: "0 0 32px" }}>A quick recap before we lock in the plan.</p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-        {[{ k: "Feeling", v: feeling }, { k: "Protect", v: focus }, { k: "Weather", v: weather }, { k: "Goal", v: goal }].map((x, i) => (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
+        {[{ k: "Protect", v: focus }, { k: "Weather", v: weather }, { k: "Goal", v: goal }].map((x, i) => (
           <div key={i} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "16px 18px" }}>
             <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>{x.k}</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 500, fontStyle: "italic" }}>{x.v}</div>
@@ -867,9 +983,87 @@ function StageReview({ answers, form, posture, onNext }: {
   );
 }
 
+// ─── Recap advice panel ───────────────────────────────────────────────────────
+
+const RECAP_GROUPS = [
+  { key: "Driver",  label: "Driver" },
+  { key: "3W",      label: "3-wood" },
+  { key: "5W",      label: "5-wood" },
+  { key: "7W",      label: "7-wood" },
+  { key: "4i-7i",   label: "4i – 7i" },
+  { key: "8i-PW",   label: "8i – PW" },
+  { key: "SW-LW",   label: "SW – LW / Chip" },
+  { key: "Putter",  label: "Putter" },
+];
+
+function RecapAdvicePanel({ recap }: { recap: Record<string, any> }) {
+  const [open, setOpen] = useState(true);
+  const groupNotes = (recap.group_notes ?? {}) as Record<string, string>;
+  const filledGroups = RECAP_GROUPS.filter(g => groupNotes[g.key]?.trim());
+  const hasContent = recap.overall?.trim() || recap.favs?.trim() || recap.wish?.trim() || filledGroups.length > 0;
+  if (!hasContent) return null;
+
+  return (
+    <div style={{ background: "var(--green-soft)", border: "1px solid var(--green)", borderRadius: 12, marginBottom: 20 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+      >
+        <div>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--green-deep)", textTransform: "uppercase", fontWeight: 700 }}>Last Recap · Advice for Today</div>
+          {recap.course_name && (
+            <div style={{ fontSize: 11, color: "var(--green-deep)", marginTop: 2, opacity: 0.75 }}>{recap.course_name} · {recap.date}</div>
+          )}
+        </div>
+        <span style={{ fontSize: 13, color: "var(--green-deep)" }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: "0 18px 18px" }}>
+          {recap.overall?.trim() && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase", marginBottom: 4 }}>Overall</div>
+              <div style={{ fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.5 }}>{recap.overall}</div>
+            </div>
+          )}
+          {(recap.favs?.trim() || recap.wish?.trim()) && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+              {recap.favs?.trim() && (
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: 700, color: "var(--good)", textTransform: "uppercase", marginBottom: 4 }}>Keep doing</div>
+                  <div style={{ fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.5 }}>{recap.favs}</div>
+                </div>
+              )}
+              {recap.wish?.trim() && (
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: 700, color: "var(--bad)", textTransform: "uppercase", marginBottom: 4 }}>Watch out for</div>
+                  <div style={{ fontSize: 13, color: "var(--ink-soft)", lineHeight: 1.5 }}>{recap.wish}</div>
+                </div>
+              )}
+            </div>
+          )}
+          {filledGroups.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase", marginBottom: 8 }}>By club</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
+                {filledGroups.map(g => (
+                  <div key={g.key} style={{ background: "var(--paper)", borderRadius: 8, padding: "8px 12px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>{g.label}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-soft)", lineHeight: 1.4 }}>{groupNotes[g.key]}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Plan stage ───────────────────────────────────────────────────────────────
 
-function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, planEnrichedMap, planEnrichedReady, onClubChange, onAimChange, onTeeItUp, onRestart }: {
+function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, planEnrichedMap, planEnrichedReady, latestRecap, onClubChange, onAimChange, onTeeItUp, onRestart }: {
   course: CourseRecord;
   planHoles: import("@/lib/types").HoleData[];
   strategies: Record<number, import("@/lib/planTypes").HoleStrategy>;
@@ -877,6 +1071,7 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
   holeHistMap: Record<number, HoleClubStat[]>;
   planEnrichedMap: Record<number, PlanEnrichedHole[]>;
   planEnrichedReady: boolean;
+  latestRecap: Record<string, any> | null;
   onClubChange: (hole: number, club: string) => void;
   onAimChange: (hole: number, aim: import("@/lib/planTypes").HoleStrategy["aim"]) => void;
   onTeeItUp: () => void; onRestart: () => void;
@@ -901,6 +1096,8 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
           <div style={{ fontFamily: "var(--font-display)", fontSize: 52, fontWeight: 500, fontStyle: "italic", color: "var(--ink)", lineHeight: 1 }}>{target}</div>
         </div>
       </div>
+
+      {latestRecap && <RecapAdvicePanel recap={latestRecap} />}
 
       <div style={{ display: "grid", gap: 8 }}>
         {planHoles.map((h) => (

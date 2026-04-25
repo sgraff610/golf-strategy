@@ -12,6 +12,7 @@ type Round = {
   starting_hole: number;
   holes: any[];
   score_differential: number | null;
+  recap?: Record<string, unknown> | null;
 };
 
 type CourseInfo = {
@@ -250,6 +251,20 @@ export default function RoundsPage() {
                       <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{value}</p>
                     </div>
                   ))}
+                </div>
+                <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                  <a
+                    href={`/rounds/recap?roundId=${round.id}`}
+                    style={{
+                      fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
+                      textDecoration: "none",
+                      background: round.recap ? "#d8e7df" : "#f6f6f6",
+                      color: round.recap ? "#0a4d3c" : "#888",
+                      border: `1px solid ${round.recap ? "#0f6e56" : "#ddd"}`,
+                    }}
+                  >
+                    {round.recap ? "✓ Recap" : "+ Add recap"}
+                  </a>
                 </div>
               </div>
             );
