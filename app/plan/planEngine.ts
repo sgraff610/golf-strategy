@@ -15,12 +15,12 @@ import { DEFAULT_CLUB_DISTANCES as DEFAULTS } from "@/lib/planTypes";
 
 export function buildPosture(answers: PlanAnswers): string {
   if (answers.focus === "doubles") {
-    return "Conservative posture: the plan leans toward 3W/5W off the tee and plays the fat side of greens. We're trading distance for fewer big numbers.";
+    return "Pick Your Spots: go for it when history says you can par this hole, play it safe when the math says it's a bogey hole — let the course come to you.";
   }
   if (answers.focus === "lowest") {
-    return "Aggressive posture: driver is the default on par 4/5s, approaches attack middle-of-green, and par 5s are live for 2.";
+    return "Go Low: driver is the default on par 4/5s, approaches attack pin-high, and par 5s are live for 2. Chase every birdie opportunity.";
   }
-  return "Balanced posture: driver stays in play when hazards are one-sided, we lay up where math says layup, and approaches aim for the fat quadrant.";
+  return "Course Manager: the plan prioritizes the club that gives you the best chance to hit the fairway. Approaches play to the safe, wide, penalty-free side of the green.";
 }
 
 export function targetScore(answers: PlanAnswers): number {

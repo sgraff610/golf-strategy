@@ -2,7 +2,8 @@
 // app/plan/page.tsx
 // Pre-Round Planner — 4-stage flow (Setup → Questions → Review → Plan).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { CourseRecord } from "@/lib/types";
 import type {
   PlayerForm,
@@ -22,6 +23,7 @@ import { PlanHoleCard } from "./PlanHoleCard";
 import { buildPosture, buildStrategies, targetScore, leavesYardage } from "./planEngine";
 
 export type HoleClubStat = { club: string; count: number; avgOverPar: number };
+export type HoleHistEntry = { date: string; score: number; par: number; club: string; tee_accuracy: string };
 export type { PlanEnrichedHole } from "@/lib/planTypes";
 const PLAN_CLUBS = ["Driver", "3W", "5W", "7W", "Irons"] as const;
 function clubGroup(club: string): string {
@@ -184,6 +186,7 @@ const STAGES = ["setup", "questions", "review", "plan"] as const;
 type Stage = typeof STAGES[number];
 
 export default function PlanPage() {
+  const router = useRouter();
   const [stage, setStage] = useState<Stage>("setup");
   const [answers, setAnswers] = useState<PlanAnswers>({});
   const [form, setForm] = useState<PlayerForm>(
@@ -203,6 +206,8 @@ export default function PlanPage() {
   const [planEnrichedReady, setPlanEnrichedReady] = useState(false);
   const [latestRecap, setLatestRecap] = useState<Record<string, any> | null>(null);
   const [recapHistory, setRecapHistory] = useState<Record<string, any>[]>([]);
+  const [allCourseRounds, setAllCourseRounds] = useState<any[]>([]);
+  const [selectedCourseName, setSelectedCourseName] = useState("");
 
   useEffect(() => {
     loadCourses().then(setCourseList);
@@ -253,16 +258,34 @@ export default function PlanPage() {
       });
   }, []);
 
+  // Fetch allCourseRounds by name as soon as a course name is picked (before tee box selection)
+  useEffect(() => {
+    if (!selectedCourseName || courseId) return;
+    supabase.from("rounds")
+      .select("id, course_name, date, holes, holes_played, score_differential")
+      .eq("course_name", selectedCourseName)
+      .order("date", { ascending: false })
+      .then(({ data }) => setAllCourseRounds(data ?? []));
+  }, [selectedCourseName, courseId]);
+
   useEffect(() => {
     if (!courseId) return;
     setLoading(true);
     setCourse(null);
     setRawRounds([]);
+    setAllCourseRounds([]);
     setHolesMode("all");
     setOverrides({});
     Promise.all([getCourse(courseId), fetchRawRounds(courseId)]).then(([courseData, rounds]) => {
       setCourse(courseData);
       setRawRounds(rounds);
+      if (courseData?.name) {
+        supabase.from("rounds")
+          .select("id, course_name, date, holes, holes_played, score_differential")
+          .eq("course_name", courseData.name)
+          .order("date", { ascending: false })
+          .then(({ data }) => setAllCourseRounds(data ?? []));
+      }
       setLoading(false);
     });
   }, [courseId]);
@@ -279,7 +302,7 @@ export default function PlanPage() {
     return course.holes; // "all" or "loop18" — same 9 holes, strategy repeats
   }, [course, holesMode]);
 
-  // Expected score for this course given player's HI
+  // Expected score and differential for this course given player's HI
   const defaultGoalScore = useMemo(() => {
     const par = course?.holes.reduce((s, h) => s + h.par, 0) ?? 72;
     if (handicapIndex === null) return par + 18;
@@ -288,6 +311,15 @@ export default function PlanPage() {
     const ch = Math.round(handicapIndex * (slope / 113) + (rating - par));
     return par + Math.max(0, ch);
   }, [course, handicapIndex]);
+
+  const defaultGoalDiff = useMemo(() => {
+    if (handicapIndex !== null) return handicapIndex;
+    if (!course) return 20;
+    const par = course.holes.reduce((s, h) => s + h.par, 0);
+    const rating = course.rating ?? par;
+    const slope = course.slope ?? 113;
+    return Math.round((defaultGoalScore - rating) * 113 / slope * 10) / 10;
+  }, [handicapIndex, course, defaultGoalScore]);
 
   const strategies = useMemo(() => {
     if (!course) return {};
@@ -335,22 +367,82 @@ export default function PlanPage() {
     }
     return result;
   }, [rawRounds, holesMode, course]);
+  // Per-hole recent score history (date, score, club, tee_accuracy) for plan card display
+  const holeHistEntries = useMemo<Record<number, HoleHistEntry[]>>(() => {
+    if (!course) return {};
+    const courseHoleCount = course.holes.length;
+    const targetHolesPlayed =
+      holesMode === "loop18" ? 18
+      : (holesMode === "front9" || holesMode === "back9") ? 9
+      : courseHoleCount;
+    const rounds = rawRounds.filter((r: any) => (r.holes_played ?? courseHoleCount) === targetHolesPlayed);
+    const result: Record<number, HoleHistEntry[]> = {};
+    for (const round of rounds) {
+      for (const h of round.holes ?? []) {
+        const holeNum = Number(h.hole);
+        const score = Number(h.score) || 0;
+        if (!holeNum || !score) continue;
+        if (!result[holeNum]) result[holeNum] = [];
+        result[holeNum].push({
+          date: round.date ?? "",
+          score,
+          par: Number(h.par) || 4,
+          club: h.club ?? "",
+          tee_accuracy: h.tee_accuracy ?? "",
+        });
+      }
+    }
+    return result;
+  }, [rawRounds, holesMode, course]);
+
   const posture = useMemo(() => buildPosture(answers), [answers]);
   const target = useMemo(() => targetScore(answers), [answers]);
 
-  const onTeeItUp = async () => {
+  const onTeeItUp = useCallback(async () => {
     if (!course) return;
-    const plan: RoundPlan = {
+    const today = new Date().toISOString().slice(0, 10);
+    const id = `round_${Date.now()}`;
+    const holes = planHoles.map((h) => {
+      const strat = strategies[h.hole];
+      return {
+        hole: h.hole,
+        par: h.par,
+        yards: h.yards,
+        stroke_index: h.stroke_index,
+        score: "",
+        chips: "",
+        putts: "",
+        tee_accuracy: "",
+        appr_accuracy: "",
+        appr_distance: "",
+        water_penalty: "",
+        drop_or_out: "",
+        tree_haz: "",
+        fairway_bunker: "",
+        greenside_bunker: "",
+        gir: false,
+        grints: false,
+        first_putt_distance: "",
+        club: strat?.pref ?? "",
+        aim: strat?.aim ?? "",
+      };
+    });
+    const { error } = await supabase.from("rounds").insert({
+      id,
       course_id: course.id,
-      round_date: new Date().toISOString().slice(0, 10),
-      answers, form, posture, strategies, target_score: target,
-    };
-    // TODO (HANDOFF §4): persist plan
-    // await supabase.from("round_plans").insert(plan);
-    // router.push(`/rounds/play?plan=${inserted.id}`);
-    console.log("Ready to save plan:", plan);
-    alert("Plan ready — wire up supabase insert in onTeeItUp()");
-  };
+      course_name: course.name,
+      tee_box: course.tee_box,
+      date: today,
+      holes_played: planHoles.length,
+      starting_hole: planHoles[0]?.hole ?? 1,
+      holes,
+    });
+    if (error) {
+      alert("Failed to create round. Please try again.");
+      return;
+    }
+    router.push(`/rounds/play?roundId=${id}&courseId=${course.id}`);
+  }, [course, planHoles, strategies, router]);
 
   function prefetchEnriched(cId: string) {
     setPlanEnrichedReady(false);
@@ -388,6 +480,8 @@ export default function PlanPage() {
                   loading={loading}
                   holesMode={holesMode}
                   setHolesMode={setHolesMode}
+                  allCourseRounds={allCourseRounds}
+                  onCourseNameChange={setSelectedCourseName}
                   onNext={() => { setStage("questions"); if (courseId) prefetchEnriched(courseId); }}
                 />
               )}
@@ -396,6 +490,9 @@ export default function PlanPage() {
                   answers={answers} setAnswers={setAnswers}
                   form={form} setForm={setForm}
                   defaultGoalScore={defaultGoalScore}
+                  defaultGoalDiff={defaultGoalDiff}
+                  course={course}
+                  allCourseRounds={allCourseRounds}
                   onSaveForm={saveClubForm}
                   recapHistory={recapHistory}
                   onNext={() => setStage("review")}
@@ -412,6 +509,7 @@ export default function PlanPage() {
                   course={course} planHoles={planHoles} strategies={strategies} form={form}
                   answers={answers} target={target}
                   holeHistMap={holeHistMap}
+                  holeHistEntries={holeHistEntries}
                   planEnrichedMap={planEnrichedMap}
                   planEnrichedReady={planEnrichedReady}
                   latestRecap={latestRecap}
@@ -476,7 +574,7 @@ function StageNav({ stage, setStage, answered, courseReady }: {
 
 // ─── Setup stage ──────────────────────────────────────────────────────────────
 
-function StageSetup({ courseList, courseId, setCourseId, course, history, loading, holesMode, setHolesMode, onNext }: {
+function StageSetup({ courseList, courseId, setCourseId, course, history, loading, holesMode, setHolesMode, allCourseRounds, onCourseNameChange, onNext }: {
   courseList: CourseRecord[];
   courseId: string;
   setCourseId: (id: string) => void;
@@ -485,6 +583,8 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
   loading: boolean;
   holesMode: HolesMode;
   setHolesMode: (m: HolesMode) => void;
+  allCourseRounds: any[];
+  onCourseNameChange: (name: string) => void;
   onNext: () => void;
 }) {
   const [selectedName, setSelectedName] = useState("");
@@ -497,6 +597,7 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
 
   const handleNameChange = (name: string) => {
     setSelectedName(name);
+    onCourseNameChange(name);
     setCourseId(""); // clear until tee box chosen (or auto-select below)
     const matches = courseList.filter((c) => c.name === name);
     if (matches.length === 1) setCourseId(matches[0].id);
@@ -629,23 +730,24 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
         <div style={{ fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "var(--muted-2)", fontWeight: 600, marginBottom: 14 }}>
           What we know about you here
         </div>
-        {!courseId && !loading && (
+        {!selectedName && !loading && (
           <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 24, color: "var(--muted)", fontSize: 14, fontStyle: "italic" }}>
             Select a course to see your history.
           </div>
         )}
-        {(loading || (courseId && !history)) && (
+        {loading && (
           <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 24, color: "var(--muted)", fontSize: 14, fontStyle: "italic" }}>
             Loading history…
           </div>
         )}
-        {history && !loading && (
+        {!loading && selectedName && (history || allCourseRounds.length > 0) && (
           <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: 24 }}>
-            {history.rounds_played === 0 ? (
+            {history && history.rounds_played === 0 && allCourseRounds.length === 0 && (
               <div style={{ color: "var(--muted)", fontSize: 14, fontStyle: "italic" }}>
                 No rounds recorded here yet — we&apos;ll build your plan from course data.
               </div>
-            ) : (
+            )}
+            {history && history.rounds_played > 0 && (
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, paddingBottom: 18, borderBottom: "1px dashed var(--line)", marginBottom: 18 }}>
                   <div>
@@ -702,6 +804,27 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
                 )}
               </>
             )}
+
+            {allCourseRounds.length > 0 && (
+              <div style={{ marginTop: history && history.rounds_played > 0 ? 16 : 0, paddingTop: history && history.rounds_played > 0 ? 16 : 0, borderTop: history && history.rounds_played > 0 ? "1px dashed var(--line)" : "none" }}>
+                <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>All rounds here</div>
+                {allCourseRounds.map((r, i) => {
+                  const score = (r.holes ?? []).reduce((s: number, h: any) => s + (Number(h.score) || 0), 0);
+                  const diff = r.score_differential != null
+                    ? ((r.holes_played ?? 18) <= 9 ? r.score_differential * 2 : r.score_differential)
+                    : null;
+                  return (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "4px 0", borderTop: i > 0 ? "1px solid var(--line-soft)" : "none" }}>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>{r.date}</div>
+                      <div style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
+                        {score > 0 && <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{score}</span>}
+                        {diff !== null && <span style={{ fontSize: 11, color: "var(--muted)" }}>{diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -734,6 +857,37 @@ function ScoreDial({ value, min, max, onChange }: { value: number; min: number; 
       />
       <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)", letterSpacing: 1 }}>
         {min} — {max}
+      </div>
+    </div>
+  );
+}
+
+// ─── Diff dial ────────────────────────────────────────────────────────────────
+
+function DiffDial({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
+  const step = 0.5;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+        <button
+          onClick={() => onChange(Math.max(min, Math.round((value - step) * 10) / 10))}
+          style={{ width: 52, height: 52, borderRadius: "50%", border: "2px solid var(--line)", background: "var(--paper)", fontSize: 24, fontWeight: 700, cursor: "pointer", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >−</button>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 88, fontWeight: 500, fontStyle: "italic", color: "var(--ink)", lineHeight: 1, minWidth: 160, textAlign: "center" }}>
+          {value >= 0 ? `+${value.toFixed(1)}` : value.toFixed(1)}
+        </div>
+        <button
+          onClick={() => onChange(Math.min(max, Math.round((value + step) * 10) / 10))}
+          style={{ width: 52, height: 52, borderRadius: "50%", border: "2px solid var(--line)", background: "var(--paper)", fontSize: 24, fontWeight: 700, cursor: "pointer", color: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >+</button>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ width: "100%", maxWidth: 400, accentColor: "var(--ink)" }}
+      />
+      <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--font-mono)", letterSpacing: 1 }}>
+        {min >= 0 ? `+${min.toFixed(1)}` : min.toFixed(1)} — +{max.toFixed(1)}
       </div>
     </div>
   );
@@ -821,16 +975,24 @@ function RangeRecapHistory({ recaps }: { recaps: Record<string, any>[] }) {
 
 // ─── Questions stage ──────────────────────────────────────────────────────────
 
-function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, onSaveForm, recapHistory, onNext }: {
+function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, defaultGoalDiff, course, allCourseRounds, onSaveForm, recapHistory, onNext }: {
   answers: PlanAnswers; setAnswers: (a: PlanAnswers) => void;
   form: PlayerForm; setForm: (f: PlayerForm) => void;
   defaultGoalScore: number;
+  defaultGoalDiff: number;
+  course: import("@/lib/types").CourseRecord | null;
+  allCourseRounds: any[];
   onSaveForm: (f: PlayerForm) => void;
   recapHistory: Record<string, any>[];
   onNext: () => void;
 }) {
   const [step, setStep] = useState(0);
+  const [goalMode, setGoalMode] = useState<"score" | "diff">("score");
+  const [goalDiff, setGoalDiff] = useState(defaultGoalDiff);
+
   const q = QUESTIONS[step];
+
+  useEffect(() => { setGoalDiff(defaultGoalDiff); }, [defaultGoalDiff]);
 
   // Auto-initialize goal to expected score when player reaches that step
   useEffect(() => {
@@ -839,6 +1001,20 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  const rating = course?.rating ?? (course?.holes.reduce((s, h) => s + h.par, 0) ?? 72);
+  const slope = course?.slope ?? 113;
+  const scoreFromDiff = (d: number) => Math.round(rating + d * slope / 113);
+  const diffFromScore = (s: number) => Math.round((s - rating) * 113 / slope * 10) / 10;
+
+  const handleScoreChange = (v: number) => {
+    setAnswers({ ...answers, goal: v });
+    setGoalDiff(diffFromScore(v));
+  };
+  const handleDiffChange = (d: number) => {
+    setGoalDiff(d);
+    setAnswers({ ...answers, goal: scoreFromDiff(d) });
+  };
 
   const isLast = step === QUESTIONS.length - 1;
 
@@ -852,7 +1028,7 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
     !!(answers as Record<string, string | undefined>)[q.id];
 
   return (
-    <div style={{ maxWidth: 740, margin: "20px auto 0" }}>
+    <div style={{ maxWidth: q.id === "goal" ? 1100 : 740, margin: "20px auto 0" }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 40 }}>
         {QUESTIONS.map((_, i) => (
           <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? "var(--ink)" : "var(--line)" }} />
@@ -863,6 +1039,19 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
       </div>
       <h2 style={{ fontFamily: "var(--font-display)", fontSize: 42, fontWeight: 500, lineHeight: 1.1, margin: "0 0 14px", color: "var(--ink)" }}>{q.q}</h2>
       <p style={{ fontSize: 15, color: "var(--muted)", margin: "0 0 36px", maxWidth: 560 }}>{q.sub}</p>
+
+      {/* Strategy step: show selected target above the choices */}
+      {q.id === "focus" && answers.goal !== undefined && (
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 18px", marginBottom: 28, display: "inline-flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--muted-2)", fontFamily: "var(--font-mono)", letterSpacing: 1, textTransform: "uppercase" }}>Your target:</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{answers.goal}</span>
+          {goalMode === "diff" && (
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              ({goalDiff >= 0 ? `+${goalDiff.toFixed(1)}` : goalDiff.toFixed(1)} diff)
+            </span>
+          )}
+        </div>
+      )}
 
       {q.kind === "choice" && (
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${q.opts.length},1fr)`, gap: 14 }}>
@@ -897,12 +1086,77 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
       )}
 
       {q.kind === "score_dial" && (
-        <ScoreDial
-          value={answers.goal ?? defaultGoalScore}
-          min={defaultGoalScore - 20}
-          max={defaultGoalScore + 20}
-          onChange={(v) => setAnswers({ ...answers, goal: v })}
-        />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "start" }}>
+          <div>
+            {/* Mode toggle */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 32, justifyContent: "center" }}>
+              {(["score", "diff"] as const).map(mode => (
+                <button key={mode}
+                  onClick={() => setGoalMode(mode)}
+                  style={{
+                    padding: "8px 20px", fontSize: 13, fontWeight: 600,
+                    border: "1px solid var(--line)", borderRadius: 8, cursor: "pointer",
+                    background: goalMode === mode ? "var(--ink)" : "var(--paper)",
+                    color: goalMode === mode ? "var(--paper)" : "var(--ink)",
+                  }}>
+                  {mode === "score" ? "Target Score" : "Target Differential"}
+                </button>
+              ))}
+            </div>
+
+            {goalMode === "score" ? (
+              <ScoreDial
+                value={answers.goal ?? defaultGoalScore}
+                min={defaultGoalScore - 20}
+                max={defaultGoalScore + 20}
+                onChange={handleScoreChange}
+              />
+            ) : (
+              <DiffDial
+                value={goalDiff}
+                min={Math.max(-5, defaultGoalDiff - 15)}
+                max={defaultGoalDiff + 15}
+                onChange={handleDiffChange}
+              />
+            )}
+          </div>
+
+          {/* Historical rounds panel */}
+          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "20px 22px" }}>
+            <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 12 }}>
+              Your history here
+            </div>
+            {allCourseRounds.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--muted)", fontStyle: "italic" }}>No rounds recorded for this course yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {/* Header row */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 16, padding: "4px 0 8px", borderBottom: "1px solid var(--line)", marginBottom: 2 }}>
+                  <div style={{ fontSize: 10, color: "var(--muted-2)", fontWeight: 600, letterSpacing: 1 }}>DATE</div>
+                  <div style={{ fontSize: 10, fontWeight: goalMode === "score" ? 800 : 500, color: goalMode === "score" ? "var(--ink)" : "var(--muted-2)", letterSpacing: 1, textAlign: "right" }}>SCORE</div>
+                  <div style={{ fontSize: 10, fontWeight: goalMode === "diff" ? 800 : 500, color: goalMode === "diff" ? "var(--ink)" : "var(--muted-2)", letterSpacing: 1, textAlign: "right" }}>DIFF</div>
+                </div>
+                {allCourseRounds.map((r, i) => {
+                  const score = (r.holes ?? []).reduce((s: number, h: any) => s + (Number(h.score) || 0), 0);
+                  const diff = r.score_differential != null
+                    ? ((r.holes_played ?? 18) <= 9 ? r.score_differential * 2 : r.score_differential)
+                    : null;
+                  return (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 16, alignItems: "baseline", padding: "6px 0", borderTop: i > 0 ? "1px solid var(--line-soft)" : "none" }}>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>{r.date}</div>
+                      <div style={{ fontSize: goalMode === "score" ? 15 : 13, fontWeight: goalMode === "score" ? 700 : 400, color: goalMode === "score" ? "var(--ink)" : "var(--muted)", textAlign: "right" }}>
+                        {score > 0 ? score : "—"}
+                      </div>
+                      <div style={{ fontSize: goalMode === "diff" ? 15 : 13, fontWeight: goalMode === "diff" ? 700 : 400, color: goalMode === "diff" ? "var(--ink)" : "var(--muted)", textAlign: "right" }}>
+                        {diff !== null ? (diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)) : "—"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 40 }}>
@@ -929,7 +1183,7 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
 function StageReview({ answers, form, posture, onNext }: {
   answers: PlanAnswers; form: PlayerForm; posture: string; onNext: () => void;
 }) {
-  const focus = { doubles: "No doubles", pace: "Steady pace", lowest: "Lowest score" }[answers.focus!];
+  const focus = { doubles: "Pick Your Spots", pace: "Course Manager", lowest: "Go Low" }[answers.focus!];
   const weather = { calm: "Calm & dry", windy: "Breezy", wet: "Wet / soft" }[answers.weather!];
   const goal = answers.goal !== undefined ? String(answers.goal) : "—";
 
@@ -954,7 +1208,7 @@ function StageReview({ answers, form, posture, onNext }: {
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
           {FORM_CLUBS.map((c) => {
             const v = form[c.k];
-            const color = v >= 75 ? "var(--good)" : v >= 55 ? "var(--ink-soft)" : v >= 35 ? "var(--muted)" : "var(--bad)";
+            const color = v >= 75 ? "var(--flag)" : v >= 55 ? "var(--ink-soft)" : v >= 35 ? "var(--muted)" : "#2e6db4";
             const label = v >= 75 ? "hot" : v >= 55 ? "solid" : v >= 35 ? "neutral" : "cold";
             return (
               <div key={c.k} style={{ textAlign: "center" }}>
@@ -995,6 +1249,31 @@ const RECAP_GROUPS = [
   { key: "SW-LW",   label: "SW – LW / Chip" },
   { key: "Putter",  label: "Putter" },
 ];
+
+function ByClubSection({ filledGroups, groupNotes }: { filledGroups: typeof RECAP_GROUPS; groupNotes: Record<string, string> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 0 6px", display: "flex", alignItems: "center", gap: 6 }}
+      >
+        <span style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase" }}>By club</span>
+        <span style={{ fontSize: 10, color: "var(--green-deep)", opacity: 0.7 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", maxWidth: "100%", gap: 8 }}>
+          {filledGroups.map(g => (
+            <div key={g.key} style={{ background: "var(--paper)", borderRadius: 8, padding: "8px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>{g.label}</div>
+              <div style={{ fontSize: 12, color: "var(--ink-soft)", lineHeight: 1.4 }}>{groupNotes[g.key]}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function RecapAdvicePanel({ recap }: { recap: Record<string, any> }) {
   const [open, setOpen] = useState(true);
@@ -1043,17 +1322,7 @@ function RecapAdvicePanel({ recap }: { recap: Record<string, any> }) {
             </div>
           )}
           {filledGroups.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase", marginBottom: 8 }}>By club</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
-                {filledGroups.map(g => (
-                  <div key={g.key} style={{ background: "var(--paper)", borderRadius: 8, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>{g.label}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-soft)", lineHeight: 1.4 }}>{groupNotes[g.key]}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <ByClubSection filledGroups={filledGroups} groupNotes={groupNotes} />
           )}
         </div>
       )}
@@ -1063,12 +1332,13 @@ function RecapAdvicePanel({ recap }: { recap: Record<string, any> }) {
 
 // ─── Plan stage ───────────────────────────────────────────────────────────────
 
-function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, planEnrichedMap, planEnrichedReady, latestRecap, onClubChange, onAimChange, onTeeItUp, onRestart }: {
+function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, holeHistEntries, planEnrichedMap, planEnrichedReady, latestRecap, onClubChange, onAimChange, onTeeItUp, onRestart }: {
   course: CourseRecord;
   planHoles: import("@/lib/types").HoleData[];
   strategies: Record<number, import("@/lib/planTypes").HoleStrategy>;
   form: PlayerForm; answers: PlanAnswers; target: number;
   holeHistMap: Record<number, HoleClubStat[]>;
+  holeHistEntries: Record<number, HoleHistEntry[]>;
   planEnrichedMap: Record<number, PlanEnrichedHole[]>;
   planEnrichedReady: boolean;
   latestRecap: Record<string, any> | null;
@@ -1104,6 +1374,7 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
           <PlanHoleCard key={h.hole} hole={h} strategy={strategies[h.hole]}
             expanded={expanded.has(h.hole)} highlight={strategies[h.hole]?.trouble}
             clubStats={holeHistMap[h.hole]}
+            holeHistory={holeHistEntries[h.hole] ?? []}
             enriched={planEnrichedReady ? (planEnrichedMap[h.hole] ?? []) : undefined}
             onClubChange={(club) => onClubChange(h.hole, club)}
             onAimChange={(aim) => onAimChange(h.hole, aim)}

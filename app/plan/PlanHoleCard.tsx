@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { HoleData } from "@/lib/types";
 import type { HoleStrategy, PlanEnrichedHole } from "@/lib/planTypes";
-import type { HoleClubStat } from "./page";
+import type { HoleClubStat, HoleHistEntry } from "./page";
 
 type Props = {
   hole: HoleData;
@@ -13,6 +13,7 @@ type Props = {
   highlight?: boolean;
   clubStats?: HoleClubStat[];
   enriched?: PlanEnrichedHole[]; // undefined = still loading, [] = loaded/no data
+  holeHistory?: HoleHistEntry[];
   onClubChange?: (club: string) => void;
   onAimChange?: (aim: HoleStrategy["aim"]) => void;
 };
@@ -455,7 +456,7 @@ function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }: {
 
 // ─── Main card ────────────────────────────────────────────────────────────────
 
-export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, enriched, onClubChange, onAimChange }: Props) {
+export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, holeHistory, enriched, onClubChange, onAimChange }: Props) {
   const parColor = hole.par === 3 ? "var(--accent)" : hole.par === 5 ? "var(--green)" : "var(--ink-soft)";
   const hazards = hazardList(hole);
   const risk = hazards.length >= 2 ? "high" : hazards.length === 1 ? "med" : "low";
@@ -515,6 +516,13 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
             {!isNaN(simAvg) && (
               <Chip tone="ghost">sim holes {fmtAvg(simAvg)}</Chip>
             )}
+            {holeHistory && holeHistory.length > 0 && (() => {
+              const last = holeHistory[0];
+              const tp = last.score - last.par;
+              const tpStr = tp === 0 ? "E" : tp > 0 ? `+${tp}` : String(tp);
+              const tone = tp < 0 ? "green" : tp === 0 ? "ghost" : "ghost";
+              return <Chip tone={tone}>last {last.score} ({tpStr})</Chip>;
+            })()}
           </div>
         </div>
         <div style={{ textAlign: "center", minWidth: 68 }}>
@@ -596,6 +604,38 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
               )}
             </div>
           </div>
+
+          {/* Recent score history */}
+          {holeHistory && holeHistory.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--line)" }}>
+              <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>
+                Recent scores
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "90px 28px 36px auto auto", gap: "4px 12px", alignItems: "baseline" }}>
+                {/* Header */}
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Date</div>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Score</div>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>+/-</div>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Club</div>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Tee</div>
+                {holeHistory.slice(0, 6).map((entry, i) => {
+                  const tp = entry.score - entry.par;
+                  const tpStr = tp === 0 ? "E" : tp > 0 ? `+${tp}` : String(tp);
+                  const scoreColor = tp < 0 ? "var(--good)" : tp === 0 ? "var(--ink)" : tp === 1 ? "var(--muted)" : "var(--bad)";
+                  const accColor = entry.tee_accuracy === "Hit" ? "var(--good)" : entry.tee_accuracy ? "var(--muted)" : "var(--muted-2)";
+                  return (
+                    <>
+                      <div key={`d${i}`} style={{ fontSize: 11, color: "var(--muted)" }}>{entry.date}</div>
+                      <div key={`s${i}`} style={{ fontSize: 13, fontWeight: 700, color: scoreColor }}>{entry.score}</div>
+                      <div key={`tp${i}`} style={{ fontSize: 11, color: scoreColor }}>{tpStr}</div>
+                      <div key={`c${i}`} style={{ fontSize: 11, color: "var(--ink-soft)" }}>{entry.club || "—"}</div>
+                      <div key={`a${i}`} style={{ fontSize: 11, color: accColor }}>{entry.tee_accuracy || "—"}</div>
+                    </>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

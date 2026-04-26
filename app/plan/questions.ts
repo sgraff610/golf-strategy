@@ -48,21 +48,21 @@ export const QUESTIONS: Question[] = [
     ],
   },
   {
-    id: "focus",
-    q: "Strategy: What do you want to protect?",
-    sub: "We'll weight decisions to minimize this.",
-    kind: "choice",
-    opts: [
-      { v: "pace",    label: "Steady pace", sub: "No blow-up holes", emoji: "⏱" },
-      { v: "doubles", label: "No doubles", sub: "Bogey golf is fine", emoji: "🛡" },
-      { v: "lowest",  label: "Lowest score", sub: "Worth some risk", emoji: "📉" },
-    ],
-  },
-  {
     id: "goal",
     q: "Goal: What's your target score?",
     sub: "Drag or tap ± to set your goal. Defaults to your expected score for this course.",
     kind: "score_dial",
+  },
+  {
+    id: "focus",
+    q: "Strategy: How do you want to get there?",
+    sub: "We'll weight every hole decision around this.",
+    kind: "choice",
+    opts: [
+      { v: "pace",    label: "Course Manager",  sub: "Hit fairways, avoid penalties, play the safe part of the green", emoji: "🛡" },
+      { v: "doubles", label: "Pick Your Spots", sub: "Go for it on easier holes, play smart on the hard ones",          emoji: "🎯" },
+      { v: "lowest",  label: "Go Low",          sub: "Get as many pars and birdies as possible",                        emoji: "🔥" },
+    ],
   },
 ];
 
