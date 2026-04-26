@@ -3,6 +3,11 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
 import { HoleData } from "@/lib/types";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ReferenceLine, ResponsiveContainer,
+  ComposedChart, ScatterChart, Scatter,
+} from "recharts";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
 type CellValue = 0 | 1 | 2;
@@ -45,6 +50,31 @@ type EnrichedHole = {
   appr_dist_num: number;
   roundDiff: number | null;
 };
+
+type RoundSummary = {
+  idx: number;
+  date: string;
+  courseId: string;
+  courseName: string;
+  score: number;
+  par: number;
+  toPar: number;
+  diff: number | null;
+  girPct: number;
+  fwPct: number;
+  avgPutts: number;
+  totalHoles: number;
+};
+
+type TrendMetric = "toPar" | "score" | "diff" | "girPct" | "fwPct" | "avgPutts";
+const TREND_METRICS: { val: TrendMetric; label: string }[] = [
+  { val: "toPar",    label: "Score vs Par" },
+  { val: "score",    label: "Gross Score" },
+  { val: "diff",     label: "Differential" },
+  { val: "girPct",   label: "GIR %" },
+  { val: "fwPct",    label: "Fairway %" },
+  { val: "avgPutts", label: "Avg Putts" },
+];
 
 type Filters = {
   driveAcc: Set<string>; apprAcc: Set<string>;
@@ -368,8 +398,266 @@ function toggleSet(s: Set<string>, val: string): Set<string> {
   const n = new Set(s); n.has(val) ? n.delete(val) : n.add(val); return n;
 }
 
+function pearsonR(xs: number[], ys: number[]): number {
+  const n = xs.length;
+  if (n < 3) return NaN;
+  const mx = xs.reduce((s, x) => s + x, 0) / n;
+  const my = ys.reduce((s, y) => s + y, 0) / n;
+  const num = xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0);
+  const den = Math.sqrt(xs.reduce((s, x) => s + (x - mx) ** 2, 0) * ys.reduce((s, y) => s + (y - my) ** 2, 0));
+  return den === 0 ? NaN : num / den;
+}
+
+function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
+  const [courseFilter, setCourseFilter] = useState("");
+  const [primaryMetric, setPrimaryMetric] = useState<"toPar" | "score" | "diff">("toPar");
+  const [overlayMetric, setOverlayMetric] = useState<"none" | "girPct" | "fwPct" | "avgPutts">("none");
+  const [scatterX, setScatterX] = useState<TrendMetric>("girPct");
+  const [scatterY, setScatterY] = useState<TrendMetric>("toPar");
+  const [scatterHoles, setScatterHoles] = useState<"both" | "9" | "18">("both");
+
+  const courses = Array.from(new Map(summaries.map(s => [s.courseId, s.courseName])).entries());
+  const filtered = courseFilter ? summaries.filter(s => s.courseId === courseFilter) : summaries;
+
+  const getVal = (s: RoundSummary): number =>
+    primaryMetric === "diff" ? (s.diff ?? NaN) : primaryMetric === "score" ? s.score : s.toPar;
+
+  const rolling5 = filtered.map((_, i) => {
+    if (i < 4) return null;
+    const vals = filtered.slice(i - 4, i + 1).map(getVal).filter(v => !isNaN(v));
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  });
+
+  const avgOf = (arr: RoundSummary[]) => {
+    const vals = arr.map(getVal).filter(v => !isNaN(v));
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : NaN;
+  };
+  const last5 = filtered.slice(-5);
+  const last10 = filtered.slice(-10);
+
+  const chartData = filtered.map((s, i) => ({
+    name: s.date.slice(5),
+    courseName: s.courseName,
+    score: s.score,
+    par: s.par,
+    totalHoles: s.totalHoles,
+    primary: getVal(s),
+    overlay: overlayMetric !== "none" ? (s[overlayMetric] as number) : undefined,
+    rolling: rolling5[i],
+  }));
+
+  const scatterBase = scatterHoles === "9" ? filtered.filter(s => s.totalHoles <= 9)
+    : scatterHoles === "18" ? filtered.filter(s => s.totalHoles >= 18)
+    : filtered;
+
+  const scatterData = scatterBase
+    .filter(s => {
+      const x = s[scatterX as keyof RoundSummary];
+      const y = s[scatterY as keyof RoundSummary];
+      return x !== null && y !== null && !isNaN(Number(x)) && !isNaN(Number(y));
+    })
+    .map(s => ({
+      x: Number(s[scatterX as keyof RoundSummary]),
+      y: Number(s[scatterY as keyof RoundSummary]),
+      label: `${s.courseName} · ${s.date.slice(5)} · ${s.totalHoles}H`,
+    }));
+
+  const r = pearsonR(scatterData.map(d => d.x), scatterData.map(d => d.y));
+
+  const metricLabel = (m: string) => TREND_METRICS.find(t => t.val === m)?.label ?? m;
+
+  const primaryColor = "#0f6e56";
+  const overlayColor = "#c8a84b";
+  const rollingColor = "#6baed6";
+
+  const btnStyle = (active: boolean, color = primaryColor): React.CSSProperties => ({
+    padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500,
+    cursor: "pointer", border: `1px solid ${color}`,
+    background: active ? color : "white", color: active ? "white" : color,
+  });
+  const selStyle: React.CSSProperties = {
+    padding: "5px 8px", borderRadius: 8, border: "1px solid #0f6e56",
+    fontSize: 12, color: "#0f6e56", background: "white",
+  };
+
+  // Scatter axis domains — fit to data with 10% padding, never starts at 0
+  const xVals = scatterData.map(d => d.x);
+  const yVals = scatterData.map(d => d.y);
+  const xPad = (Math.max(...xVals) - Math.min(...xVals)) * 0.1 || 1;
+  const yPad = (Math.max(...yVals) - Math.min(...yVals)) * 0.1 || 1;
+  const xDomain: [number, number] = xVals.length >= 3
+    ? [Math.floor(Math.min(...xVals) - xPad), Math.ceil(Math.max(...xVals) + xPad)]
+    : [0, 100];
+  const yDomain: [number, number] = yVals.length >= 3
+    ? [Math.floor(Math.min(...yVals) - yPad), Math.ceil(Math.max(...yVals) + yPad)]
+    : [0, 100];
+
+  // Custom tooltips
+  const TrendTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0]?.payload;
+    const primVal = d?.primary;
+    const toParStr = typeof primVal === "number" && !isNaN(primVal)
+      ? (primVal >= 0 ? "+" : "") + primVal.toFixed(0) : "—";
+    return (
+      <div style={{ background: "white", border: "1px solid #ddd", borderRadius: 8, padding: "8px 10px", fontSize: 11, boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
+        <p style={{ fontWeight: 700, margin: "0 0 2px", color: "#1a1a1a" }}>{d?.courseName}</p>
+        <p style={{ margin: "0 0 5px", color: "#999", fontSize: 10 }}>{d?.name} · {d?.totalHoles}H</p>
+        <p style={{ margin: "1px 0", color: "#1a1a1a" }}>Score: <strong>{d?.score}</strong> ({toParStr})</p>
+        {payload.find((p: any) => p.dataKey === "overlay") && (
+          <p style={{ margin: "1px 0", color: overlayColor }}>
+            {metricLabel(overlayMetric)}: {(payload.find((p: any) => p.dataKey === "overlay")?.value ?? 0).toFixed(1)}
+          </p>
+        )}
+        {payload.find((p: any) => p.dataKey === "rolling")?.value != null && (
+          <p style={{ margin: "1px 0", color: rollingColor }}>
+            5-rnd avg: {payload.find((p: any) => p.dataKey === "rolling")?.value.toFixed(1)}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  const ScatterTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const d = payload[0]?.payload;
+    return (
+      <div style={{ background: "white", border: "1px solid #ddd", borderRadius: 8, padding: "8px 10px", fontSize: 11, boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
+        <p style={{ fontWeight: 700, margin: "0 0 4px", color: "#1a1a1a" }}>{d?.label}</p>
+        <p style={{ margin: "1px 0" }}>{metricLabel(scatterX)}: <strong>{typeof d?.x === "number" ? d.x.toFixed(1) : d?.x}</strong></p>
+        <p style={{ margin: "1px 0" }}>{metricLabel(scatterY)}: <strong>{typeof d?.y === "number" ? d.y.toFixed(1) : d?.y}</strong></p>
+      </div>
+    );
+  };
+
+  if (filtered.length < 2) {
+    return <p style={{ color: "white", fontSize: 13 }}>Need at least 2 rounds to show trends.</p>;
+  }
+
+  return (
+    <div>
+      {courses.length > 1 && (
+        <div style={{ marginBottom: 14 }}>
+          <select value={courseFilter} onChange={e => setCourseFilter(e.target.value)}
+            style={{ ...selStyle, width: "100%" }}>
+            <option value="">All courses</option>
+            {courses.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginBottom: 14 }}>
+        {[
+          { label: "Last 5 avg", val: avgOf(last5) },
+          { label: "Last 10 avg", val: avgOf(last10) },
+          { label: "All-time avg", val: avgOf(filtered) },
+        ].map(({ label, val }) => (
+          <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: 10, textAlign: "center" }}>
+            <p style={{ fontSize: 10, color: "#0f6e56", margin: "0 0 3px" }}>{label}</p>
+            <p style={{ fontSize: 18, fontWeight: 700, margin: 0, color: isNaN(val) ? "#666" : val > 0 ? "#c0392b" : val < 0 ? "#27ae60" : "#666" }}>
+              {isNaN(val) ? "—" : `${val >= 0 ? "+" : ""}${val.toFixed(1)}`}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+        <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 10px" }}>Performance Trend</p>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+          {(["toPar", "score", "diff"] as const).map(m => (
+            <button key={m} style={btnStyle(primaryMetric === m)} onClick={() => setPrimaryMetric(m)}>
+              {metricLabel(m)}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, color: "#bbb" }}>Overlay:</span>
+          {(["none", "girPct", "fwPct", "avgPutts"] as const).map(m => (
+            <button key={m} style={btnStyle(overlayMetric === m, overlayColor)} onClick={() => setOverlayMetric(m)}>
+              {m === "none" ? "None" : metricLabel(m)}
+            </button>
+          ))}
+        </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: overlayMetric !== "none" ? 40 : 8, bottom: 0, left: -20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
+            <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#999" }} />
+            <YAxis yAxisId="left" tick={{ fontSize: 9, fill: primaryColor }} />
+            {overlayMetric !== "none" && <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: overlayColor }} />}
+            <Tooltip content={<TrendTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+            <ReferenceLine yAxisId="left" y={0} stroke="#ddd" strokeDasharray="4 2" />
+            <Line yAxisId="left" type="monotone" dataKey="primary" name={metricLabel(primaryMetric)} stroke={primaryColor} dot={{ r: 2 }} strokeWidth={1.5} connectNulls />
+            <Line yAxisId="left" type="monotone" dataKey="rolling" name="5-rnd avg" stroke={rollingColor} dot={false} strokeWidth={2} strokeDasharray="5 3" connectNulls />
+            {overlayMetric !== "none" && (
+              <Line yAxisId="right" type="monotone" dataKey="overlay" name={metricLabel(overlayMetric)} stroke={overlayColor} dot={{ r: 2 }} strokeWidth={1.5} connectNulls />
+            )}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "12px 14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Relationship Explorer</p>
+          {!isNaN(r) && scatterData.length >= 3 && (
+            <span style={{ fontSize: 12, fontWeight: 700, color: Math.abs(r) > 0.5 ? "#c0392b" : Math.abs(r) > 0.3 ? "#c8a84b" : "#27ae60" }}>
+              r = {r.toFixed(2)}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={{ fontSize: 10, color: "#0f6e56", fontWeight: 600 }}>X axis</span>
+            <select value={scatterX} onChange={e => setScatterX(e.target.value as TrendMetric)} style={selStyle}>
+              {TREND_METRICS.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={{ fontSize: 10, color: "#0f6e56", fontWeight: 600 }}>Y axis</span>
+            <select value={scatterY} onChange={e => setScatterY(e.target.value as TrendMetric)} style={selStyle}>
+              {TREND_METRICS.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={{ fontSize: 10, color: "#0f6e56", fontWeight: 600 }}>Holes</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["both", "9", "18"] as const).map(h => (
+                <button key={h} style={btnStyle(scatterHoles === h)} onClick={() => setScatterHoles(h)}>
+                  {h === "both" ? "All" : h + "H"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {scatterData.length < 3 ? (
+          <p style={{ fontSize: 12, color: "#999" }}>Need at least 3 rounds for comparison.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <ScatterChart margin={{ top: 4, right: 8, bottom: 20, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
+              <XAxis type="number" dataKey="x" name={metricLabel(scatterX)} domain={xDomain}
+                tick={{ fontSize: 9, fill: "#999" }}
+                label={{ value: metricLabel(scatterX), position: "insideBottom", offset: -12, fontSize: 9, fill: "#999" }} />
+              <YAxis type="number" dataKey="y" name={metricLabel(scatterY)} domain={yDomain}
+                tick={{ fontSize: 9, fill: "#0f6e56" }} />
+              <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<ScatterTooltip />} />
+              <Scatter data={scatterData} fill="#0f6e56" opacity={0.7} />
+            </ScatterChart>
+          </ResponsiveContainer>
+        )}
+        {!isNaN(r) && scatterData.length >= 3 && (
+          <p style={{ fontSize: 10, color: "#999", margin: "6px 0 0", fontStyle: "italic" }}>
+            {Math.abs(r) > 0.6 ? "Strong" : Math.abs(r) > 0.4 ? "Moderate" : Math.abs(r) > 0.2 ? "Weak" : "No meaningful"} correlation between {metricLabel(scatterX).toLowerCase()} and {metricLabel(scatterY).toLowerCase()}.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function RoundsInsights() {
   const [allHoles, setAllHoles] = useState<EnrichedHole[]>([]);
+  const [roundSummaries, setRoundSummaries] = useState<RoundSummary[]>([]);
   const [totalRounds, setTotalRounds] = useState(0);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -386,6 +674,7 @@ export default function RoundsInsights() {
       setTotalRounds(rounds.length);
       const years = new Set<number>();
       const enriched: EnrichedHole[] = [];
+      const summaries_: RoundSummary[] = [];
       for (let ri = 0; ri < rounds.length; ri++) {
         const round = rounds[ri];
         const course = await getCourse(round.course_id);
@@ -447,9 +736,36 @@ export default function RoundsInsights() {
             roundDiff,
           });
         }
+        // Build round-level summary
+        const scoredHoles = (round.holes ?? []).filter((h: any) => h.score && h.par);
+        if (scoredHoles.length > 0) {
+          const totalScore = scoredHoles.reduce((s: number, h: any) => s + Number(h.score), 0);
+          const totalPar   = scoredHoles.reduce((s: number, h: any) => s + Number(h.par), 0);
+          const totalPutts = scoredHoles.reduce((s: number, h: any) => s + (Number(h.putts) || 0), 0);
+          const girCount   = scoredHoles.filter((h: any) => {
+            const sc = Number(h.score), pt = Number(h.putts) || 0;
+            return typeof h.gir === "boolean" ? h.gir : (sc - pt) <= (h.par - 2);
+          }).length;
+          const par4plus  = scoredHoles.filter((h: any) => Number(h.par) >= 4);
+          const fwCount   = par4plus.filter((h: any) => h.tee_accuracy === "Hit").length;
+          summaries_.push({
+            idx: ri,
+            date: round.date ?? "",
+            courseId: round.course_id ?? "",
+            courseName: round.course_name ?? "",
+            score: totalScore, par: totalPar,
+            toPar: totalScore - totalPar,
+            diff: roundDiff,
+            girPct: girCount / scoredHoles.length * 100,
+            fwPct:  par4plus.length > 0 ? fwCount / par4plus.length * 100 : 0,
+            avgPutts: totalPutts / scoredHoles.length,
+            totalHoles: scoredHoles.length,
+          });
+        }
       }
       setAvailableYears(Array.from(years).sort((a,b) => b-a));
       setAllHoles(enriched);
+      setRoundSummaries(summaries_);
       setLoading(false);
     }
     loadAll();
@@ -633,18 +949,23 @@ export default function RoundsInsights() {
     (filters.diffBucket.size>0?1:0)
 
   return (
-    <main style={{ maxWidth: 520, margin: "40px auto", fontFamily: "sans-serif", padding: "0 16px" }}>
+    <main style={{ maxWidth: 1400, width: "100%", margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px", boxSizing: "border-box" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
         <a href="/rounds/chat" style={{ fontSize: 13, fontWeight: 600, padding: "6px 14px", borderRadius: 8, background: "#0f6e56", color: "white", textDecoration: "none" }}>Ask Coach →</a>
       </div>
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4, color: "#d0d0d0" }}>Coach</h1>
-      <p style={{ color: "white", marginBottom: 20, fontSize: 13 }}>Analyze how different factors impact your score vs par.</p>
+      <p style={{ color: "white", marginBottom: 20, fontSize: 13 }}>Track trends and analyze what moves your score.</p>
 
       {loading && <p style={{ color: "white" }}>Loading rounds...</p>}
       {!loading && allHoles.length === 0 && <p style={{ color: "white" }}>No hole data found. Add some rounds first.</p>}
 
-      {!loading && allHoles.length > 0 && (<>
+      {!loading && allHoles.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0 }}>
+            <TrendsView summaries={roundSummaries} />
+          </div>
+          <div style={{ minWidth: 0 }}>
         <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: 0 }}>Filters</p>
@@ -985,7 +1306,9 @@ export default function RoundsInsights() {
             </table>
           </div>
         </div>
-      </>)}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
