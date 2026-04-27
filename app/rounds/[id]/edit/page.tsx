@@ -147,6 +147,36 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   const totalPar = roundHoles.reduce((s,h)=>s+h.par,0);
   const toPar = totalScore - totalPar;
 
+  const [showCalc, setShowCalc] = useState(false);
+  const courseHoles: any[] = allVersions[0]?.holes ?? [];
+  const CALC_DIST: Record<string,number> = { Driver:230,"3W":210,"5W":195,"7W":180,"4i":185,"5i":175,"6i":165,"7i":155,"8i":145,"9i":130,PW:120,SW:100,LW:80 };
+
+  function calcEstRem(rh: RoundHole): number | null {
+    if (rh.par < 4 || !rh.club || !CALC_DIST[rh.club]) return null;
+    const rem = rh.yards - CALC_DIST[rh.club];
+    return rem > 0 ? rem : 0;
+  }
+  function calcWaterRisk(rh: RoundHole, ch: any): number {
+    if (!ch || rh.tee_accuracy === "Hit" || !rh.tee_accuracy) return 0;
+    const penalties = (Number(rh.water_penalty)||0) + (Number(rh.drop_or_out)||0);
+    if (!penalties) return 0;
+    const match = (rh.tee_accuracy === "Left" && ch.tee_water_out_left) ||
+                  (rh.tee_accuracy === "Right" && ch.tee_water_out_right);
+    return match ? 100 : 0;
+  }
+  function calcTreeRisk(rh: RoundHole, ch: any): number {
+    if (!ch || rh.tee_accuracy === "Hit" || !rh.tee_accuracy || !Number(rh.tree_haz)) return 0;
+    if (rh.tee_accuracy === "Left"  && ch.tee_tree_hazard_left)  return 75;
+    if (rh.tee_accuracy === "Right" && ch.tee_tree_hazard_right) return 75;
+    return 0;
+  }
+  function calcBunkerRisk(rh: RoundHole, ch: any): number {
+    if (!ch || rh.tee_accuracy === "Hit" || !rh.tee_accuracy || !Number(rh.fairway_bunker)) return 0;
+    if (rh.tee_accuracy === "Left"  && ch.tee_bunkers_left)  return 100;
+    if (rh.tee_accuracy === "Right" && ch.tee_bunkers_right) return 100;
+    return 0;
+  }
+
   return (
     <div style={{ marginTop:32 }}>
       <div style={{ marginBottom:16 }}>
@@ -157,7 +187,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
         </p>
       </div>
 
-      <div style={{ overflowX:"auto", marginBottom:20, borderRadius:10, border:"1px solid #ddd", boxShadow:"0 2px 8px #0001" }}>
+      <div style={{ overflowX:"auto", borderRadius:10, border:"1px solid #ddd", boxShadow:"0 2px 8px #0001", marginBottom:12 }}>
         <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"auto" }}>
           <tbody>
             <tr>
@@ -252,8 +282,54 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
                 ? <td key={ci} style={c}>{col.rh.first_putt_distance||"—"}</td>
                 : <td key={ci} style={{...c,background:"#f5f5f5"}}></td>)}
             </tr>
+            {showCalc && <>
+              <tr>
+                <td colSpan={cols.length+1} style={{padding:"4px 8px",background:"#e8f5f0",fontSize:9,fontWeight:700,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,borderTop:"2px solid #0f6e56"}}>Calculations</td>
+              </tr>
+              <tr>
+                <td style={lbl}>Est Rem</td>
+                {cols.map((col,ci) => {
+                  if (col.type==="spacer") return <td key={ci} style={{...c,background:"#f5f5f5"}}></td>;
+                  const rem = calcEstRem(col.rh);
+                  return <td key={ci} style={{...c,color:"#0f6e56",fontWeight:rem!==null?600:400}}>{rem!==null?rem:"—"}</td>;
+                })}
+              </tr>
+              <tr style={{background:"#f9f9f9"}}>
+                <td style={{...lbl,background:"#f9f9f9"}}>Water</td>
+                {cols.map((col,ci) => {
+                  if (col.type==="spacer") return <td key={ci} style={{...c,background:"#e8f5f0"}}></td>;
+                  const ch = courseHoles.find((h:any)=>h.hole===col.rh.hole);
+                  const v = calcWaterRisk(col.rh, ch);
+                  return <td key={ci} style={{...c,background:"#f9f9f9",color:v>0?"#e67e22":"#aaa",fontWeight:v>0?700:400}}>{v>0?`${v}%`:"—"}</td>;
+                })}
+              </tr>
+              <tr>
+                <td style={lbl}>Trees</td>
+                {cols.map((col,ci) => {
+                  if (col.type==="spacer") return <td key={ci} style={{...c,background:"#f5f5f5"}}></td>;
+                  const ch = courseHoles.find((h:any)=>h.hole===col.rh.hole);
+                  const v = calcTreeRisk(col.rh, ch);
+                  return <td key={ci} style={{...c,color:v>0?"#27ae60":"#aaa",fontWeight:v>0?700:400}}>{v>0?`${v}%`:"—"}</td>;
+                })}
+              </tr>
+              <tr style={{background:"#f9f9f9"}}>
+                <td style={{...lbl,background:"#f9f9f9"}}>Bkr</td>
+                {cols.map((col,ci) => {
+                  if (col.type==="spacer") return <td key={ci} style={{...c,background:"#e8f5f0"}}></td>;
+                  const ch = courseHoles.find((h:any)=>h.hole===col.rh.hole);
+                  const v = calcBunkerRisk(col.rh, ch);
+                  return <td key={ci} style={{...c,background:"#f9f9f9",color:v>0?"#c8a84b":"#aaa",fontWeight:v>0?700:400}}>{v>0?`${v}%`:"—"}</td>;
+                })}
+              </tr>
+            </>}
           </tbody>
         </table>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <button onClick={() => setShowCalc(v => !v)} style={{ padding:"8px 18px", fontSize:13, fontWeight:600, borderRadius:8, border:"1.5px solid #0f6e56", background:showCalc?"#0f6e56":"transparent", color:showCalc?"white":"#0f6e56", cursor:"pointer" }}>
+          {showCalc ? "Hide Calculations" : "Include Calculations"}
+        </button>
+        {showCalc && <p style={{ fontSize:11, color:"#0f6e56", margin:"6px 0 0", fontStyle:"italic" }}>Est Rem = estimated approach yardage · Water/Trees/Bkr = % confidence hazard was implicated</p>}
       </div>
     </div>
   );
