@@ -95,7 +95,8 @@ type Filters = {
   chipsMin: string; chipsMax: string;
   firstPutt: string;
   greenDepth: string;
-  greensideFilter: GreensideFilter;
+  gsPositionFilter: GreensideFilter;
+  gsSurface: "any" | "rough" | "green" | "bunker";
   yardsBucket: string;
   siTierFilter: string;
   doglegFilter: string;
@@ -118,7 +119,7 @@ const DEFAULT_FILTERS: Filters = {
   siMin: "", siMax: "", ratingMin: "", ratingMax: "", slopeMin: "", slopeMax: "",
   years: new Set(), gsBunker: false, girOnly: false, nonGirOnly: false,
   puttsMin: "", puttsMax: "", chipsMin: "", chipsMax: "", firstPutt: "",
-  greenDepth: "", greensideFilter: defaultGreensideFilter(),
+  greenDepth: "", gsPositionFilter: defaultGreensideFilter(), gsSurface: "any" as const,
   yardsBucket: "", siTierFilter: "", doglegFilter: "", apprDistBucket: "", holeCluster: "",
   impactDir: "all",
   diffBucket: new Set(),
@@ -171,11 +172,11 @@ const GS_COLORS: Record<CellValue, { fill: string; text: string }> = {
   2: { fill: "#c8a84b", text: "#fff" },
 };
 
-function GreensideFilterWidget({ value, onChange }: { value: GreensideFilter; onChange: (v: GreensideFilter) => void }) {
+function GreensideDial({ value, onChange }: { value: GreensideFilter; onChange: (v: GreensideFilter) => void }) {
   return (
     <div style={{ marginTop: 8 }}>
       <p style={{ fontSize: 10, color: "#999", margin: "0 0 4px", fontStyle: "italic" }}>
-        Tap to cycle: grey = any · teal = green side · sand = bunker
+        Tap to select greenside position
       </p>
       <svg viewBox="0 0 200 190" style={{ width: "100%", maxWidth: 200, height: "auto", display: "block" }}>
         <text x={CX} y={CY - R_OUTER - 6} textAnchor="middle" fontSize={8} fontStyle="italic" fill="#999">↑ Far</text>
@@ -183,13 +184,15 @@ function GreensideFilterWidget({ value, onChange }: { value: GreensideFilter; on
         <text x={CX + R_OUTER + 6} y={CY + 3} textAnchor="start" fontSize={8} fontStyle="italic" fill="#999">R →</text>
         {GS_SEGMENTS.map(seg => {
           const v = value[seg.key];
-          const col = GS_COLORS[v];
+          const active = v === 1;
+          const fill = active ? "#0f6e56" : "#e8e8e8";
+          const textFill = active ? "#fff" : "#666";
           const lp = labelPos(seg.angle);
           const d = arcPath(seg.angle, R_INNER + 2, R_OUTER);
           return (
-            <g key={seg.key} onClick={() => onChange({ ...value, [seg.key]: ((v + 1) % 3) as CellValue })} style={{ cursor: "pointer" }}>
-              <path d={d} fill={col.fill} stroke="#fff" strokeWidth={1.5} style={{ transition: "fill 0.15s" }} />
-              <text x={lp.x} y={lp.y + 3} textAnchor="middle" fontSize={8} fontWeight={500} fill={col.text} style={{ pointerEvents: "none" }}>{seg.abbr}</text>
+            <g key={seg.key} onClick={() => onChange({ ...value, [seg.key]: (active ? 0 : 1) as CellValue })} style={{ cursor: "pointer" }}>
+              <path d={d} fill={fill} stroke="#fff" strokeWidth={1.5} style={{ transition: "fill 0.15s" }} />
+              <text x={lp.x} y={lp.y + 3} textAnchor="middle" fontSize={8} fontWeight={500} fill={textFill} style={{ pointerEvents: "none" }}>{seg.abbr}</text>
               <path d={d} fill="transparent" stroke="none" style={{ pointerEvents: "all" }} />
             </g>
           );
@@ -199,6 +202,54 @@ function GreensideFilterWidget({ value, onChange }: { value: GreensideFilter; on
         <text x={CX} y={CY + 11} textAnchor="middle" fontSize={7} fontWeight={500} fill="#fff" style={{ pointerEvents: "none" }}>GREEN</text>
       </svg>
       <div style={{ textAlign: "center", fontSize: 9, color: "#999", fontStyle: "italic" }}>↓ Short</div>
+    </div>
+  );
+}
+
+const SURFACE_OPTIONS: { val: "rough" | "green" | "bunker"; label: string; color: string }[] = [
+  { val: "rough",  label: "Rough",       color: "#7a5c3a" },
+  { val: "green",  label: "Extra Green", color: "#0f6e56" },
+  { val: "bunker", label: "Bunker",      color: "#c8a84b" },
+];
+
+function SurfacePicker({ value, onChange }: { value: "any" | "rough" | "green" | "bunker"; onChange: (v: "any" | "rough" | "green" | "bunker") => void }) {
+  const active = SURFACE_OPTIONS.find(o => o.val === value);
+  const centerColor = active?.color ?? "#e8e8e8";
+  const centerLabel = active?.label ?? "Any";
+  return (
+    <div style={{ marginTop: 12 }}>
+      <p style={{ fontSize: 10, color: "#999", margin: "0 0 8px", fontStyle: "italic" }}>
+        Select surface type
+      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%", background: centerColor,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          flexShrink: 0, transition: "background 0.2s",
+        }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: "#fff", textAlign: "center", lineHeight: 1.2 }}>{centerLabel}</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {SURFACE_OPTIONS.map(opt => {
+            const isActive = value === opt.val;
+            return (
+              <button
+                key={opt.val}
+                onClick={() => onChange(isActive ? "any" : opt.val)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer", padding: "2px 0",
+                  fontSize: 13, fontWeight: isActive ? 700 : 500,
+                  color: opt.color,
+                  textDecoration: isActive ? "underline" : "none",
+                  textAlign: "left",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -361,16 +412,18 @@ function filterHoles(holes: EnrichedHole[], f: Filters): EnrichedHole[] {
       const matchesAny = DIFF_BUCKETS.filter(b => f.diffBucket.has(b.val)).some(b => b.test(h.roundDiff!));
       if (!matchesAny) return false;
     }
-    const gsAny = Object.values(f.greensideFilter).some(v => v !== 0);
-    if (gsAny) {
-      const combined: GreensideFilter = defaultGreensideFilter();
-      const keys = Object.keys(combined) as (keyof GreensideFilter)[];
+    const posAny = Object.values(f.gsPositionFilter).some(v => v !== 0);
+    if (posAny) {
+      const keys = Object.keys(f.gsPositionFilter) as (keyof GreensideFilter)[];
       for (const k of keys) {
-        if (h.approach_bunker[k] === 2) combined[k] = 2;
-        else if (h.approach_green[k] === 1) combined[k] = 1;
+        if (f.gsPositionFilter[k] === 1) {
+          if (h.approach_green[k] !== 1 && h.approach_bunker[k] !== 2) return false;
+        }
       }
-      if (!greensideMatches(combined, f.greensideFilter)) return false;
     }
+    if (f.gsSurface === "green"  && !Object.values(h.approach_green).some(v => v === 1))  return false;
+    if (f.gsSurface === "bunker" && !Object.values(h.approach_bunker).some(v => v === 2)) return false;
+    if (f.gsSurface === "rough"  && (Object.values(h.approach_green).some(v => v === 1) || Object.values(h.approach_bunker).some(v => v === 2))) return false;
     return true;
   });
 }
@@ -795,7 +848,7 @@ export default function RoundsInsights() {
     !!filters.chipsMin || !!filters.chipsMax || !!filters.firstPutt ||
     !!filters.greenDepth || !!filters.yardsBucket || !!filters.siTierFilter ||
     !!filters.doglegFilter || !!filters.apprDistBucket || filters.diffBucket.size > 0 ||
-    Object.values(filters.greensideFilter).some(v => v !== 0);
+    Object.values(filters.gsPositionFilter).some(v => v !== 0) || filters.gsSurface !== "any";
 
   const holesWithKnownChips = filtered.filter(h => h.chips !== null);
 
@@ -939,7 +992,8 @@ export default function RoundsInsights() {
     (filters.puttsMin||filters.puttsMax?1:0) +
     (filters.chipsMin||filters.chipsMax?1:0) +
     (filters.firstPutt?1:0) + (filters.greenDepth?1:0) +
-    (Object.values(filters.greensideFilter).some(v=>v!==0)?1:0);
+    (Object.values(filters.gsPositionFilter).some(v=>v!==0)?1:0) +
+    (filters.gsSurface!=="any"?1:0);
   const courseActive = (filters.courseId?1:0) + filters.pars.size +
     (filters.siMin||filters.siMax?1:0) +
     (filters.ratingMin||filters.ratingMax?1:0) +
@@ -1228,11 +1282,15 @@ export default function RoundsInsights() {
             </div>
             <div>
               <p style={fl}>Greenside Position</p>
-              <GreensideFilterWidget value={filters.greensideFilter} onChange={v => setFilters(f => ({ ...f, greensideFilter: v }))} />
-              <button onClick={() => setFilters(f => ({ ...f, greensideFilter: defaultGreensideFilter() }))}
+              <GreensideDial value={filters.gsPositionFilter} onChange={v => setFilters(f => ({ ...f, gsPositionFilter: v }))} />
+              <button onClick={() => setFilters(f => ({ ...f, gsPositionFilter: defaultGreensideFilter() }))}
                 style={{ marginTop: 6, fontSize: 11, color: "#0f6e56", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
-                Clear greenside
+                Clear position
               </button>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <p style={fl}>Surface Type</p>
+              <SurfacePicker value={filters.gsSurface} onChange={v => setFilters(f => ({ ...f, gsSurface: v }))} />
             </div>
           </CollapsibleSection>
         </div>

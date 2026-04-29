@@ -53,6 +53,8 @@ export async function loadCourses(): Promise<CourseRecord[]> {
     slope: row.slope ?? null,
     holes: row.holes,
     ai_summary: row.ai_summary ?? null,
+    hero_image_url: row.hero_image_url ?? null,
+    hero_image_position: row.hero_image_position ?? null,
   }));
 }
 
@@ -70,6 +72,8 @@ export async function saveCourse(course: CourseRecord): Promise<void> {
       hole_count: course.holes.length,
       holes: course.holes,
       ai_summary: course.ai_summary ?? null,
+      hero_image_url: course.hero_image_url ?? null,
+      hero_image_position: course.hero_image_position ?? null,
     });
   if (error) console.error("saveCourse error:", error);
 }
@@ -94,5 +98,7 @@ export async function getCourse(id: string): Promise<CourseRecord | null> {
     slope: data.slope ?? null,
     holes: data.holes,
     ai_summary: data.ai_summary ?? null,
+    hero_image_url: data.hero_image_url ?? null,
+    hero_image_position: data.hero_image_position ?? null,
   };
 }

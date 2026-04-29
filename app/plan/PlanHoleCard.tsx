@@ -58,7 +58,7 @@ function Chip({ children, tone = "default" }: { children: React.ReactNode; tone?
 const AIM_OPTS = ["L", "LF", "CF", "RF", "R"] as const;
 type AimPos = typeof AIM_OPTS[number];
 
-function AimDial({ value, onChange, hole }: {
+export function AimDial({ value, onChange, hole }: {
   value: AimPos;
   onChange: (v: AimPos) => void;
   hole: HoleData;
@@ -189,7 +189,7 @@ type PlanGridData = {
   baseline: number;
 };
 
-function wAvgE(holes: PlanEnrichedHole[], fn: (e: PlanEnrichedHole) => number): number {
+export function wAvgE(holes: PlanEnrichedHole[], fn: (e: PlanEnrichedHole) => number): number {
   let n = 0, d = 0;
   for (const e of holes) { const v = fn(e); if (!isNaN(v)) { n += v * e.simScore; d += e.simScore; } }
   return d > 0 ? n / d : NaN;
@@ -312,7 +312,7 @@ const DIR_TO_AIM: Record<string, HoleStrategy["aim"]> = {
   Right: "RF",
 };
 
-function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }: {
+export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }: {
   enriched: PlanEnrichedHole[];
   selected: string;
   hole: HoleData;

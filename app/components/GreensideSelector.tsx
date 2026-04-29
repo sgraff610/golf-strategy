@@ -3,17 +3,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // GreensideSelector
 //
-// Outer ring (8 segments): hazard positions — cycles 0→1(green)→2(bunker)→0
-// Inner ring (8 segments): aim target — single-select, yellow=caution, red=danger
-//   click once → yellow, click again → red, click again → deselect
-//   selecting a new segment deselects the previous one
-// Center circle: shows "Aim for Pin" (default) or "Aim for {direction}"
-//
-// Drop this file into: app/components/GreensideSelector.tsx
+// Dial 1 — Outer ring (8 segments): hazard positions — cycles 0→1(green)→2(bunker)→0
+//          Static center: "Green 🚩"
+// Dial 2 — Aim ring (8 green segments): click to select direction, center cycles
+//          nothing → warning (yellow) → danger (red) → deselected
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type CellValue = 0 | 1 | 2;
-export type AimValue = 0 | 1 | 2; // 0=none, 1=yellow, 2=red
+export type AimValue  = 0 | 1 | 2; // 0=none, 1=warning, 2=danger
 
 export type GreensideState = {
   long_left:    CellValue;
@@ -24,8 +21,8 @@ export type GreensideState = {
   short_left:   CellValue;
   short_middle: CellValue;
   short_right:  CellValue;
-  aim_dir:      string;   // e.g. 'FL', 'F', 'FR', 'L', 'R', 'BL', 'B', 'BR' or ''
-  aim_level:    AimValue; // 0=unset, 1=yellow, 2=red
+  aim_dir:   string;   // 'B'|'BR'|'R'|'FR'|'F'|'FL'|'L'|'BL' or ''
+  aim_level: AimValue;
 };
 
 export const defaultGreensideState = (): GreensideState => ({
@@ -37,8 +34,8 @@ export const defaultGreensideState = (): GreensideState => ({
   short_left:   0,
   short_middle: 0,
   short_right:  0,
-  aim_dir:      '',
-  aim_level:    0,
+  aim_dir:   '',
+  aim_level: 0,
 });
 
 // ─── Flat ↔ Nested helpers ────────────────────────────────────────────────────
@@ -54,8 +51,8 @@ export function flatToGreenside(hole: FlatHole): GreensideState {
     const green  = !!hole[`approach_green_${pos}`];
     gs[pos] = bunker ? 2 : green ? 1 : 0;
   }
-  gs.aim_dir   = (hole['aim_dir']   as string)  ?? '';
-  gs.aim_level = (hole['aim_level'] as AimValue) ?? 0;
+  gs.aim_dir   = (hole['aim_dir']   as string)    ?? '';
+  gs.aim_level = (hole['aim_level'] as AimValue)  ?? 0;
   return gs;
 }
 
@@ -79,7 +76,6 @@ type Props = {
 };
 
 // F=bottom(180°), B=top(0°), R=right(90°), L=left(270°). arcPath subtracts 90° internally.
-// _left and _right keys are swapped horizontally to match visual orientation.
 const OUTER_SEGMENTS = [
   { key: 'long_middle',  label: 'B',   angle:   0 },
   { key: 'long_right',   label: 'BR',  angle:  45 },
@@ -90,24 +86,6 @@ const OUTER_SEGMENTS = [
   { key: 'middle_left',  label: 'L',   angle: 270 },
   { key: 'long_left',    label: 'BL',  angle: 315 },
 ] as const;
-
-// Inner aim ring — same cardinal directions
-const INNER_SEGMENTS = [
-  { dir: 'B',  label: 'B',  angle:   0 },
-  { dir: 'BR', label: 'BR', angle:  45 },
-  { dir: 'R',  label: 'R',  angle:  90 },
-  { dir: 'FR', label: 'FR', angle: 135 },
-  { dir: 'F',  label: 'F',  angle: 180 },
-  { dir: 'FL', label: 'FL', angle: 225 },
-  { dir: 'L',  label: 'L',  angle: 270 },
-  { dir: 'BL', label: 'BL', angle: 315 },
-] as const;
-
-const AIM_LABELS: Record<string, string> = {
-  FL: 'Front Left', F: 'Front', FR: 'Front Right',
-  L: 'Left', R: 'Right',
-  BL: 'Back Left', B: 'Back', BR: 'Back Right',
-};
 
 const OUTER_COLORS: Record<CellValue, string> = {
   0: '#0f6e56',
@@ -121,72 +99,82 @@ const OUTER_STROKE: Record<CellValue, string> = {
   2: '#a0842e',
 };
 
-const AIM_COLORS: Record<AimValue, string> = {
-  0: '#d4edda',   // light green — unselected inner segment
-  1: '#f5c842',   // yellow
-  2: '#e03c2d',   // red
-};
-
-const AIM_STROKE: Record<AimValue, string> = {
-  0: '#9ecfaa',
-  1: '#c9a000',
-  2: '#a82010',
-};
-
-// SVG geometry
-const CX = 145;
-const CY = 145;
-const R_CENTER  = 42;   // center circle (+10%)
-const R_INNER_IN  = R_CENTER + 2;  // 44
-const R_INNER_OUT = 74;            // inner ring outer edge (-10% from 82)
-const R_OUTER_IN  = R_INNER_OUT + 3; // 77
-const R_OUTER_OUT = 115;           // outer ring outer edge (-10% from 128)
+// SVG geometry — Dial 1
+const CX = 110;
+const CY = 110;
+const R_CENTER    = 34;
+const R_OUTER_IN  = R_CENTER + 4;
+const R_OUTER_OUT = 90;
 const GAP_DEG = 3;
+
+// SVG geometry — Dial 2 (larger viewBox to fit context ring)
+const D2_CX = 125;
+const D2_CY = 125;
+const R_CTX_IN  = 93;   // context ring (transparent, shows G/S from Dial 1)
+const R_CTX_OUT = 112;
 
 function toRad(deg: number) { return (deg * Math.PI) / 180; }
 
-function arcPath(angleDeg: number, r1: number, r2: number): string {
-  // Boundaries at exactly angleDeg ± 22.5°; gap inset from those boundary lines
+function arcPath(angleDeg: number, r1: number, r2: number, cx = CX, cy = CY): string {
   const a1 = toRad(angleDeg - 22.5 + GAP_DEG / 2 - 90);
   const a2 = toRad(angleDeg + 22.5 - GAP_DEG / 2 - 90);
-  const x1 = CX + r1 * Math.cos(a1), y1 = CY + r1 * Math.sin(a1);
-  const x2 = CX + r2 * Math.cos(a1), y2 = CY + r2 * Math.sin(a1);
-  const x3 = CX + r2 * Math.cos(a2), y3 = CY + r2 * Math.sin(a2);
-  const x4 = CX + r1 * Math.cos(a2), y4 = CY + r1 * Math.sin(a2);
+  const x1 = cx + r1 * Math.cos(a1), y1 = cy + r1 * Math.sin(a1);
+  const x2 = cx + r2 * Math.cos(a1), y2 = cy + r2 * Math.sin(a1);
+  const x3 = cx + r2 * Math.cos(a2), y3 = cy + r2 * Math.sin(a2);
+  const x4 = cx + r1 * Math.cos(a2), y4 = cy + r1 * Math.sin(a2);
   const fmt = (n: number) => n.toFixed(2);
   return `M${fmt(x1)},${fmt(y1)} L${fmt(x2)},${fmt(y2)} A${r2},${r2} 0 0,1 ${fmt(x3)},${fmt(y3)} L${fmt(x4)},${fmt(y4)} A${r1},${r1} 0 0,0 ${fmt(x1)},${fmt(y1)} Z`;
 }
 
-function labelPoint(angleDeg: number, r: number): [number, number] {
+function labelPoint(angleDeg: number, r: number, cx = CX, cy = CY): [number, number] {
   const rad = toRad(angleDeg - 90);
-  return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
+  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
 }
 
+// Maps Dial 2 aim direction → the corresponding Dial 1 position key
+const AIM_TO_OUTER: Record<string, keyof GreensideState> = {
+  B:  'long_middle',  BR: 'long_right',   R:  'middle_right', FR: 'short_right',
+  F:  'short_middle', FL: 'short_left',   L:  'middle_left',  BL: 'long_left',
+};
+
+const AIM_SEGMENTS = [
+  { dir: 'B',  label: 'B',  angle:   0 },
+  { dir: 'BR', label: 'BR', angle:  45 },
+  { dir: 'R',  label: 'R',  angle:  90 },
+  { dir: 'FR', label: 'FR', angle: 135 },
+  { dir: 'F',  label: 'F',  angle: 180 },
+  { dir: 'FL', label: 'FL', angle: 225 },
+  { dir: 'L',  label: 'L',  angle: 270 },
+  { dir: 'BL', label: 'BL', angle: 315 },
+] as const;
+
+const AIM_DIR_LABELS: Record<string, string> = {
+  B: 'Back', BR: 'Back R', R: 'Right', FR: 'Front R',
+  F: 'Front', FL: 'Front L', L: 'Left', BL: 'Back L',
+};
+
 export default function GreensideSelector({ label = 'Greenside', value, onChange }: Props) {
-  // Outer ring click
-  const handleOuter = (key: keyof GreensideState) => {
-    if (key === 'aim_dir' || key === 'aim_level') return;
-    onChange({ ...value, [key]: ((value[key as keyof GreensideState] as number + 1) % 3) as CellValue });
+  const handleOuter = (key: string) => {
+    const cur = value[key as keyof GreensideState] as CellValue;
+    onChange({ ...value, [key]: ((cur + 1) % 3) as CellValue });
   };
 
-  // Inner aim ring click — single select, cycles 0→1→2→0, deselects previous
   const handleAim = (dir: string) => {
     if (value.aim_dir === dir) {
-      // same segment — cycle
       const next = ((value.aim_level + 1) % 3) as AimValue;
       onChange({ ...value, aim_level: next, aim_dir: next === 0 ? '' : dir });
     } else {
-      // new segment — select at level 1, deselect previous
       onChange({ ...value, aim_dir: dir, aim_level: 1 });
     }
   };
 
-  const aimLabel = value.aim_dir ? AIM_LABELS[value.aim_dir] ?? value.aim_dir : 'Pin';
-  const aimLine1 = 'Aim for';
-  const aimLine2 = aimLabel;
+  const noneSelected = !value.aim_dir || value.aim_level === 0;
+  const centerFill   = noneSelected ? '#22c55e' : value.aim_level === 1 ? '#f5c842' : '#e03c2d';
+  const centerStroke = noneSelected ? '#16a34a' : value.aim_level === 1 ? '#c9a000' : '#a82010';
+  const centerText   = (noneSelected || value.aim_level === 1) ? '#000' : '#fff';
 
-  const VW = 290;
-  const VH = 290;
+  const VW = 220;
+  const VH = 220;
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -197,119 +185,129 @@ export default function GreensideSelector({ label = 'Greenside', value, onChange
         {label}
       </div>
 
-      <div style={{ width: '100%', maxWidth: 290 }}>
-        <svg
-          viewBox={`0 0 ${VW} ${VH}`}
-          xmlns="http://www.w3.org/2000/svg"
-          style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
-        >
-          {/* Orientation labels */}
-          <text x={CX} y={CY - R_OUTER_OUT - 8} textAnchor="middle" fontSize={10} fontStyle="italic" fill="#999">↑ Far</text>
-          <text x={CX - R_OUTER_OUT - 6} y={CY + 4} textAnchor="end" fontSize={10} fontStyle="italic" fill="#999">← Left</text>
-          <text x={CX + R_OUTER_OUT + 6} y={CY + 4} textAnchor="start" fontSize={10} fontStyle="italic" fill="#999">Right →</text>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
-          {/* ── OUTER RING (hazards) ── */}
-          {OUTER_SEGMENTS.map((seg) => {
-            const v = value[seg.key as keyof GreensideState] as CellValue;
-            const d = arcPath(seg.angle, R_OUTER_IN, R_OUTER_OUT);
-            const [lx, ly] = labelPoint(seg.angle, (R_OUTER_IN + R_OUTER_OUT) / 2);
-            return (
-              <g key={seg.key} style={{ cursor: 'pointer' }} onClick={() => handleOuter(seg.key as keyof GreensideState)}>
-                <path d={d} fill={OUTER_COLORS[v]} stroke={OUTER_STROKE[v]} strokeWidth={1} />
-                <text x={lx} y={ly + 4} textAnchor="middle" fontSize={11} fontWeight="500" fill={v === 0 ? '#888' : '#fff'} style={{ pointerEvents: 'none' }}>
-                  {seg.label}
-                </text>
-                {/* invisible larger hit area */}
-                <path d={d} fill="transparent" stroke="none" style={{ cursor: 'pointer' }} />
-              </g>
-            );
-          })}
+        {/* ── DIAL 1: Hazard position ring ── */}
+        <div>
+          <div style={{ fontSize: 10, color: '#999', fontStyle: 'italic', marginBottom: 4 }}>
+            Tap to cycle: rough · extra green · bunker
+          </div>
+          <div style={{ width: '100%', maxWidth: VW }}>
+            <svg viewBox={`0 0 ${VW} ${VH}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
+              <text x={CX} y={CY - R_OUTER_OUT - 6} textAnchor="middle" fontSize={9} fontStyle="italic" fill="#999">↑ Far</text>
+              <text x={CX - R_OUTER_OUT - 4} y={CY + 4} textAnchor="end" fontSize={9} fontStyle="italic" fill="#999">← L</text>
+              <text x={CX + R_OUTER_OUT + 4} y={CY + 4} textAnchor="start" fontSize={9} fontStyle="italic" fill="#999">R →</text>
+              {OUTER_SEGMENTS.map((seg) => {
+                const v = value[seg.key as keyof GreensideState] as CellValue;
+                const d = arcPath(seg.angle, R_OUTER_IN, R_OUTER_OUT);
+                const [lx, ly] = labelPoint(seg.angle, (R_OUTER_IN + R_OUTER_OUT) / 2);
+                return (
+                  <g key={seg.key} style={{ cursor: 'pointer' }} onClick={() => handleOuter(seg.key)}>
+                    <path d={d} fill={OUTER_COLORS[v]} stroke={OUTER_STROKE[v]} strokeWidth={1} />
+                    <text x={lx} y={ly + 4} textAnchor="middle" fontSize={10} fontWeight="500" fill={v === 0 ? '#9ecfaa' : '#fff'} style={{ pointerEvents: 'none' }}>{seg.label}</text>
+                    <path d={d} fill="transparent" stroke="none" style={{ cursor: 'pointer' }} />
+                  </g>
+                );
+              })}
+              <circle cx={CX} cy={CY} r={R_CENTER} fill="#0f6e56" stroke="#0a5240" strokeWidth={1.5} />
+              <text x={CX} y={CY - 5} textAnchor="middle" fontSize={14} style={{ pointerEvents: 'none' }}>🚩</text>
+              <text x={CX} y={CY + 11} textAnchor="middle" fontSize={8} fontWeight="700" fill="#fff" style={{ pointerEvents: 'none' }}>GREEN</text>
+            </svg>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: 9, color: '#999', fontStyle: 'italic' }}>↓ Short</div>
+        </div>
 
-          {/* ── INNER RING (aim) ── */}
-          {INNER_SEGMENTS.map((seg) => {
-            const isSelected = value.aim_dir === seg.dir;
-            const noneSelected = !value.aim_dir || value.aim_level === 0;
-            // Nothing selected → all bright green
-            // level=1 or 2 selected → selected stays green, rest go light gray
-            let fill: string;
-            let stroke: string;
-            let textColor: string;
-            if (noneSelected || isSelected) {
-              fill = '#22c55e'; stroke = '#16a34a'; textColor = '#fff';
-            } else {
-              fill = '#e8e8e8'; stroke = '#ccc'; textColor = '#888';
-            }
-            const d = arcPath(seg.angle, R_INNER_IN, R_INNER_OUT);
-            const [lx, ly] = labelPoint(seg.angle, (R_INNER_IN + R_INNER_OUT) / 2);
-            return (
-              <g key={seg.dir} style={{ cursor: 'pointer' }} onClick={() => handleAim(seg.dir)}>
-                <path d={d} fill={fill} stroke={stroke} strokeWidth={1} />
-                <text x={lx} y={ly + 4} textAnchor="middle" fontSize={10} fontWeight="500" fill={textColor} style={{ pointerEvents: 'none' }}>
-                  {seg.label}
-                </text>
-                <path d={d} fill="transparent" stroke="none" />
-              </g>
-            );
-          })}
+        {/* ── DIAL 2: Aim ring + context ring ── */}
+        <div>
+          <div style={{ fontSize: 10, color: '#999', fontStyle: 'italic', marginBottom: 4 }}>
+            Tap to aim: once = warning · twice = danger
+          </div>
+          <div style={{ width: '100%', maxWidth: 250 }}>
+            <svg viewBox="0 0 250 250" style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
+              {AIM_SEGMENTS.map((seg) => {
+                const isSelected = value.aim_dir === seg.dir;
+                const fill   = (!value.aim_dir || isSelected) ? '#22c55e' : '#e8e8e8';
+                const stroke = (!value.aim_dir || isSelected) ? '#16a34a' : '#ccc';
+                const tc     = (!value.aim_dir || isSelected) ? '#fff' : '#aaa';
+                const d = arcPath(seg.angle, R_OUTER_IN, R_OUTER_OUT, D2_CX, D2_CY);
+                const [lx, ly] = labelPoint(seg.angle, (R_OUTER_IN + R_OUTER_OUT) / 2, D2_CX, D2_CY);
+                return (
+                  <g key={seg.dir} style={{ cursor: 'pointer' }} onClick={() => handleAim(seg.dir)}>
+                    <path d={d} fill={fill} stroke={stroke} strokeWidth={1} />
+                    <text x={lx} y={ly + 4} textAnchor="middle" fontSize={10} fontWeight="500" fill={tc} style={{ pointerEvents: 'none' }}>{seg.label}</text>
+                    <path d={d} fill="transparent" stroke="none" />
+                  </g>
+                );
+              })}
 
-          {/* ── CENTER CIRCLE ── */}
-          {(() => {
-            const noneSelected = !value.aim_dir || value.aim_level === 0;
-            const circleFill = noneSelected ? '#22c55e' : value.aim_level === 1 ? '#f5c842' : '#e03c2d';
-            const circleStroke = noneSelected ? '#16a34a' : value.aim_level === 1 ? '#c9a000' : '#a82010';
-            const handleReset = () => onChange({ ...value, aim_dir: '', aim_level: 0 });
-            const textColor = (noneSelected || value.aim_level === 1) ? '#000' : '#fff';
-            return (
-              <g onClick={handleReset} style={{ cursor: 'pointer' }}>
-                <circle cx={CX} cy={CY} r={R_CENTER} fill={circleFill} stroke={circleStroke} strokeWidth={1.5} />
+              {/* Context ring — transparent, shows G or S from Dial 1 */}
+              {AIM_SEGMENTS.map((seg) => {
+                const outerKey = AIM_TO_OUTER[seg.dir];
+                const v = value[outerKey] as CellValue;
+                const d = arcPath(seg.angle, R_CTX_IN, R_CTX_OUT, D2_CX, D2_CY);
+                const [lx, ly] = labelPoint(seg.angle, (R_CTX_IN + R_CTX_OUT) / 2, D2_CX, D2_CY);
+                const letter = v === 1 ? 'G' : v === 2 ? 'S' : null;
+                const letterColor = v === 1 ? '#22c55e' : '#c8a84b';
+                return (
+                  <g key={`ctx-${seg.dir}`} style={{ cursor: 'pointer' }} onClick={() => handleAim(seg.dir)}>
+                    <path d={d} fill="transparent" stroke="#ddd" strokeWidth={0.5} />
+                    {letter && (
+                      <text x={lx} y={ly + 5} textAnchor="middle" fontSize={13} fontWeight="700" fill={letterColor} style={{ pointerEvents: 'none' }}>
+                        {letter}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+
+              <g onClick={() => onChange({ ...value, aim_dir: '', aim_level: 0 })} style={{ cursor: 'pointer' }}>
+                <circle cx={D2_CX} cy={D2_CY} r={R_CENTER} fill={centerFill} stroke={centerStroke} strokeWidth={1.5} />
                 {noneSelected ? (
                   <>
-                    <text x={CX} y={CY - 6} textAnchor="middle" fontSize={9} fill="#000" fontStyle="italic" style={{ pointerEvents: 'none' }}>Aim for</text>
-                    <text x={CX} y={CY + 8} textAnchor="middle" fontSize={11} fontWeight="700" fill="#000" style={{ pointerEvents: 'none' }}>Pin</text>
+                    <text x={D2_CX} y={D2_CY - 5} textAnchor="middle" fontSize={9} fill="#000" fontStyle="italic" style={{ pointerEvents: 'none' }}>Aim for</text>
+                    <text x={D2_CX} y={D2_CY + 9} textAnchor="middle" fontSize={11} fontWeight="700" fill="#000" style={{ pointerEvents: 'none' }}>Pin</text>
                   </>
                 ) : (
                   <>
-                    <text x={CX} y={CY - 14} textAnchor="middle" fontSize={10} fontWeight="700" fill={textColor} style={{ pointerEvents: 'none' }}>
+                    <text x={D2_CX} y={D2_CY - 12} textAnchor="middle" fontSize={9} fontWeight="700" fill={centerText} style={{ pointerEvents: 'none' }}>
                       {value.aim_level === 1 ? 'Warning' : 'Danger'}
                     </text>
-                    <text x={CX} y={CY - 2} textAnchor="middle" fontSize={9} fill={textColor} style={{ pointerEvents: 'none' }}>Aim for</text>
-                    <text x={CX} y={CY + 13} textAnchor="middle" fontSize={10} fontWeight="700" fill={textColor} style={{ pointerEvents: 'none' }}>
-                      {AIM_LABELS[value.aim_dir] ?? value.aim_dir}
+                    <text x={D2_CX} y={D2_CY} textAnchor="middle" fontSize={8} fill={centerText} style={{ pointerEvents: 'none' }}>Aim for</text>
+                    <text x={D2_CX} y={D2_CY + 12} textAnchor="middle" fontSize={9} fontWeight="700" fill={centerText} style={{ pointerEvents: 'none' }}>
+                      {AIM_DIR_LABELS[value.aim_dir] ?? value.aim_dir}
                     </text>
                   </>
                 )}
               </g>
-            );
-          })()}
-        </svg>
+            </svg>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: 9, color: '#999', fontStyle: 'italic' }}>↓ Short</div>
+        </div>
+
       </div>
 
-      {/* Two-column legend */}
-      <div style={{ display: 'flex', gap: 24, marginTop: 6, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {/* Left: Aim Direction */}
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 600, color: '#999', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 5 }}>Aim</div>
-          {[
-            { color: '#22c55e', border: '#16a34a', label: 'Target' },
-            { color: '#f5c842', border: '#c9a000', label: 'Warning' },
-            { color: '#e03c2d', border: '#a82010', label: 'Danger' },
-          ].map(({ color, border, label: l }) => (
-            <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#666', marginBottom: 3 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: color, border: `1.5px solid ${border}`, flexShrink: 0 }} />
-              {l}
-            </div>
-          ))}
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Surrounding</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#666', marginBottom: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#22c55e', lineHeight: 1, width: 12, textAlign: 'center', flexShrink: 0 }}>G</span>
+            Extra Green
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#666', marginBottom: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#c8a84b', lineHeight: 1, width: 12, textAlign: 'center', flexShrink: 0 }}>S</span>
+            Bunker
+          </div>
         </div>
-        {/* Right: Hazard positions */}
         <div>
-          <div style={{ fontSize: 10, fontWeight: 600, color: '#999', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 5 }}>Surrounding</div>
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Aim</div>
           {[
-            { color: '#0f6e56', border: '#0a5240', label: 'Rough' },
-            { color: '#22c55e', border: '#16a34a', label: 'Extra Green' },
-            { color: '#c8a84b', border: '#a0842e', label: 'Bunker' },
-          ].map(({ color, border, label: l }) => (
-            <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#666', marginBottom: 3 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: color, border: `1.5px solid ${border}`, flexShrink: 0 }} />
+            { color: '#22c55e', stroke: '#16a34a', label: 'Target' },
+            { color: '#f5c842', stroke: '#c9a000', label: 'Warning' },
+            { color: '#e03c2d', stroke: '#a82010', label: 'Danger' },
+          ].map(({ color, stroke, label: l }) => (
+            <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#666', marginBottom: 2 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 3, background: color, border: `1.5px solid ${stroke}`, flexShrink: 0 }} />
               {l}
             </div>
           ))}

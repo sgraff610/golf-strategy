@@ -7,6 +7,9 @@ import { getCourse, saveCourse, loadCourses } from "@/lib/storage";
 import GreensideSelector, {
   GreensideState, defaultGreensideState, flatToGreenside, greensideToFlat,
 } from "@/app/components/GreensideSelector";
+import { TeeStratGrid, AimDial } from "@/app/plan/PlanHoleCard";
+import ScoreDistChart from "@/app/components/ScoreDistChart";
+import type { PlanEnrichedHole } from "@/lib/planTypes";
 
 const DOGLEG_OPTIONS: { value: DoglegDirection; label: string }[] = [
   { value: null,            label: "None" },
@@ -726,6 +729,7 @@ function EditCourseInner() {
   const [greenside, setGreenside] = useState<GreensideState>(defaultGreensideState());
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
+  const [enrichedMap, setEnrichedMap] = useState<Record<number, PlanEnrichedHole[]> | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -747,6 +751,19 @@ function EditCourseInner() {
       }
       setLoading(false);
     }).catch(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    setEnrichedMap(null);
+    fetch("/api/plan-enriched", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseId: id }),
+    })
+      .then(r => r.json())
+      .then(data => setEnrichedMap(data ?? {}))
+      .catch(() => setEnrichedMap({}));
   }, [id]);
 
   useEffect(() => {
@@ -967,30 +984,6 @@ function EditCourseInner() {
             <input style={inputStyle} type="number" min={1} max={18} value={hole.stroke_index||""} onChange={e => updateHole("stroke_index", Number(e.target.value))} />
           </div>
 
-          {/* Preferred tee strategy */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:12, marginTop:8 }}>
-            <div>
-              <label style={LABEL}>Preferred Club</label>
-              <select style={selectStyle} value={hole.preferred_club ?? ""} onChange={e => updateHole("preferred_club", e.target.value || undefined)}>
-                <option value="">— none —</option>
-                {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={LABEL}>Preferred Landing</label>
-              <select style={selectStyle} value={hole.preferred_landing ?? ""} onChange={e => updateHole("preferred_landing", e.target.value || null)}>
-                <option value="">— none —</option>
-                <option value="L">L — Left rough</option>
-                <option value="LF">LF — Left fairway</option>
-                <option value="CF">CF — Center fairway</option>
-                <option value="RF">RF — Right fairway</option>
-                <option value="R">R — Right rough</option>
-              </select>
-            </div>
-          </div>
-
         </div>
         {/* Hole Notes */}
         <div>
@@ -1043,14 +1036,91 @@ function EditCourseInner() {
           </div>
         </div>
 
-        {/* Greenside */}
+        {/* Course Strategy */}
         <div>
-          <span style={SECTION}>Greenside</span>
+          <span style={SECTION}>Course Strategy</span>
+
+          {/* Preferred Club + Preferred Landing */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
+            <div>
+              <label style={LABEL}>Preferred club</label>
+              <input
+                style={inputStyle}
+                type="text"
+                placeholder="e.g. Driver"
+                value={hole.preferred_club ?? ""}
+                onChange={e => updateHole("preferred_club", e.target.value)}
+              />
+            </div>
+            <div>
+              <label style={LABEL}>Preferred landing</label>
+              <select
+                style={selectStyle}
+                value={hole.preferred_landing ?? ""}
+                onChange={e => updateHole("preferred_landing", (e.target.value || null) as any)}
+              >
+                <option value="">—</option>
+                <option value="L">L — Left</option>
+                <option value="LF">LF — Left-Fair</option>
+                <option value="CF">CF — Center</option>
+                <option value="RF">RF — Right-Fair</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Green depth + Greenside selector */}
           <div style={{ marginBottom:12 }}>
             <label style={LABEL}>Green depth (yards)</label>
             <input style={{ ...inputStyle, maxWidth:120 }} type="number" min={0} value={hole.approach_green_depth||""} onChange={e => updateHole("approach_green_depth", Number(e.target.value))} />
           </div>
           <GreensideSelector value={greenside} onChange={handleGreensideChange} />
+
+          {/* Tee strategy grid + Aim dial — par 4/5 only */}
+          {hole.par !== 3 && (
+            <div style={{
+              marginTop:20, padding:"14px 12px",
+              background:"#fbf7ef", borderRadius:10, border:"1px solid #d9d1bf",
+              '--bg':'#f4efe6', '--paper':'#fbf7ef', '--paper-alt':'#f0eadc',
+              '--ink':'#1d2a24', '--ink-soft':'#2e3d35', '--muted':'#6a6356', '--muted-2':'#8e8778',
+              '--line':'#d9d1bf', '--line-soft':'#e6ddca',
+              '--green':'#0f6e56', '--green-deep':'#0a4d3c', '--green-soft':'#d8e7df',
+              '--accent':'#b5733a', '--accent-soft':'#f0dcc5', '--sand':'#c8a84b', '--flag':'#a63a2a',
+              '--good':'#2f7a52', '--bad':'#a63a2a',
+              '--font-display':"Georgia, 'Times New Roman', serif",
+              '--font-ui':'system-ui, sans-serif',
+              '--font-mono':'ui-monospace, monospace',
+            } as React.CSSProperties}>
+              <div style={{ fontSize:11, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>
+                Tee Strategy
+              </div>
+              {enrichedMap === null ? (
+                <div style={{ fontSize:12, color:"#888", fontStyle:"italic" }}>Loading similar holes…</div>
+              ) : (
+                <TeeStratGrid
+                  enriched={enrichedMap[hole.hole] ?? []}
+                  selected={hole.preferred_club ?? ""}
+                  hole={hole}
+                  onChange={club => updateHole("preferred_club", club)}
+                  onAimChange={aim => updateHole("preferred_landing", aim)}
+                />
+              )}
+              <div style={{ marginTop:16 }}>
+                <AimDial
+                  value={(hole.preferred_landing ?? "CF") as any}
+                  onChange={aim => updateHole("preferred_landing", aim)}
+                  hole={hole}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Score distribution chart */}
+          <ScoreDistChart
+            par={hole.par}
+            similarHoleScores={(enrichedMap?.[hole.hole] ?? []).filter(e => !e.isExact).map(e => e.stp + hole.par)}
+            thisHoleScores={(enrichedMap?.[hole.hole] ?? []).filter(e => e.isExact).map(e => e.stp + hole.par)}
+            difficultyRating={(hole as any).visual_analysis?.visual_difficulty_score ?? null}
+          />
         </div>
 
         <AiAnalysisPanel hole={hole} allTeeVersions={allTeeVersions} courseId={id} onSave={async (updated) => {

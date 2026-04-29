@@ -93,4 +93,6 @@ export type CourseRecord = {
   slope: number | null;
   holes: HoleData[];
   ai_summary?: string | null;
+  hero_image_url?: string | null;
+  hero_image_position?: string | null;
 };
