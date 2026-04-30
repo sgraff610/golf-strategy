@@ -1,6 +1,6 @@
 // app/plan/PlanHoleCard.tsx
 "use client";
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import type { HoleData } from "@/lib/types";
 import type { HoleStrategy, PlanEnrichedHole } from "@/lib/planTypes";
 import type { HoleClubStat, HoleHistEntry } from "./page";
@@ -256,16 +256,9 @@ const GRID_TOTAL_W = 420; // px
 const PILL_MAX     = 90;  // px — (420-50-10)/4, fills columns when all maxed
 const PILL_MIN     = 36;  // px — fits "+0.45" at 11px bold
 
-/** Width scales from PILL_MIN (count 0) to PILL_MAX (count ≥ 10) */
-function pillWidth(count: number): number {
-  if (count === 0) return PILL_MIN;
-  return Math.min(Math.round(PILL_MIN + (count / 10) * (PILL_MAX - PILL_MIN)), PILL_MAX);
-}
-
-/** Overall col: same range, driven by usage %, maxes at 25%+ */
-function overallPillWidth(p: number): number {
-  return Math.round(PILL_MIN + Math.min(p / 0.25, 1) * (PILL_MAX - PILL_MIN));
-}
+/** All pills use equal fixed width */
+function pillWidth(_count: number): number { return PILL_MAX; }
+function overallPillWidth(_p: number): number { return PILL_MAX; }
 
 function fmt(n: number): string { return n >= 0 ? `+${n.toFixed(2)}` : n.toFixed(2); }
 function pct(n: number): string { return `${Math.round(n * 100)}%`; }
@@ -350,23 +343,25 @@ export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }
       <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, alignItems: "center", gap: 3 }}>
         {/* Left */}
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          {leftHazard
+          {leftHazard && lCol.count > 0
             ? <ImpactPill impact={lCol.impact} count={lCol.count} width={pillWidth(lCol.count)}
                 hoverText={`${lCol.count}x`}
                 onClick={clubVal ? () => { onChange?.(clubVal); onAimChange?.("LF"); } : undefined} />
-            : <ImpactPill impact={NaN} count={0} width={PILL_MIN} hoverText="" ghost />}
+            : <div style={{ width: PILL_MAX }} />}
         </div>
-        {/* Hit — always shown */}
-        <ImpactPill impact={hCol.impact} count={hCol.count} width={pillWidth(hCol.count)}
-          hoverText={`${hCol.count}x`}
-          onClick={clubVal ? () => { onChange?.(clubVal); onAimChange?.("CF"); } : undefined} />
+        {/* Hit */}
+        {hCol.count > 0
+          ? <ImpactPill impact={hCol.impact} count={hCol.count} width={pillWidth(hCol.count)}
+              hoverText={`${hCol.count}x`}
+              onClick={clubVal ? () => { onChange?.(clubVal); onAimChange?.("CF"); } : undefined} />
+          : <div style={{ width: PILL_MAX }} />}
         {/* Right */}
         <div style={{ display: "flex", justifyContent: "flex-start" }}>
-          {rightHazard
+          {rightHazard && rCol.count > 0
             ? <ImpactPill impact={rCol.impact} count={rCol.count} width={pillWidth(rCol.count)}
                 hoverText={`${rCol.count}x`}
                 onClick={clubVal ? () => { onChange?.(clubVal); onAimChange?.("RF"); } : undefined} />
-            : <ImpactPill impact={NaN} count={0} width={PILL_MIN} hoverText="" ghost />}
+            : <div style={{ width: PILL_MAX }} />}
         </div>
       </div>
     );
@@ -624,13 +619,13 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                   const scoreColor = tp < 0 ? "var(--good)" : tp === 0 ? "var(--ink)" : tp === 1 ? "var(--muted)" : "var(--bad)";
                   const accColor = entry.tee_accuracy === "Hit" ? "var(--good)" : entry.tee_accuracy ? "var(--muted)" : "var(--muted-2)";
                   return (
-                    <>
-                      <div key={`d${i}`} style={{ fontSize: 11, color: "var(--muted)" }}>{entry.date}</div>
-                      <div key={`s${i}`} style={{ fontSize: 13, fontWeight: 700, color: scoreColor }}>{entry.score}</div>
-                      <div key={`tp${i}`} style={{ fontSize: 11, color: scoreColor }}>{tpStr}</div>
-                      <div key={`c${i}`} style={{ fontSize: 11, color: "var(--ink-soft)" }}>{entry.club || "—"}</div>
-                      <div key={`a${i}`} style={{ fontSize: 11, color: accColor }}>{entry.tee_accuracy || "—"}</div>
-                    </>
+                    <React.Fragment key={i}>
+                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{entry.date}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: scoreColor }}>{entry.score}</div>
+                      <div style={{ fontSize: 11, color: scoreColor }}>{tpStr}</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{entry.club || "—"}</div>
+                      <div style={{ fontSize: 11, color: accColor }}>{entry.tee_accuracy || "—"}</div>
+                    </React.Fragment>
                   );
                 })}
               </div>
