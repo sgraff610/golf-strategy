@@ -383,7 +383,7 @@ export default function ClubhousePage() {
           <div style={{ position: "absolute", top: 0, right: 0, width: 160, height: 160, background: "radial-gradient(circle,rgba(200,168,75,.12) 0%,transparent 70%)", pointerEvents: "none" }} />
 
           {/* Two-column layout */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "stretch" }}>
 
             {/* Left: HI + trend + 5×4 diff grid */}
             <div>
@@ -447,15 +447,15 @@ export default function ClubhousePage() {
               )}
             </div>
 
-            {/* Right: big sparkline centered over 2×2 stats */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {/* Right: sparkline above 2×2 stats, bottom-aligned so 2×2 sits level with 5×4 grid */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <Sparkline data={sparklineData} w={190} h={68} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,.35)", marginTop: 3, letterSpacing: 0.3 }}>
                   last {sparklineData.length} rounds
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, width: "100%" }}>
                 {[
                   { label: "Score", val: fmtStp(stats20?.avgScoreToPar) },
                   { label: "Putts", val: fmtPuts(stats20?.avgPuttsPer18) },
@@ -463,7 +463,7 @@ export default function ClubhousePage() {
                   { label: "GIR",   val: fmtPct(stats20?.girPct) },
                 ].map(s => (
                   <div key={s.label} style={{ textAlign: "center" }}>
-                    <div style={{ fontFamily: "Georgia,serif", fontSize: 17, fontWeight: 600, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
+                    <div style={{ fontFamily: "Georgia,serif", fontSize: 20, fontWeight: 600, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
                       {s.val}
                     </div>
                     <div style={{ fontSize: 8, color: "rgba(255,255,255,.4)", marginTop: 3, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
