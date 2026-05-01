@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { getClubDistances, saveClubDistances } from "@/lib/storage";
 import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
@@ -193,6 +193,7 @@ export default function ClubhousePage() {
   const [newClubMax, setNewClubMax] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Round | null>(null);
   const [hoveredBtn, setHoveredBtn] = useState<string | null>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -273,8 +274,8 @@ export default function ClubhousePage() {
     const d = r.score_differential != null
       ? (r.holes_played <= 9 ? r.score_differential * 2 : r.score_differential)
       : computeDiffNum(r, courseInfoMap[r.course_id]);
-    return d !== null ? { diff: d, course_name: r.course_name, date: r.date } : null;
-  }).filter((d): d is { diff: number; course_name: string; date: string } => d !== null);
+    return d !== null ? { diff: d, course_name: r.course_name, date: r.date, id: r.id } : null;
+  }).filter((d): d is { diff: number; course_name: string; date: string; id: string } => d !== null);
 
   const diffsOnly = diffsWithInfo.map(d => d.diff);
   const last20WithInfo = diffsWithInfo.slice(-20);
@@ -312,10 +313,10 @@ export default function ClubhousePage() {
   const coursesThisYear = new Set(rounds.filter(r => r.date?.startsWith(thisYear)).map(r => r.course_id)).size;
 
   // Best by course
-  const csByCourse: Record<string, { name: string; rounds: number; best: number; bestDate: string; total: number }> = {};
+  const csByCourse: Record<string, { name: string; courseId: string; rounds: number; best: number; bestDate: string; total: number }> = {};
   for (const r of rounds18) {
     const sc = totalScore(r.holes);
-    if (!csByCourse[r.course_id]) csByCourse[r.course_id] = { name: r.course_name, rounds: 0, best: sc, bestDate: r.date, total: 0 };
+    if (!csByCourse[r.course_id]) csByCourse[r.course_id] = { name: r.course_name, courseId: r.course_id, rounds: 0, best: sc, bestDate: r.date, total: 0 };
     const cs = csByCourse[r.course_id];
     cs.rounds++; cs.total += sc;
     if (sc < cs.best) { cs.best = sc; cs.bestDate = r.date; }
@@ -382,10 +383,10 @@ export default function ClubhousePage() {
           {/* Subtle radial glow top-right */}
           <div style={{ position: "absolute", top: 0, right: 0, width: 160, height: 160, background: "radial-gradient(circle,rgba(200,168,75,.12) 0%,transparent 70%)", pointerEvents: "none" }} />
 
-          {/* Two-column layout */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "stretch" }}>
+          {/* 2-row × 2-col grid: each row shares height so items align cleanly */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "auto auto", columnGap: 16, rowGap: 10 }}>
 
-            {/* Left: HI + trend + 5×4 diff grid */}
+            {/* Row 1, Col 1: HI + trend */}
             <div>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", fontWeight: 700, letterSpacing: 1.8, textTransform: "uppercase", marginBottom: 4 }}>
                 Handicap Index
@@ -407,54 +408,59 @@ export default function ClubhousePage() {
                   <span>30 days</span>
                 </div>
               )}
-
-              {/* 5×4 diff chip grid */}
-              {last20WithInfo.length > 0 && (
-                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
-                  {last20WithInfo.map((item, i) => {
-                    const used = item.diff <= threshold;
-                    const active = activeDiffIdx === i;
-                    return (
-                      <div key={i} style={{ position: "relative" }}>
-                        <div
-                          onClick={() => setActiveDiffIdx(active ? null : i)}
-                          style={{
-                            fontSize: 9, fontWeight: 700, padding: "3px 5px", borderRadius: 99,
-                            cursor: "pointer", fontFeatureSettings: '"tnum" 1', textAlign: "center",
-                            background: used ? "linear-gradient(135deg,#d9b466,#8c6a26)" : "rgba(255,255,255,.1)",
-                            color: used ? "#fff8e3" : "rgba(255,255,255,.4)",
-                            boxShadow: used ? "0 1px 2px rgba(80,55,15,.3)" : "none",
-                            border: used ? "none" : "1px solid rgba(255,255,255,.07)",
-                          }}
-                        >
-                          {item.diff.toFixed(1)}
-                        </div>
-                        {active && (
-                          <div style={{
-                            position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
-                            background: "var(--ink)", color: "white", borderRadius: 8, padding: "6px 10px",
-                            fontSize: 10.5, whiteSpace: "nowrap", zIndex: 20, pointerEvents: "none",
-                            boxShadow: "0 3px 10px rgba(0,0,0,.3)",
-                          }}>
-                            {item.course_name}<br />
-                            <span style={{ color: "rgba(255,255,255,.55)" }}>{item.date}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
-            {/* Right: sparkline above 2×2 stats, bottom-aligned so 2×2 sits level with 5×4 grid */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <Sparkline data={sparklineData} w={190} h={68} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,.35)", marginTop: 3, letterSpacing: 0.3 }}>
-                  last {sparklineData.length} rounds
-                </div>
+            {/* Row 1, Col 2: sparkline — vertically centered in the HI row */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <Sparkline data={sparklineData} w={190} h={60} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,.35)", marginTop: 3, letterSpacing: 0.3 }}>
+                last {sparklineData.length} rounds
               </div>
+            </div>
+
+            {/* Row 2, Col 1: 5×4 diff chip grid */}
+            {last20WithInfo.length > 0 ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, alignContent: "center" }}>
+                {last20WithInfo.map((item, i) => {
+                  const used = item.diff <= threshold;
+                  const active = activeDiffIdx === i;
+                  return (
+                    <div key={i} style={{ position: "relative" }}>
+                      <a
+                        href={`/rounds/${item.id}/edit`}
+                        onMouseEnter={() => setActiveDiffIdx(i)}
+                        onMouseLeave={() => setActiveDiffIdx(null)}
+                        style={{
+                          display: "block", fontSize: 9, fontWeight: 700, padding: "3px 5px", borderRadius: 99,
+                          cursor: "pointer", fontFeatureSettings: '"tnum" 1', textAlign: "center",
+                          textDecoration: "none",
+                          background: used ? "linear-gradient(135deg,#d9b466,#8c6a26)" : "rgba(255,255,255,.1)",
+                          color: used ? "#fff8e3" : "rgba(255,255,255,.4)",
+                          boxShadow: used ? "0 1px 2px rgba(80,55,15,.3)" : "none",
+                          border: used ? "none" : "1px solid rgba(255,255,255,.07)",
+                        }}
+                      >
+                        {item.diff.toFixed(1)}
+                      </a>
+                      {active && (
+                        <div style={{
+                          position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+                          background: "var(--ink)", color: "white", borderRadius: 8, padding: "6px 10px",
+                          fontSize: 10.5, whiteSpace: "nowrap", zIndex: 20, pointerEvents: "none",
+                          boxShadow: "0 3px 10px rgba(0,0,0,.3)",
+                        }}>
+                          {item.course_name}<br />
+                          <span style={{ color: "rgba(255,255,255,.55)" }}>{item.date}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <div />}
+
+            {/* Row 2, Col 2: 2×2 stats — vertically centered in the diff row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, width: "100%" }}>
                 {[
                   { label: "Score", val: fmtStp(stats20?.avgScoreToPar) },
@@ -482,76 +488,72 @@ export default function ClubhousePage() {
           <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", fontWeight: 500, fontSize: 20, color: "var(--ink)", marginBottom: 10 }}>
             Trophy case
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {(() => {
-              const brScore = bestRound ? totalScore(bestRound.holes) : null;
-              const brPar = bestRound ? bestRound.holes.reduce((s: number, h: any) => s + (h.par || 0), 0) : null;
-              const brToPar = brScore != null && brPar ? brScore - brPar : null;
-              const brToParStr = brToPar == null ? "" : brToPar === 0 ? " (E)" : brToPar > 0 ? ` (+${brToPar})` : ` (${brToPar})`;
-              return [{
-                kind: "pr",
-                big: brScore != null ? String(brScore) : "—",
-                label: "Best round",
-                sub: bestRound
-                  ? `${brToParStr ? brToParStr.slice(2, -1) + " vs par · " : ""}${bestRound.course_name} · ${fmtDateShort(bestRound.date)}`
-                  : "No 18-hole rounds yet",
-                extra: brToParStr ? (
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-                    {brToPar === 0 ? "Even par" : brToPar! > 0 ? `+${brToPar} vs par` : `${brToPar} vs par`}
-                  </div>
-                ) : null,
-              }];
-            })().map(t => (
-              <div key={t.label} style={{
-                background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14,
-                padding: "14px 16px", position: "relative",
-              }}>
-                <div style={{ position: "absolute", top: 12, right: 12 }}>
-                  <MilestoneBadge kind={t.kind} size={22} />
+          {(() => {
+            const brScore = bestRound ? totalScore(bestRound.holes) : null;
+            const brPar = bestRound ? totalPar(bestRound.holes) : null;
+            const brToPar = brScore != null && brPar ? brScore - brPar : null;
+            const trophyCardBase: React.CSSProperties = {
+              background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14,
+              padding: "14px 16px", position: "relative", display: "block", textDecoration: "none",
+            };
+            const trophyInner = (kind: string, big: string, label: string, sub: string, extra?: React.ReactNode) => (
+              <>
+                <div style={{ position: "absolute", top: 12, right: 12 }}><MilestoneBadge kind={kind} size={22} /></div>
+                <div style={{ fontFamily: "Georgia,serif", fontWeight: 600, fontSize: 32, color: "var(--green-deep)", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>{big}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}>{label}</div>
+                {extra}
+                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>
+              </>
+            );
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {/* Best round — links to round */}
+                <a href={bestRound ? `/rounds/${bestRound.id}/edit` : undefined} style={trophyCardBase}>
+                  {trophyInner(
+                    "pr",
+                    brScore != null ? String(brScore) : "—",
+                    "Best round",
+                    bestRound ? `${bestRound.course_name} · ${bestRound.date}` : "No 18-hole rounds yet",
+                    brToPar != null ? (
+                      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                        {brToPar === 0 ? "Even par" : brToPar > 0 ? `+${brToPar} vs par` : `${brToPar} vs par`}
+                      </div>
+                    ) : null,
+                  )}
+                </a>
+                {/* Best differential — links to round */}
+                <a href={bestDiffEntry ? `/rounds/${bestDiffEntry.id}/edit` : undefined} style={trophyCardBase}>
+                  {trophyInner(
+                    "diff",
+                    bestDiffEntry ? bestDiffEntry.diff.toFixed(1) : "—",
+                    "Best differential",
+                    bestDiffEntry ? `${bestDiffEntry.course_name} · ${bestDiffEntry.date}` : "—",
+                  )}
+                </a>
+                {/* Sub-90 streak — scrolls to rounds tab */}
+                <div style={{ ...trophyCardBase, cursor: "pointer" }} onClick={() => { setTab("rounds"); setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>
+                  {trophyInner(
+                    "streak", String(streak),
+                    streak === 1 ? "Sub-90 round" : "Sub-90 streak",
+                    streak > 0 ? "Current run" : "Break 90 to start one",
+                  )}
                 </div>
-                <div style={{ fontFamily: "Georgia,serif", fontWeight: 600, fontSize: 32, color: "var(--green-deep)", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
-                  {t.big}
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}>{t.label}</div>
-                {t.extra}
-                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {bestRound ? `${bestRound.course_name} · ${fmtDateShort(bestRound.date)}` : "No 18-hole rounds yet"}
+                {/* Courses this year — scrolls to rounds tab */}
+                <div style={{ ...trophyCardBase, cursor: "pointer" }} onClick={() => { setTab("rounds"); setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>
+                  {trophyInner(
+                    "course",
+                    String(coursesThisYear || new Set(rounds.map(r => r.course_id)).size),
+                    coursesThisYear ? "Courses this year" : "Courses played",
+                    `${rounds.length} total rounds`,
+                  )}
                 </div>
               </div>
-            ))}
-            {[
-              {
-                kind: "diff", big: bestDiffEntry ? bestDiffEntry.diff.toFixed(1) : "—",
-                label: "Best differential", sub: bestDiffEntry ? `${bestDiffEntry.course_name} · ${bestDiffEntry.date}` : "—",
-              },
-              {
-                kind: "streak", big: String(streak),
-                label: streak === 1 ? "Sub-90 round" : "Sub-90 streak", sub: streak > 0 ? "Current run" : "Break 90 to start one",
-              },
-              {
-                kind: "course", big: String(coursesThisYear || new Set(rounds.map(r => r.course_id)).size),
-                label: coursesThisYear ? "Courses this year" : "Courses played", sub: `${rounds.length} total rounds`,
-              },
-            ].map(t => (
-              <div key={t.label} style={{
-                background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14,
-                padding: "14px 16px", position: "relative",
-              }}>
-                <div style={{ position: "absolute", top: 12, right: 12 }}>
-                  <MilestoneBadge kind={t.kind} size={22} />
-                </div>
-                <div style={{ fontFamily: "Georgia,serif", fontWeight: 600, fontSize: 32, color: "var(--green-deep)", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
-                  {t.big}
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}>{t.label}</div>
-                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.sub}</div>
-              </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
 
         {/* ── Tabs ── */}
-        <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 18, gap: 0 }}>
+        <div ref={tabsRef} style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 18, gap: 0 }}>
           {([
             { id: "stats",  label: "Stats" },
             { id: "rounds", label: "Rounds", count: rounds.length },
@@ -738,7 +740,7 @@ export default function ClubhousePage() {
                   <div style={{ fontSize: 9.5, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 700 }}>Best at each course</div>
                 </div>
                 {courseStatsList.map((cs, i) => (
-                  <div key={cs.name} style={{
+                  <div key={cs.courseId} style={{
                     display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 12, alignItems: "center",
                     padding: "11px 16px", borderTop: i ? "1px solid var(--line-soft)" : "none",
                   }}>
