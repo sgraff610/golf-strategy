@@ -100,6 +100,7 @@ const fmtDateShort = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 function totalScore(holes: any[]) { return holes.reduce((s, h) => s + (Number(h.score) || 0), 0); }
+function totalPar(holes: any[]) { return holes.reduce((s, h) => s + (h.par || 0), 0); }
 function totalPutts(holes: any[]) { return holes.reduce((s, h) => s + (Number(h.putts) || 0), 0); }
 function fairwaysHit(holes: any[]) { return holes.filter(h => (h.par === 4 || h.par === 5) && h.tee_accuracy === "Hit").length; }
 function drivingTotal(holes: any[]) { return holes.filter(h => h.par === 4 || h.par === 5).length; }
@@ -301,7 +302,9 @@ export default function ClubhousePage() {
 
   // Trophy computations
   const rounds18 = roundsDesc.filter(r => (r.holes_played ?? r.holes.length) >= 18 && totalScore(r.holes) > 0);
-  const bestRound = rounds18.length ? rounds18.reduce((b, r) => totalScore(r.holes) < totalScore(b.holes) ? r : b) : null;
+  const bestRound = rounds18.length ? rounds18.reduce((b, r) =>
+    (totalScore(r.holes) - totalPar(r.holes)) < (totalScore(b.holes) - totalPar(b.holes)) ? r : b
+  ) : null;
   const bestDiffEntry = diffsWithInfo.length ? diffsWithInfo.reduce((b, d) => d.diff < b.diff ? d : b) : null;
   let streak = 0;
   for (const r of rounds18) { if (totalScore(r.holes) < 90) streak++; else break; }
@@ -407,7 +410,7 @@ export default function ClubhousePage() {
 
               {/* 5×4 diff chip grid */}
               {last20WithInfo.length > 0 && (
-                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 3 }}>
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
                   {last20WithInfo.map((item, i) => {
                     const used = item.diff <= threshold;
                     const active = activeDiffIdx === i;
@@ -416,7 +419,7 @@ export default function ClubhousePage() {
                         <div
                           onClick={() => setActiveDiffIdx(active ? null : i)}
                           style={{
-                            fontSize: 9, fontWeight: 700, padding: "2px 3px", borderRadius: 5,
+                            fontSize: 9, fontWeight: 700, padding: "3px 5px", borderRadius: 99,
                             cursor: "pointer", fontFeatureSettings: '"tnum" 1', textAlign: "center",
                             background: used ? "linear-gradient(135deg,#d9b466,#8c6a26)" : "rgba(255,255,255,.1)",
                             color: used ? "#fff8e3" : "rgba(255,255,255,.4)",
@@ -444,15 +447,15 @@ export default function ClubhousePage() {
               )}
             </div>
 
-            {/* Right: big sparkline + 2×2 stats */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div>
-                <Sparkline data={sparklineData} w={200} h={68} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
+            {/* Right: big sparkline centered over 2×2 stats */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <Sparkline data={sparklineData} w={190} h={68} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,.35)", marginTop: 3, letterSpacing: 0.3 }}>
                   last {sparklineData.length} rounds
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%" }}>
                 {[
                   { label: "Score", val: fmtStp(stats20?.avgScoreToPar) },
                   { label: "Putts", val: fmtPuts(stats20?.avgPuttsPer18) },
