@@ -530,7 +530,38 @@ export default function Home(){
   return(
     <main style={{maxWidth:520,margin:"40px auto",fontFamily:"sans-serif",padding:"0 24px"}}>
       <h1 style={{fontSize:22,fontWeight:600,marginBottom:4,color:"#d0d0d0"}}>Strategy Engine</h1>
-      <p style={{color:"white",marginBottom:24,fontSize:13}}>Select a course and hole to get your personalised strategy.</p>
+      <p style={{color:"white",marginBottom:16,fontSize:13}}>Select a course and hole to get your personalised strategy.</p>
+
+      {/* Clubhouse nav widget */}
+      {(()=>{
+        if(!existingDiffs||existingDiffs.length<3)return null;
+        const last20=existingDiffs.slice(-20);
+        const sorted=[...last20].sort((a,b)=>a-b);
+        const count=last20.length<=6?1:last20.length<=8?2:last20.length<=11?3:last20.length<=14?4:last20.length<=16?5:last20.length<=18?6:last20.length===19?7:8;
+        const hi=Math.floor(sorted.slice(0,count).reduce((s,d)=>s+d,0)/count*10)/10;
+        const threshold=sorted[count-1];
+        const recent=last20.slice(-8);
+        return(
+          <a href="/clubhouse" style={{display:"block",textDecoration:"none",marginBottom:20}}>
+            <div style={{background:"linear-gradient(135deg,#0d3d2d 0%,#0f6e56 60%,#083d2a 100%)",borderRadius:14,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              <div>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",marginBottom:2}}>Handicap Index</div>
+                <div style={{fontSize:42,fontWeight:600,color:"#fff",lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{hi.toFixed(1)}</div>
+                <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:3}}>
+                  {recent.map((d,i)=>{
+                    const used=d<=threshold;
+                    return<span key={i} style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:99,background:used?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.15)",color:used?"#0a3d2c":"rgba(255,255,255,0.7)",fontVariantNumeric:"tabular-nums"}}>{d.toFixed(1)}</span>;
+                  })}
+                </div>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",fontWeight:500}}>Clubhouse</div>
+                <div style={{fontSize:13,color:"#fff",fontWeight:700,marginTop:2}}>Rounds & Profile →</div>
+              </div>
+            </div>
+          </a>
+        );
+      })()}
 
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
