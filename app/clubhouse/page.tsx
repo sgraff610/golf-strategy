@@ -176,7 +176,7 @@ export default function ClubhousePage() {
   const [loading, setLoading] = useState(true);
 
   // UI
-  const [tab, setTab] = useState<"rounds" | "stats" | "bag" | "notes">("rounds");
+  const [tab, setTab] = useState<"rounds" | "stats" | "bag" | "notes">("stats");
   const [courseFilter, setCourseFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
   const [activeDiffIdx, setActiveDiffIdx] = useState<number | null>(null);
@@ -379,8 +379,10 @@ export default function ClubhousePage() {
           {/* Subtle radial glow top-right */}
           <div style={{ position: "absolute", top: 0, right: 0, width: 160, height: 160, background: "radial-gradient(circle,rgba(200,168,75,.12) 0%,transparent 70%)", pointerEvents: "none" }} />
 
-          {/* Handicap + sparkline row */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          {/* Two-column layout */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+
+            {/* Left: HI + trend + 5×4 diff grid */}
             <div>
               <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", fontWeight: 700, letterSpacing: 1.8, textTransform: "uppercase", marginBottom: 4 }}>
                 Handicap Index
@@ -399,73 +401,76 @@ export default function ClubhousePage() {
                   <span style={{ color: trend < 0 ? "#6de8b8" : "#f29450", fontWeight: 700 }}>
                     {trend < 0 ? `↓ ${Math.abs(trend).toFixed(1)}` : `↑ ${trend.toFixed(1)}`}
                   </span>
-                  <span>in 30 days · best {Math.min(8, Math.floor(last20Diffs.length * 0.4) || 1)} of {last20Diffs.length}</span>
+                  <span>30 days</span>
+                </div>
+              )}
+
+              {/* 5×4 diff chip grid */}
+              {last20WithInfo.length > 0 && (
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 3 }}>
+                  {last20WithInfo.map((item, i) => {
+                    const used = item.diff <= threshold;
+                    const active = activeDiffIdx === i;
+                    return (
+                      <div key={i} style={{ position: "relative" }}>
+                        <div
+                          onClick={() => setActiveDiffIdx(active ? null : i)}
+                          style={{
+                            fontSize: 9, fontWeight: 700, padding: "2px 3px", borderRadius: 5,
+                            cursor: "pointer", fontFeatureSettings: '"tnum" 1', textAlign: "center",
+                            background: used ? "linear-gradient(135deg,#d9b466,#8c6a26)" : "rgba(255,255,255,.1)",
+                            color: used ? "#fff8e3" : "rgba(255,255,255,.4)",
+                            boxShadow: used ? "0 1px 2px rgba(80,55,15,.3)" : "none",
+                            border: used ? "none" : "1px solid rgba(255,255,255,.07)",
+                          }}
+                        >
+                          {item.diff.toFixed(1)}
+                        </div>
+                        {active && (
+                          <div style={{
+                            position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+                            background: "var(--ink)", color: "white", borderRadius: 8, padding: "6px 10px",
+                            fontSize: 10.5, whiteSpace: "nowrap", zIndex: 20, pointerEvents: "none",
+                            boxShadow: "0 3px 10px rgba(0,0,0,.3)",
+                          }}>
+                            {item.course_name}<br />
+                            <span style={{ color: "rgba(255,255,255,.55)" }}>{item.date}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
-            <div style={{ textAlign: "right", paddingTop: 4 }}>
-              <Sparkline data={sparklineData} w={100} h={38} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,.4)", marginTop: 4, letterSpacing: 0.3 }}>
-                last {sparklineData.length} rounds
-              </div>
-            </div>
-          </div>
 
-          {/* Differential chips */}
-          {last20WithInfo.length > 0 && (
-            <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 3 }}>
-              {last20WithInfo.map((item, i) => {
-                const used = item.diff <= threshold;
-                const active = activeDiffIdx === i;
-                return (
-                  <div key={i} style={{ position: "relative" }}>
-                    <div
-                      onClick={() => setActiveDiffIdx(active ? null : i)}
-                      style={{
-                        fontSize: 9.5, fontWeight: 700, padding: "2px 7px", borderRadius: 99,
-                        cursor: "pointer", fontFeatureSettings: '"tnum" 1',
-                        background: used ? "linear-gradient(135deg,#d9b466,#8c6a26)" : "rgba(255,255,255,.1)",
-                        color: used ? "#fff8e3" : "rgba(255,255,255,.45)",
-                        boxShadow: used ? "0 1px 2px rgba(80,55,15,.3)" : "none",
-                        border: used ? "none" : "1px solid rgba(255,255,255,.08)",
-                      }}
-                    >
-                      {item.diff.toFixed(1)}
+            {/* Right: big sparkline + 2×2 stats */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <Sparkline data={sparklineData} w={200} h={68} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,.35)", marginTop: 3, letterSpacing: 0.3 }}>
+                  last {sparklineData.length} rounds
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {[
+                  { label: "Score", val: fmtStp(stats20?.avgScoreToPar) },
+                  { label: "Putts", val: fmtPuts(stats20?.avgPuttsPer18) },
+                  { label: "Fwy",   val: fmtPct(stats20?.drivingPct) },
+                  { label: "GIR",   val: fmtPct(stats20?.girPct) },
+                ].map(s => (
+                  <div key={s.label} style={{ textAlign: "center" }}>
+                    <div style={{ fontFamily: "Georgia,serif", fontSize: 17, fontWeight: 600, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
+                      {s.val}
                     </div>
-                    {active && (
-                      <div style={{
-                        position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
-                        background: "var(--ink)", color: "white", borderRadius: 8, padding: "6px 10px",
-                        fontSize: 10.5, whiteSpace: "nowrap", zIndex: 20, pointerEvents: "none",
-                        boxShadow: "0 3px 10px rgba(0,0,0,.3)",
-                      }}>
-                        {item.course_name}<br />
-                        <span style={{ color: "rgba(255,255,255,.55)" }}>{item.date}</span>
-                      </div>
-                    )}
+                    <div style={{ fontSize: 8, color: "rgba(255,255,255,.4)", marginTop: 3, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                      {s.label}
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* 4-stat strip */}
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.1)", display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4 }}>
-            {[
-              { label: "Score", val: fmtStp(stats20?.avgScoreToPar) },
-              { label: "Putts", val: fmtPuts(stats20?.avgPuttsPer18) },
-              { label: "Fwy",   val: fmtPct(stats20?.drivingPct) },
-              { label: "GIR",   val: fmtPct(stats20?.girPct) },
-            ].map(s => (
-              <div key={s.label} style={{ textAlign: "center" }}>
-                <div style={{ fontFamily: "Georgia,serif", fontSize: 17, fontWeight: 600, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
-                  {s.val}
-                </div>
-                <div style={{ fontSize: 8.5, color: "rgba(255,255,255,.4)", marginTop: 4, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>
-                  {s.label}
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
+
           </div>
         </div>
 
@@ -475,11 +480,43 @@ export default function ClubhousePage() {
             Trophy case
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {(() => {
+              const brScore = bestRound ? totalScore(bestRound.holes) : null;
+              const brPar = bestRound ? bestRound.holes.reduce((s: number, h: any) => s + (h.par || 0), 0) : null;
+              const brToPar = brScore != null && brPar ? brScore - brPar : null;
+              const brToParStr = brToPar == null ? "" : brToPar === 0 ? " (E)" : brToPar > 0 ? ` (+${brToPar})` : ` (${brToPar})`;
+              return [{
+                kind: "pr",
+                big: brScore != null ? String(brScore) : "—",
+                label: "Best round",
+                sub: bestRound
+                  ? `${brToParStr ? brToParStr.slice(2, -1) + " vs par · " : ""}${bestRound.course_name} · ${fmtDateShort(bestRound.date)}`
+                  : "No 18-hole rounds yet",
+                extra: brToParStr ? (
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                    {brToPar === 0 ? "Even par" : brToPar! > 0 ? `+${brToPar} vs par` : `${brToPar} vs par`}
+                  </div>
+                ) : null,
+              }];
+            })().map(t => (
+              <div key={t.label} style={{
+                background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14,
+                padding: "14px 16px", position: "relative",
+              }}>
+                <div style={{ position: "absolute", top: 12, right: 12 }}>
+                  <MilestoneBadge kind={t.kind} size={22} />
+                </div>
+                <div style={{ fontFamily: "Georgia,serif", fontWeight: 600, fontSize: 32, color: "var(--green-deep)", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
+                  {t.big}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}>{t.label}</div>
+                {t.extra}
+                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {bestRound ? `${bestRound.course_name} · ${fmtDateShort(bestRound.date)}` : "No 18-hole rounds yet"}
+                </div>
+              </div>
+            ))}
             {[
-              {
-                kind: "pr", big: bestRound ? String(totalScore(bestRound.holes)) : "—",
-                label: "Best round", sub: bestRound ? `${bestRound.course_name} · ${fmtDateShort(bestRound.date)}` : "No 18-hole rounds yet",
-              },
               {
                 kind: "diff", big: bestDiffEntry ? bestDiffEntry.diff.toFixed(1) : "—",
                 label: "Best differential", sub: bestDiffEntry ? `${bestDiffEntry.course_name} · ${bestDiffEntry.date}` : "—",
@@ -513,8 +550,8 @@ export default function ClubhousePage() {
         {/* ── Tabs ── */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 18, gap: 0 }}>
           {([
-            { id: "rounds", label: "Rounds", count: rounds.length },
             { id: "stats",  label: "Stats" },
+            { id: "rounds", label: "Rounds", count: rounds.length },
             { id: "bag",    label: "Bag" },
             { id: "notes",  label: "Notes" },
           ] as const).map(t => {

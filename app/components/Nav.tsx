@@ -30,7 +30,7 @@ export default function Nav() {
     { href: "/courses",           label: "Courses" },
     { href: "/rounds",            label: "Rounds" },
     { href: "/rounds/insights",   label: "Coach" },
-    { href: "/profile",           label: "Profile" },
+    { href: "/clubhouse",         label: "Clubhouse" },
   ];
 
   return (
