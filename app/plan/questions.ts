@@ -1,33 +1,11 @@
 // app/plan/questions.ts
-// Question schema for the pre-round planner. Edit copy here, not in page.tsx.
-
-export type QuestionOption = {
-  v: string;
-  label: string;
-  sub: string;
-  emoji: string;
-};
+export type QuestionOption = { v: string; label: string; sub: string; emoji: string };
 
 export type Question =
-  | {
-      id: "focus" | "weather";
-      q: string;
-      sub: string;
-      kind: "choice";
-      opts: QuestionOption[];
-    }
-  | {
-      id: "form";
-      q: string;
-      sub: string;
-      kind: "form";
-    }
-  | {
-      id: "goal";
-      q: string;
-      sub: string;
-      kind: "score_dial";
-    };
+  | { id: "focus"; q: string; sub: string; kind: "choice"; opts: QuestionOption[] }
+  | { id: "form";  q: string; sub: string; kind: "form" }
+  | { id: "goal";  q: string; sub: string; kind: "score_dial" }
+  | { id: "weather"; q: string; sub: string; kind: "weather_grid" };
 
 export const QUESTIONS: Question[] = [
   {
@@ -38,14 +16,9 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "weather",
-    q: "Conditions: What's the weather doing?",
-    sub: "Wind + wet cost ~½ club. We'll recalibrate yardages.",
-    kind: "choice",
-    opts: [
-      { v: "calm",  label: "Calm & dry",  sub: "Play normal distances", emoji: "☀️" },
-      { v: "windy", label: "Breezy",      sub: "10–15 mph",             emoji: "🌬" },
-      { v: "wet",   label: "Wet / soft",  sub: "Fairways holding",       emoji: "🌧" },
-    ],
+    q: "Conditions: Here's the forecast.",
+    sub: "Drag the marker to adjust if the course plays firmer or softer than the forecast suggests.",
+    kind: "weather_grid",
   },
   {
     id: "goal",

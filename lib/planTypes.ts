@@ -11,13 +11,15 @@ export type PlayerForm = Record<ClubKey, number>;
 
 export type FeelingAnswer = "dialed" | "steady" | "rusty";
 export type FocusAnswer = "doubles" | "pace" | "lowest";
-export type WeatherAnswer = "calm" | "windy" | "wet";
-/** Target gross score for the round (replaces the old break80/sub90/practice enum) */
+/** Target gross score for the round */
 export type GoalAnswer = number;
 
 export type PlanAnswers = {
   focus?: FocusAnswer;
-  weather?: WeatherAnswer;
+  /** 0 = calm, 10 = 25+ mph */
+  windScore?: number;
+  /** 0 = bone-dry/firm, 10 = waterlogged */
+  wetnessScore?: number;
   goal?: GoalAnswer;
 };
 

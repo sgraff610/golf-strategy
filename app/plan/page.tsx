@@ -2,7 +2,7 @@
 // app/plan/page.tsx
 // Pre-Round Planner — 4-stage flow (Setup → Questions → Review → Plan).
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { CourseRecord } from "@/lib/types";
 import type {
@@ -20,7 +20,7 @@ import { loadCourses, getCourse, getClubDistances, getClubForm, saveClubForm } f
 import { FORM_CLUBS, QUESTIONS } from "./questions";
 import { FormRanger } from "./FormRanger";
 import { PlanHoleCard } from "./PlanHoleCard";
-import { buildPosture, buildStrategies, targetScore, leavesYardage } from "./planEngine";
+import { buildPosture, buildStrategies, targetScore, leavesYardage, windClubAdjust, wetnessRollLoss } from "./planEngine";
 
 export type HoleClubStat = { club: string; count: number; avgOverPar: number };
 export type HoleHistEntry = { date: string; score: number; par: number; club: string; tee_accuracy: string };
@@ -166,12 +166,13 @@ function buildHistory(
 
 const TOKENS = `
   .plan-root {
-    --bg:#f4efe6; --paper:#fbf7ef; --paper-alt:#f0eadc;
-    --ink:#1d2a24; --ink-soft:#2e3d35; --muted:#6a6356; --muted-2:#8e8778;
-    --line:#d9d1bf; --line-soft:#e6ddca;
-    --green:#0f6e56; --green-deep:#0a4d3c; --green-soft:#d8e7df;
-    --accent:#b5733a; --accent-soft:#f0dcc5; --sand:#c8a84b; --flag:#a63a2a;
-    --good:#2f7a52; --bad:#a63a2a;
+    --bg:#eef1f4; --paper:#f7f9fb; --paper-alt:#e6ebf0;
+    --ink:#131821; --ink-soft:#253041; --muted:#5d6b7a; --muted-2:#8995a3;
+    --line:#d7dde3; --line-soft:#e5eaef;
+    --green:#0f6e56; --green-deep:#084634; --green-soft:#d2e8df;
+    --accent:#f29450; --accent-soft:#fde0c8;
+    --sand:#c8a84b; --sand-soft:#f5ecd0; --sand-deep:#8c6a26;
+    --flag:#c94a2a; --good:#1e8449; --bad:#c94a2a;
     --font-display: Georgia, 'Times New Roman', serif;
     --font-ui: var(--font-geist-sans, system-ui), sans-serif;
     --font-mono: var(--font-geist-mono, ui-monospace), monospace;
@@ -208,8 +209,12 @@ export default function PlanPage() {
   const [recapHistory, setRecapHistory] = useState<Record<string, any>[]>([]);
   const [allCourseRounds, setAllCourseRounds] = useState<any[]>([]);
   const [selectedCourseName, setSelectedCourseName] = useState("");
+  const [roundDate, setRoundDate] = useState<string>("");
+  const [teeTime, setTeeTime] = useState<string>("08:00");
 
   useEffect(() => {
+    // Set date on client only — avoids SSR/UTC vs local-timezone hydration mismatch
+    setRoundDate(new Date().toLocaleDateString("en-CA")); // "YYYY-MM-DD" in local time
     loadCourses().then(setCourseList);
     getClubDistances().then(setClubDistances);
     // Load most recent recap dials as form defaults; fall back to saved form
@@ -400,7 +405,6 @@ export default function PlanPage() {
 
   const onTeeItUp = useCallback(async () => {
     if (!course) return;
-    const today = new Date().toISOString().slice(0, 10);
     const id = `round_${Date.now()}`;
     const holes = planHoles.map((h) => {
       const strat = strategies[h.hole];
@@ -432,7 +436,8 @@ export default function PlanPage() {
       course_id: course.id,
       course_name: course.name,
       tee_box: course.tee_box,
-      date: today,
+      date: roundDate,
+      tee_time: teeTime,
       holes_played: planHoles.length,
       starting_hole: planHoles[0]?.hole ?? 1,
       holes,
@@ -458,7 +463,8 @@ export default function PlanPage() {
   }
 
   const answered =
-    (["focus", "weather"] as const).every((k) => answers[k]) &&
+    !!answers.focus &&
+    answers.windScore !== undefined && answers.wetnessScore !== undefined &&
     answers.goal !== undefined;
   const courseReady = !!course && !!history;
 
@@ -482,6 +488,10 @@ export default function PlanPage() {
                   setHolesMode={setHolesMode}
                   allCourseRounds={allCourseRounds}
                   onCourseNameChange={setSelectedCourseName}
+                  roundDate={roundDate}
+                  setRoundDate={setRoundDate}
+                  teeTime={teeTime}
+                  setTeeTime={setTeeTime}
                   onNext={() => { setStage("questions"); if (courseId) prefetchEnriched(courseId); }}
                 />
               )}
@@ -495,6 +505,8 @@ export default function PlanPage() {
                   allCourseRounds={allCourseRounds}
                   onSaveForm={saveClubForm}
                   recapHistory={recapHistory}
+                  roundDate={roundDate}
+                  teeTime={teeTime}
                   onNext={() => setStage("review")}
                 />
               )}
@@ -572,9 +584,131 @@ function StageNav({ stage, setStage, answered, courseReady }: {
   );
 }
 
+// ─── Weather grid widget ──────────────────────────────────────────────────────
+
+function WeatherGrid({ windScore, wetnessScore, onChange }: {
+  windScore: number;
+  wetnessScore: number;
+  onChange: (wind: number, wet: number) => void;
+}) {
+  // Snap 0–10 scores to the nearest of 4 grid steps
+  const selRow = Math.round((1 - windScore / 10) * 3);   // 0=strong(top) → 3=calm(bottom)
+  const selCol = Math.round(wetnessScore / 10 * 3);       // 0=dry(left)   → 3=wet(right)
+
+  const clubs = windClubAdjust(windScore);
+  const roll  = wetnessRollLoss(wetnessScore);
+
+  // Bilinear corner colours — aligned to existing CSS vars where possible
+  // Corners: [row=0 windy][row=3 calm] × [col=0 dry][col=3 wet]
+  const C_WINDY_DRY: [number,number,number] = [245, 236, 208]; // --sand-soft  #f5ecd0  tan
+  const C_WINDY_WET: [number,number,number] = [197, 223, 240]; // light blue   #c5dff0
+  const C_CALM_DRY:  [number,number,number] = [254, 249, 195]; // light yellow #fef9c3
+  const C_CALM_WET:  [number,number,number] = [210, 232, 223]; // --green-soft #d2e8df  green
+
+  function lerpRGB(a: [number,number,number], b: [number,number,number], t: number): [number,number,number] {
+    return [Math.round(a[0]+(b[0]-a[0])*t), Math.round(a[1]+(b[1]-a[1])*t), Math.round(a[2]+(b[2]-a[2])*t)];
+  }
+  function cellBg(row: number, col: number): string {
+    const u = col / 3; // wetness  0→1
+    const v = row / 3; // windiness 0=strong → 1=calm
+    const [r,g,b] = lerpRGB(lerpRGB(C_WINDY_DRY, C_WINDY_WET, u), lerpRGB(C_CALM_DRY, C_CALM_WET, u), v);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  const WIND_ROWS = [
+    { label: "Strong", sub: "15+ mph" },
+    { label: "Windy",  sub: "10 mph"  },
+    { label: "Breezy", sub: "5 mph"   },
+    { label: "Calm",   sub: ""        },
+  ];
+  const WET_COLS = ["Firm", "Slightly\nSoft", "Soft", "Very\nWet"];
+
+  const CELL_W = 70, CELL_H = 56, ROW_LABEL_W = 68, GAP = 4;
+  const gridWidth = ROW_LABEL_W + 4 * CELL_W + 3 * GAP;
+
+  return (
+    <div style={{ display: "inline-block" }}>
+      <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>
+        Tap to set conditions
+      </div>
+
+      {/* Column headers */}
+      <div style={{ display: "flex", marginLeft: ROW_LABEL_W, gap: GAP, marginBottom: 4 }}>
+        {WET_COLS.map((lbl, i) => (
+          <div key={i} style={{ width: CELL_W, textAlign: "center", fontSize: 9, fontWeight: 600, color: "var(--muted-2)", letterSpacing: 0.5, textTransform: "uppercase", lineHeight: 1.3 }}>
+            {lbl.split("\n").map((l, j) => <span key={j} style={{ display: "block" }}>{l}</span>)}
+          </div>
+        ))}
+      </div>
+
+      {/* Grid rows */}
+      {WIND_ROWS.map((row, rowIdx) => (
+        <div key={rowIdx} style={{ display: "flex", alignItems: "stretch", gap: GAP, marginBottom: GAP }}>
+          {/* Row label */}
+          <div style={{ width: ROW_LABEL_W, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-end", paddingRight: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-soft)" }}>{row.label}</span>
+            {row.sub && <span style={{ fontSize: 9, color: "var(--muted-2)", marginTop: 1 }}>{row.sub}</span>}
+          </div>
+
+          {/* 4 cells */}
+          {[0,1,2,3].map(colIdx => {
+            const isSelected = rowIdx === selRow && colIdx === selCol;
+            return (
+              <button
+                key={colIdx}
+                onClick={() => onChange(((3 - rowIdx) / 3) * 10, (colIdx / 3) * 10)}
+                style={{
+                  width: CELL_W, height: CELL_H, flexShrink: 0,
+                  background: cellBg(rowIdx, colIdx),
+                  border: isSelected ? "2.5px solid var(--ink)" : "1.5px solid rgba(0,0,0,0.10)",
+                  borderRadius: 7, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: isSelected ? "inset 0 0 0 1px var(--ink)" : "none",
+                  transition: "border-color 0.1s, box-shadow 0.1s",
+                }}
+              >
+                {isSelected && (
+                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <polyline points="1,4 4,7 9,1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+
+      {/* X-axis label */}
+      <div style={{ marginLeft: ROW_LABEL_W, width: 4 * CELL_W + 3 * GAP, textAlign: "center", fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginTop: 4 }}>
+        ← Dry · Wetness · Wet →
+      </div>
+
+      {/* Adjustment summary */}
+      <div style={{ marginTop: 14, display: "flex", gap: 10, width: gridWidth }}>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 14px", flex: 1 }}>
+          <div style={{ fontSize: 9, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 3 }}>Wind adjustment</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: windScore > 3 ? "var(--accent)" : "var(--ink)" }}>
+            {clubs > 0 ? `+${clubs} club${clubs === 1 ? "" : "s"} on approach` : "No adjustment"}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>Wind {windScore.toFixed(1)} / 10</div>
+        </div>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 14px", flex: 1 }}>
+          <div style={{ fontSize: 9, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 3 }}>Course firmness</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: wetnessScore > 3 ? "var(--accent)" : "var(--green)" }}>
+            {roll > 0 ? `−${roll} yds roll` : "Normal roll"}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>Wetness {wetnessScore.toFixed(1)} / 10</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Setup stage ──────────────────────────────────────────────────────────────
 
-function StageSetup({ courseList, courseId, setCourseId, course, history, loading, holesMode, setHolesMode, allCourseRounds, onCourseNameChange, onNext }: {
+function StageSetup({ courseList, courseId, setCourseId, course, history, loading, holesMode, setHolesMode, allCourseRounds, onCourseNameChange, roundDate, setRoundDate, teeTime, setTeeTime, onNext }: {
   courseList: CourseRecord[];
   courseId: string;
   setCourseId: (id: string) => void;
@@ -585,6 +719,10 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
   setHolesMode: (m: HolesMode) => void;
   allCourseRounds: any[];
   onCourseNameChange: (name: string) => void;
+  roundDate: string;
+  setRoundDate: (d: string) => void;
+  teeTime: string;
+  setTeeTime: (t: string) => void;
   onNext: () => void;
 }) {
   const [selectedName, setSelectedName] = useState("");
@@ -651,6 +789,36 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
               )}
             </div>
           )}
+        </div>
+
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>
+            When are you playing?
+          </div>
+          <div style={{ display: "flex", gap: 10, maxWidth: 480 }}>
+            <input
+              type="date"
+              value={roundDate}
+              onChange={(e) => setRoundDate(e.target.value)}
+              style={{
+                flex: "1 1 auto", padding: "12px 14px",
+                fontSize: 15, fontWeight: 500, background: "var(--paper)",
+                color: "var(--ink)", border: "1px solid var(--line)",
+                borderRadius: 8, cursor: "pointer",
+              }}
+            />
+            <input
+              type="time"
+              value={teeTime}
+              onChange={(e) => setTeeTime(e.target.value)}
+              style={{
+                flex: "0 0 140px", padding: "12px 14px",
+                fontSize: 15, fontWeight: 500, background: "var(--paper)",
+                color: "var(--ink)", border: "1px solid var(--line)",
+                borderRadius: 8, cursor: "pointer",
+              }}
+            />
+          </div>
         </div>
 
         {loading && (
@@ -975,7 +1143,60 @@ function RangeRecapHistory({ recaps }: { recaps: Record<string, any>[] }) {
 
 // ─── Questions stage ──────────────────────────────────────────────────────────
 
-function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, defaultGoalDiff, course, allCourseRounds, onSaveForm, recapHistory, onNext }: {
+type WeatherFetch = {
+  loading: boolean; error: boolean;
+  windMph: number | null; precipIn: number | null; temp: number | null;
+  moistureScore: number;
+  wetReason: string | null;
+  windScore: number;    // 0–10 derived from windMph
+  wetnessScore: number; // 0–10 derived from moisture + precip
+};
+
+// Compute a ground-moisture index from the 7 days before roundDate.
+// Applies exponential recency decay, then divides by per-day drying rate
+// (hot + dry = faster drying = less moisture retained).
+function computeMoisture(
+  dailyDates: string[], dailyPrecip: number[],
+  dailyTemp: number[], dailyHumidity: number[],
+  roundDate: string
+): { score: number; wetReason: string | null } {
+  const pastDays: { precip: number; temp: number; humidity: number }[] = [];
+  for (let i = 0; i < dailyDates.length; i++) {
+    if (dailyDates[i] < roundDate)
+      pastDays.push({ precip: dailyPrecip[i] ?? 0, temp: dailyTemp[i] ?? 65, humidity: dailyHumidity[i] ?? 60 });
+  }
+  const recent = pastDays.slice(-7).reverse(); // most recent first
+  if (!recent.length) return { score: 0, wetReason: null };
+
+  const decayWeights = [1.0, 0.70, 0.49, 0.34, 0.24, 0.17, 0.12];
+  let score = 0;
+  let totalPrecip = 0;
+  let rainyDays = 0;
+  for (let i = 0; i < recent.length; i++) {
+    const { precip, temp, humidity } = recent[i];
+    totalPrecip += precip;
+    if (precip > 0.05) rainyDays++;
+    // Hot + dry → fast drying → less retained. Cool + humid → slow drying.
+    const tempFactor  = temp     > 80 ? 1.5 : temp     > 65 ? 1.0 : temp     > 50 ? 0.65 : 0.40;
+    const humFactor   = humidity > 75 ? 0.7 : humidity > 55 ? 1.0 : 1.30;
+    score += (precip * decayWeights[i]) / (tempFactor * humFactor);
+  }
+
+  // Build a plain-language reason string when ground is soft from history
+  let wetReason: string | null = null;
+  if (score > 0.25) {
+    const p3 = recent.slice(0, 3).reduce((s, d) => s + d.precip, 0);
+    const avgTemp = recent.slice(0, 3).reduce((s, d) => s + d.temp, 0) / Math.min(3, recent.length);
+    if (p3 > 0.5)           wetReason = `${p3.toFixed(2)}" fell in the past 3 days`;
+    else if (rainyDays >= 3) wetReason = `${rainyDays} rainy days in the past week`;
+    else if (totalPrecip > 0.5) wetReason = `${totalPrecip.toFixed(2)}" over the past ${recent.length} days`;
+    if (wetReason && avgTemp < 60)
+      wetReason += ` · slow to dry (${Math.round(avgTemp)}°F)`;
+  }
+  return { score, wetReason };
+}
+
+function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, defaultGoalDiff, course, allCourseRounds, onSaveForm, recapHistory, roundDate, teeTime, onNext }: {
   answers: PlanAnswers; setAnswers: (a: PlanAnswers) => void;
   form: PlayerForm; setForm: (f: PlayerForm) => void;
   defaultGoalScore: number;
@@ -984,11 +1205,14 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
   allCourseRounds: any[];
   onSaveForm: (f: PlayerForm) => void;
   recapHistory: Record<string, any>[];
+  roundDate: string;
+  teeTime: string;
   onNext: () => void;
 }) {
   const [step, setStep] = useState(0);
   const [goalMode, setGoalMode] = useState<"score" | "diff">("score");
   const [goalDiff, setGoalDiff] = useState(defaultGoalDiff);
+  const [wx, setWx] = useState<WeatherFetch>({ loading: false, error: false, windMph: null, precipIn: null, temp: null, moistureScore: 0, wetReason: null, windScore: 0, wetnessScore: 0 });
 
   const q = QUESTIONS[step];
 
@@ -1001,6 +1225,63 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  // Auto-fetch weather when reaching the weather question.
+  // One API call returns both hourly (tee-time conditions) and daily (7-day history).
+  useEffect(() => {
+    if (q.id !== "weather" || !course?.city) return;
+    setWx({ loading: true, error: false, windMph: null, precipIn: null, temp: null, moistureScore: 0, wetReason: null, windScore: 0, wetnessScore: 0 });
+    const teeHour = parseInt(teeTime.split(":")[0], 10) || 8;
+    fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(course.city)}&count=1&language=en&format=json`)
+      .then(r => r.json())
+      .then(geo => {
+        const loc = geo?.results?.[0];
+        if (!loc) { setWx(w => ({ ...w, loading: false, error: true })); return; }
+        const { latitude, longitude } = loc;
+        // Single call: hourly for tee-time data + daily for 7-day moisture history
+        return fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
+          `&hourly=temperature_2m,windspeed_10m,precipitation` +
+          `&daily=precipitation_sum,temperature_2m_mean,relative_humidity_2m_mean` +
+          `&wind_speed_unit=mph&temperature_unit=fahrenheit&precipitation_unit=inch` +
+          `&timezone=auto&past_days=7&forecast_days=14`
+        ).then(r => r.json());
+      })
+      .then(data => {
+        if (!data?.hourly || !data?.daily) { setWx(w => ({ ...w, loading: false, error: true })); return; }
+
+        // ── Tee-time conditions (hourly) ──────────────────────────────────────
+        const h = data.hourly;
+        const idx = (h.time as string[]).findIndex(
+          t => t.startsWith(roundDate) && parseInt(t.slice(11, 13), 10) === teeHour
+        );
+        const i = idx >= 0 ? idx : 0;
+        const windMph  = h.windspeed_10m?.[i]  ?? null;
+        const precipIn = h.precipitation?.[i]   ?? null;
+        const temp     = h.temperature_2m?.[i]  ?? null;
+
+        // ── Ground moisture from past 7 days (daily) ──────────────────────────
+        const d = data.daily;
+        const { score: moistureScore, wetReason } = computeMoisture(
+          d.time, d.precipitation_sum, d.temperature_2m_mean, d.relative_humidity_2m_mean, roundDate
+        );
+
+        // Derive 0–10 scores from raw data
+        const windScore    = Math.min(10, (windMph ?? 0) / 2.5);
+        const wetnessScore = Math.min(10,
+          Math.min(8, moistureScore * 16.67) +
+          Math.min(2, (precipIn ?? 0) * 10)
+        );
+        setWx({ loading: false, error: false, windMph, precipIn, temp, moistureScore, wetReason, windScore, wetnessScore });
+
+        // Auto-set scores if not already overridden by user
+        if (answers.windScore === undefined && answers.wetnessScore === undefined) {
+          setAnswers({ ...answers, windScore, wetnessScore } as PlanAnswers);
+        }
+      })
+      .catch(() => setWx(w => ({ ...w, loading: false, error: true })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.id, course?.city, roundDate, teeTime]);
 
   const rating = course?.rating ?? (course?.holes.reduce((s, h) => s + h.par, 0) ?? 72);
   const slope = course?.slope ?? 113;
@@ -1025,6 +1306,7 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
   const canAdvance =
     q.kind === "form" ||
     q.kind === "score_dial" ||
+    q.kind === "weather_grid" ||
     !!(answers as Record<string, string | undefined>)[q.id];
 
   return (
@@ -1050,6 +1332,60 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
               ({goalDiff >= 0 ? `+${goalDiff.toFixed(1)}` : goalDiff.toFixed(1)} diff)
             </span>
           )}
+        </div>
+      )}
+
+      {/* Weather question: 2D grid widget */}
+      {q.id === "weather" && (
+        <div style={{ marginBottom: 28 }}>
+          {/* Round info strip */}
+          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 16px", marginBottom: 16, maxWidth: 520, display: "flex", gap: 24, alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Round</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                {roundDate ? new Date(roundDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "—"}
+                {" · "}
+                {new Date(`1970-01-01T${teeTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              </div>
+            </div>
+            {wx.temp !== null && (
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Temp</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{Math.round(wx.temp)}°F</div>
+              </div>
+            )}
+            {wx.windMph !== null && (
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Wind</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{Math.round(wx.windMph)} mph</div>
+              </div>
+            )}
+            {wx.precipIn !== null && (
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Precip</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{wx.precipIn.toFixed(2)}"</div>
+              </div>
+            )}
+          </div>
+
+          {wx.wetReason && (
+            <div style={{ background: "var(--accent-soft)", border: "1px solid var(--accent)", borderRadius: 8, padding: "8px 14px", marginBottom: 14, maxWidth: 520, fontSize: 12, color: "var(--ink-soft)", lineHeight: 1.4 }}>
+              <span style={{ fontWeight: 700 }}>Course likely soft</span> — {wx.wetReason}
+            </div>
+          )}
+
+          {wx.loading && (
+            <div style={{ fontSize: 13, color: "var(--muted)", fontStyle: "italic", marginBottom: 16 }}>Fetching forecast…</div>
+          )}
+          {!wx.loading && wx.error && (
+            <div style={{ fontSize: 13, color: "var(--muted)", fontStyle: "italic", marginBottom: 16 }}>Forecast unavailable — position the marker manually.</div>
+          )}
+
+          <WeatherGrid
+            windScore={answers.windScore ?? wx.windScore}
+            wetnessScore={answers.wetnessScore ?? wx.wetnessScore}
+            onChange={(windScore, wetnessScore) => setAnswers({ ...answers, windScore, wetnessScore } as PlanAnswers)}
+          />
         </div>
       )}
 
@@ -1184,7 +1520,10 @@ function StageReview({ answers, form, posture, onNext }: {
   answers: PlanAnswers; form: PlayerForm; posture: string; onNext: () => void;
 }) {
   const focus = { doubles: "Pick Your Spots", pace: "Course Manager", lowest: "Go Low" }[answers.focus!];
-  const weather = { calm: "Calm & dry", windy: "Breezy", wet: "Wet / soft" }[answers.weather!];
+  const windScore    = answers.windScore    ?? 0;
+  const wetnessScore = answers.wetnessScore ?? 0;
+  const windLabel    = windScore < 2 ? "Calm" : windScore < 5 ? "Light breeze" : windScore < 7 ? "Breezy" : "Windy";
+  const wetLabel     = wetnessScore < 2 ? "Firm & dry" : wetnessScore < 5 ? "Slightly soft" : wetnessScore < 8 ? "Soft" : "Very wet";
   const goal = answers.goal !== undefined ? String(answers.goal) : "—";
 
   return (
@@ -1194,8 +1533,8 @@ function StageReview({ answers, form, posture, onNext }: {
       </h2>
       <p style={{ fontSize: 16, color: "var(--muted)", margin: "0 0 32px" }}>A quick recap before we lock in the plan.</p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-        {[{ k: "Protect", v: focus }, { k: "Weather", v: weather }, { k: "Goal", v: goal }].map((x, i) => (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
+        {[{ k: "Strategy", v: focus }, { k: "Wind", v: windLabel }, { k: "Course", v: wetLabel }, { k: "Goal", v: goal }].map((x, i) => (
           <div key={i} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "16px 18px" }}>
             <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>{x.k}</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 500, fontStyle: "italic" }}>{x.v}</div>
