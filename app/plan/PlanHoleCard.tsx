@@ -396,8 +396,8 @@ export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }
           <div key={row.club} style={{
             display: "grid", gridTemplateColumns: COL_TMPL,
             gap: 5, marginBottom: 3, alignItems: "center",
-            border: isSelected ? "1px solid var(--ink)" : "1px solid transparent",
-            borderRadius: 8, padding: "3px 0",
+            border: isSelected ? "2px solid var(--ink)" : "1px solid transparent",
+            borderRadius: 999, padding: isSelected ? "3px 6px" : "3px 0",
           }}>
             {/* Club name */}
             <div onClick={() => onChange?.(clubVal)} style={{
@@ -591,8 +591,8 @@ export function ApproachStratGrid({ enriched, clubDistances }: {
         <div key={row.label} style={{
           display: "grid", gridTemplateColumns: COL_TMPL,
           gap: 5, marginBottom: 3, alignItems: "center",
-          border: row.isCenter ? "1px solid var(--ink)" : "1px solid transparent",
-          borderRadius: 8, padding: "3px 0",
+          border: row.isCenter ? "2px solid var(--ink)" : "1px solid transparent",
+          borderRadius: 999, padding: row.isCenter ? "3px 6px" : "3px 0",
         }}>
           <div style={{
             background: row.isCenter ? "var(--ink)" : row.isEdge ? "var(--paper-alt)" : "var(--paper)",
@@ -614,6 +614,72 @@ export function ApproachStratGrid({ enriched, clubDistances }: {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Approach accuracy radial (par 3) ────────────────────────────────────────
+
+const ACC_DIRS = ["Hit", "Long", "Short", "Left", "Right"] as const;
+type AccDir = typeof ACC_DIRS[number];
+
+function AccPill({ label, impact, count }: { label: string; impact: number; count: number }) {
+  const [hovered, setHovered] = useState(false);
+  const s = count === 0
+    ? { bg: "var(--paper-alt)", fg: "var(--muted-2)", bd: "var(--line)" }
+    : pillStyle(impact, count);
+  const display = hovered ? `${count}×` : count === 0 ? "—" : isNaN(impact) ? "—" : fmt(impact);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: s.bg, border: `1px solid ${s.bd}`, color: s.fg,
+        borderRadius: 999, padding: "5px 10px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+        minWidth: 52, cursor: "default", userSelect: "none",
+        transition: "background 0.1s",
+      }}
+    >
+      <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: 1.2, textTransform: "uppercase", opacity: 0.65 }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1 }}>{display}</span>
+    </div>
+  );
+}
+
+function ApproachAccuracyRadial({ enriched, selectedClub }: {
+  enriched: PlanEnrichedHole[];
+  selectedClub: string;
+}) {
+  const clubHoles = enriched.filter(e => e.approachClub === selectedClub);
+  if (clubHoles.length === 0) return null;
+
+  const baseline = wAvgE(clubHoles, e => e.stp);
+  const stats = Object.fromEntries(ACC_DIRS.map(dir => {
+    const holes = clubHoles.filter(e => e.approachAccuracy === dir);
+    const avg = wAvgE(holes, e => e.stp);
+    return [dir, { count: holes.length, impact: isNaN(avg) ? NaN : avg - baseline }] as [AccDir, { count: number; impact: number }];
+  }));
+
+  return (
+    <div>
+      <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 8 }}>
+        {selectedClub} · miss distribution
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "auto auto auto", gridTemplateRows: "auto auto auto", gap: 6, placeItems: "center" }}>
+        {/* Row 0 */}
+        <div />
+        <AccPill label="Far" impact={stats.Long.impact} count={stats.Long.count} />
+        <div />
+        {/* Row 1 */}
+        <AccPill label="Left" impact={stats.Left.impact} count={stats.Left.count} />
+        <AccPill label="Hit" impact={stats.Hit.impact} count={stats.Hit.count} />
+        <AccPill label="Right" impact={stats.Right.impact} count={stats.Right.count} />
+        {/* Row 2 */}
+        <div />
+        <AccPill label="Short" impact={stats.Short.impact} count={stats.Short.count} />
+        <div />
+      </div>
     </div>
   );
 }
@@ -685,7 +751,7 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
               const tp = last.score - last.par;
               const tpStr = tp === 0 ? "E" : tp > 0 ? `+${tp}` : String(tp);
               const tone = tp < 0 ? "green" : tp === 0 ? "ghost" : "ghost";
-              return <Chip tone={tone}>last {last.score} ({tpStr})</Chip>;
+              return <Chip tone={tone}>last ({tpStr})</Chip>;
             })()}
           </div>
         </div>
@@ -722,11 +788,17 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                     enriched={enriched}
                     clubDistances={clubDistances ?? DEFAULT_CLUB_DISTANCES}
                   />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 160, flexShrink: 0 }}>
-                    <AimDial
-                      value={strategy.aim as AimPos}
-                      onChange={(aim) => onAimChange?.(aim)}
-                      hole={hole}
+                  <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexShrink: 0 }}>
+                    <div style={{ minWidth: 160 }}>
+                      <AimDial
+                        value={strategy.aim as AimPos}
+                        onChange={(aim) => onAimChange?.(aim)}
+                        hole={hole}
+                      />
+                    </div>
+                    <ApproachAccuracyRadial
+                      enriched={enriched}
+                      selectedClub={strategy.pref}
                     />
                   </div>
                 </div>
