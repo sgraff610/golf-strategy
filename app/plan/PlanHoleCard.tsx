@@ -250,16 +250,16 @@ function pillStyle(impact: number, count: number): { bg: string; fg: string; bd:
   return               { bg: "var(--green)",             fg: "white",             bd: "var(--green-deep)" };
 }
 
-const GRID_CLUB_W  = 50;  // px
+const GRID_CLUB_W  = 64;  // px
 const GRID_TOTAL_W = 420; // px
-const PILL_MAX     = 70;  // px — narrower pills with more breathing room
+const PILL_MAX     = 58;  // px
 const PILL_MIN     = 36;  // px
 
 /** All pills use equal fixed width */
 function pillWidth(_count: number): number { return PILL_MAX; }
 function overallPillWidth(_p: number): number { return PILL_MAX; }
 
-function fmt(n: number): string { return n >= 0 ? `+${n.toFixed(2)}` : n.toFixed(2); }
+function fmt(n: number): string { return n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1); }
 function pct(n: number): string { return `${Math.round(n * 100)}%`; }
 
 // ─── Impact pill ───────────────────────────────────────────────────────────────
@@ -402,8 +402,9 @@ export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }
             {/* Club name */}
             <div onClick={() => onChange?.(clubVal)} style={{
               background: isSelected ? "var(--ink)" : "var(--paper)",
-              borderRadius: 6, padding: "3px 4px", cursor: "pointer",
+              borderRadius: 999, padding: "4px 8px", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
+              border: isSelected ? "none" : "1px solid var(--line)",
             }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? "var(--paper)" : "var(--ink)" }}>
                 {row.club}
@@ -431,7 +432,7 @@ export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }
         gap: 5, marginTop: 5, paddingTop: 5,
         borderTop: "1px dashed var(--line)", alignItems: "center",
       }}>
-        <div style={{ background: "var(--paper-alt)", borderRadius: 6, padding: "5px 4px", display: "flex", justifyContent: "center" }}>
+        <div style={{ background: "var(--paper-alt)", borderRadius: 999, padding: "5px 8px", display: "flex", justifyContent: "center", border: "1px solid var(--line)" }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", letterSpacing: 0.5 }}>Overall</span>
         </div>
 
@@ -595,8 +596,9 @@ export function ApproachStratGrid({ enriched, clubDistances }: {
         }}>
           <div style={{
             background: row.isCenter ? "var(--ink)" : row.isEdge ? "var(--paper-alt)" : "var(--paper)",
-            borderRadius: 6, padding: "3px 4px",
+            borderRadius: 999, padding: "4px 8px",
             display: "flex", alignItems: "center", justifyContent: "center",
+            border: row.isCenter ? "none" : "1px solid var(--line)",
           }}>
             <span style={{
               fontSize: row.isEdge ? 9 : 11, fontWeight: 700,
@@ -784,27 +786,28 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
               <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 8 }}>
                 Recent scores
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "90px 28px 36px auto auto", gap: "4px 12px", alignItems: "baseline" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "90px 28px 36px auto", gap: "4px 12px", alignItems: "baseline" }}>
                 {/* Header */}
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Date</div>
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Score</div>
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>+/-</div>
-                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>{hole.par === 3 ? "Appr" : "Club"}</div>
-                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>{hole.par === 3 ? "Acc" : "Tee"}</div>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>{hole.par === 3 ? "Appr · Acc" : "Club · Tee"}</div>
                 {holeHistory.slice(0, 6).map((entry, i) => {
                   const tp = entry.score - entry.par;
                   const tpStr = tp === 0 ? "E" : tp > 0 ? `+${tp}` : String(tp);
                   const scoreColor = tp < 0 ? "var(--good)" : tp === 0 ? "var(--ink)" : tp === 1 ? "var(--muted)" : "var(--bad)";
                   const clubVal = hole.par === 3 ? (entry.appr_distance || "—") : (entry.club || "—");
-                  const accVal  = hole.par === 3 ? (entry.appr_accuracy || "—") : (entry.tee_accuracy || "—");
-                  const accColor = accVal === "Hit" ? "var(--good)" : accVal !== "—" ? "var(--muted)" : "var(--muted-2)";
+                  const accVal  = hole.par === 3 ? (entry.appr_accuracy || "") : (entry.tee_accuracy || "");
+                  const accColor = accVal === "Hit" ? "var(--good)" : accVal ? "var(--muted)" : "var(--muted-2)";
                   return (
                     <React.Fragment key={i}>
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>{entry.date}</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: scoreColor }}>{entry.score}</div>
                       <div style={{ fontSize: 11, color: scoreColor }}>{tpStr}</div>
-                      <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{clubVal}</div>
-                      <div style={{ fontSize: 11, color: accColor }}>{accVal}</div>
+                      <div style={{ fontSize: 11, display: "flex", gap: 5, alignItems: "baseline" }}>
+                        <span style={{ color: "var(--ink-soft)" }}>{clubVal}</span>
+                        {accVal && <span style={{ color: accColor, fontSize: 10 }}>· {accVal}</span>}
+                      </div>
                     </React.Fragment>
                   );
                 })}

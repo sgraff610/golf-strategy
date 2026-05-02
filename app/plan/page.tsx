@@ -630,79 +630,82 @@ function WeatherGrid({ windScore, wetnessScore, onChange }: {
   const gridWidth = ROW_LABEL_W + 4 * CELL_W + 3 * GAP;
 
   return (
-    <div style={{ display: "inline-block" }}>
-      <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>
-        Tap to set conditions
-      </div>
+    <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+      {/* Left: grid */}
+      <div style={{ display: "inline-block" }}>
+        <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>
+          Tap to set conditions
+        </div>
 
-      {/* Column headers */}
-      <div style={{ display: "flex", marginLeft: ROW_LABEL_W, gap: GAP, marginBottom: 4 }}>
-        {WET_COLS.map((lbl, i) => (
-          <div key={i} style={{ width: CELL_W, textAlign: "center", fontSize: 9, fontWeight: 600, color: "var(--muted-2)", letterSpacing: 0.5, textTransform: "uppercase", lineHeight: 1.3 }}>
-            {lbl.split("\n").map((l, j) => <span key={j} style={{ display: "block" }}>{l}</span>)}
+        {/* Column headers */}
+        <div style={{ display: "flex", marginLeft: ROW_LABEL_W, gap: GAP, marginBottom: 4 }}>
+          {WET_COLS.map((lbl, i) => (
+            <div key={i} style={{ width: CELL_W, textAlign: "center", fontSize: 9, fontWeight: 600, color: "var(--muted-2)", letterSpacing: 0.5, textTransform: "uppercase", lineHeight: 1.3 }}>
+              {lbl.split("\n").map((l, j) => <span key={j} style={{ display: "block" }}>{l}</span>)}
+            </div>
+          ))}
+        </div>
+
+        {/* Grid rows */}
+        {WIND_ROWS.map((row, rowIdx) => (
+          <div key={rowIdx} style={{ display: "flex", alignItems: "stretch", gap: GAP, marginBottom: GAP }}>
+            {/* Row label */}
+            <div style={{ width: ROW_LABEL_W, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-end", paddingRight: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-soft)" }}>{row.label}</span>
+              {row.sub && <span style={{ fontSize: 9, color: "var(--muted-2)", marginTop: 1 }}>{row.sub}</span>}
+            </div>
+
+            {/* 4 cells */}
+            {[0,1,2,3].map(colIdx => {
+              const isSelected = rowIdx === selRow && colIdx === selCol;
+              return (
+                <button
+                  key={colIdx}
+                  onClick={() => onChange(((3 - rowIdx) / 3) * 10, (colIdx / 3) * 10)}
+                  style={{
+                    width: CELL_W, height: CELL_H, flexShrink: 0,
+                    background: cellBg(rowIdx, colIdx),
+                    border: isSelected ? "2.5px solid var(--ink)" : "1.5px solid rgba(0,0,0,0.10)",
+                    borderRadius: 7, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: isSelected ? "inset 0 0 0 1px var(--ink)" : "none",
+                    transition: "border-color 0.1s, box-shadow 0.1s",
+                  }}
+                >
+                  {isSelected && (
+                    <div style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                        <polyline points="1,4 4,7 9,1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         ))}
-      </div>
 
-      {/* Grid rows */}
-      {WIND_ROWS.map((row, rowIdx) => (
-        <div key={rowIdx} style={{ display: "flex", alignItems: "stretch", gap: GAP, marginBottom: GAP }}>
-          {/* Row label */}
-          <div style={{ width: ROW_LABEL_W, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-end", paddingRight: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-soft)" }}>{row.label}</span>
-            {row.sub && <span style={{ fontSize: 9, color: "var(--muted-2)", marginTop: 1 }}>{row.sub}</span>}
-          </div>
-
-          {/* 4 cells */}
-          {[0,1,2,3].map(colIdx => {
-            const isSelected = rowIdx === selRow && colIdx === selCol;
-            return (
-              <button
-                key={colIdx}
-                onClick={() => onChange(((3 - rowIdx) / 3) * 10, (colIdx / 3) * 10)}
-                style={{
-                  width: CELL_W, height: CELL_H, flexShrink: 0,
-                  background: cellBg(rowIdx, colIdx),
-                  border: isSelected ? "2.5px solid var(--ink)" : "1.5px solid rgba(0,0,0,0.10)",
-                  borderRadius: 7, cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: isSelected ? "inset 0 0 0 1px var(--ink)" : "none",
-                  transition: "border-color 0.1s, box-shadow 0.1s",
-                }}
-              >
-                {isSelected && (
-                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <polyline points="1,4 4,7 9,1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                )}
-              </button>
-            );
-          })}
+        {/* X-axis label */}
+        <div style={{ marginLeft: ROW_LABEL_W, width: 4 * CELL_W + 3 * GAP, textAlign: "center", fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginTop: 4 }}>
+          ← Dry · Wetness · Wet →
         </div>
-      ))}
-
-      {/* X-axis label */}
-      <div style={{ marginLeft: ROW_LABEL_W, width: 4 * CELL_W + 3 * GAP, textAlign: "center", fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginTop: 4 }}>
-        ← Dry · Wetness · Wet →
       </div>
 
-      {/* Adjustment summary */}
-      <div style={{ marginTop: 14, display: "flex", gap: 10, width: gridWidth }}>
-        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 14px", flex: 1 }}>
-          <div style={{ fontSize: 9, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 3 }}>Wind adjustment</div>
+      {/* Right: adjustment cards stacked vertically */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 26, minWidth: 148 }}>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 14px" }}>
+          <div style={{ fontSize: 9, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 3 }}>Wind</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: windScore > 3 ? "var(--accent)" : "var(--ink)" }}>
-            {clubs > 0 ? `+${clubs} club${clubs === 1 ? "" : "s"} on approach` : "No adjustment"}
+            {clubs > 0 ? `+${clubs} club${clubs === 1 ? "" : "s"}` : "No adj."}
           </div>
-          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>Wind {windScore.toFixed(1)} / 10</div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{windScore.toFixed(1)} / 10</div>
         </div>
-        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 14px", flex: 1 }}>
-          <div style={{ fontSize: 9, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 3 }}>Course firmness</div>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 14px" }}>
+          <div style={{ fontSize: 9, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 3 }}>Firmness</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: wetnessScore > 3 ? "var(--accent)" : "var(--green)" }}>
-            {roll > 0 ? `−${roll} yds roll` : "Normal roll"}
+            {roll > 0 ? `−${roll} yds` : "Normal"}
           </div>
-          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>Wetness {wetnessScore.toFixed(1)} / 10</div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{wetnessScore.toFixed(1)} / 10</div>
         </div>
       </div>
     </div>
