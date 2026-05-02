@@ -23,7 +23,7 @@ import { PlanHoleCard } from "./PlanHoleCard";
 import { buildPosture, buildStrategies, targetScore, leavesYardage, windClubAdjust, wetnessRollLoss } from "./planEngine";
 
 export type HoleClubStat = { club: string; count: number; avgOverPar: number };
-export type HoleHistEntry = { date: string; score: number; par: number; club: string; tee_accuracy: string };
+export type HoleHistEntry = { date: string; score: number; par: number; club: string; tee_accuracy: string; appr_distance?: string; appr_accuracy?: string };
 export type { PlanEnrichedHole } from "@/lib/planTypes";
 const PLAN_CLUBS = ["Driver", "3W", "5W", "7W", "Irons"] as const;
 function clubGroup(club: string): string {
@@ -394,6 +394,8 @@ export default function PlanPage() {
           par: Number(h.par) || 4,
           club: h.club ?? "",
           tee_accuracy: h.tee_accuracy ?? "",
+          appr_distance: h.appr_distance ?? "",
+          appr_accuracy: h.appr_accuracy ?? "",
         });
       }
     }
@@ -525,6 +527,7 @@ export default function PlanPage() {
                   planEnrichedMap={planEnrichedMap}
                   planEnrichedReady={planEnrichedReady}
                   latestRecap={latestRecap}
+                  clubDistances={clubDistances}
                   onClubChange={(hole, club) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], pref: club } }))}
                   onAimChange={(hole, aim) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], aim } }))}
                   onTeeItUp={onTeeItUp}
@@ -1671,7 +1674,7 @@ function RecapAdvicePanel({ recap }: { recap: Record<string, any> }) {
 
 // ─── Plan stage ───────────────────────────────────────────────────────────────
 
-function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, holeHistEntries, planEnrichedMap, planEnrichedReady, latestRecap, onClubChange, onAimChange, onTeeItUp, onRestart }: {
+function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, holeHistEntries, planEnrichedMap, planEnrichedReady, latestRecap, clubDistances, onClubChange, onAimChange, onTeeItUp, onRestart }: {
   course: CourseRecord;
   planHoles: import("@/lib/types").HoleData[];
   strategies: Record<number, import("@/lib/planTypes").HoleStrategy>;
@@ -1681,6 +1684,7 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
   planEnrichedMap: Record<number, PlanEnrichedHole[]>;
   planEnrichedReady: boolean;
   latestRecap: Record<string, any> | null;
+  clubDistances: ClubDistances | undefined;
   onClubChange: (hole: number, club: string) => void;
   onAimChange: (hole: number, aim: import("@/lib/planTypes").HoleStrategy["aim"]) => void;
   onTeeItUp: () => void; onRestart: () => void;
@@ -1715,6 +1719,7 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
             clubStats={holeHistMap[h.hole]}
             holeHistory={holeHistEntries[h.hole] ?? []}
             enriched={planEnrichedReady ? (planEnrichedMap[h.hole] ?? []) : undefined}
+            clubDistances={clubDistances}
             onClubChange={(club) => onClubChange(h.hole, club)}
             onAimChange={(aim) => onAimChange(h.hole, aim)}
             onToggle={() => {

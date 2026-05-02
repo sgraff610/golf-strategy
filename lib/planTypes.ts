@@ -98,6 +98,8 @@ export type CourseHistorySummary = {
 export type PlanEnrichedHole = {
   club: string;
   teeAccuracy: string;
+  approachClub?: string;    // par 3 only — the appr_distance club used
+  approachAccuracy?: string; // par 3 only — Hit/Left/Right
   stp: number;        // score − par
   simScore: number;
   isExact: boolean;

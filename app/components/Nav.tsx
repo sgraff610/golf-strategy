@@ -28,7 +28,6 @@ export default function Nav() {
     { href: "/",                  label: "Strategy/Play" },
     { href: "/plan",              label: "Plan" },
     { href: "/courses",           label: "Courses" },
-    { href: "/rounds",            label: "Rounds" },
     { href: "/rounds/insights",   label: "Coach" },
     { href: "/clubhouse",         label: "Clubhouse" },
   ];

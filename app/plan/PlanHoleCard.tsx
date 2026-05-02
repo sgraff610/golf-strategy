@@ -2,7 +2,8 @@
 "use client";
 import React, { useRef, useState } from "react";
 import type { HoleData } from "@/lib/types";
-import type { HoleStrategy, PlanEnrichedHole } from "@/lib/planTypes";
+import type { HoleStrategy, PlanEnrichedHole, ClubDistances } from "@/lib/planTypes";
+import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
 import type { HoleClubStat, HoleHistEntry } from "./page";
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   clubStats?: HoleClubStat[];
   enriched?: PlanEnrichedHole[]; // undefined = still loading, [] = loaded/no data
   holeHistory?: HoleHistEntry[];
+  clubDistances?: ClubDistances;
   onClubChange?: (club: string) => void;
   onAimChange?: (aim: HoleStrategy["aim"]) => void;
 };
@@ -248,13 +250,10 @@ function pillStyle(impact: number, count: number): { bg: string; fg: string; bd:
   return               { bg: "var(--green)",             fg: "white",             bd: "var(--green-deep)" };
 }
 
-/** Width in px based on count: min 36, max 96 at count ≥ 10 */
-// Grid constants — derived so 3 dir pills + 1 overall pill exactly fill 300px total
-// Club=42, gap=5×2, overall=60 → dir area=188 → 3×60+2×3=186 ≈ fills it
-const GRID_CLUB_W  = 50;  // px (42 × 1.2)
+const GRID_CLUB_W  = 50;  // px
 const GRID_TOTAL_W = 420; // px
-const PILL_MAX     = 90;  // px — (420-50-10)/4, fills columns when all maxed
-const PILL_MIN     = 36;  // px — fits "+0.45" at 11px bold
+const PILL_MAX     = 70;  // px — narrower pills with more breathing room
+const PILL_MIN     = 36;  // px
 
 /** All pills use equal fixed width */
 function pillWidth(_count: number): number { return PILL_MAX; }
@@ -340,7 +339,7 @@ export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }
   }) {
     const [lCol, hCol, rCol] = cols;
     return (
-      <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, alignItems: "center", gap: 3 }}>
+      <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, alignItems: "center", gap: 8 }}>
         {/* Left */}
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           {leftHazard && lCol.count > 0
@@ -378,7 +377,7 @@ export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }
       {/* Header */}
       <div style={{ display: "grid", gridTemplateColumns: COL_TMPL, gap: 5, marginBottom: 5, alignItems: "center" }}>
         <div style={{ ...LABEL_STYLE, paddingLeft: 4 }}>Club</div>
-        <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, gap: 3, alignItems: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, gap: 8, alignItems: "center" }}>
           <div style={{ ...LABEL_STYLE, textAlign: "right", paddingRight: 2 }}>Left</div>
           <div style={{ ...LABEL_STYLE, textAlign: "center" }}>Hit</div>
           <div style={{ ...LABEL_STYLE, textAlign: "left", paddingLeft: 2 }}>Right</div>
@@ -449,9 +448,177 @@ export function TeeStratGrid({ enriched, selected, hole, onChange, onAimChange }
   );
 }
 
+// ─── Approach strategy grid (par 3) ──────────────────────────────────────────
+
+function sortedClubOrder(clubDistances: ClubDistances): string[] {
+  return Object.entries(clubDistances)
+    .sort((a, b) => ((b[1].max + b[1].min) / 2) - ((a[1].max + a[1].min) / 2))
+    .map(([k]) => k);
+}
+
+type ApproachRow = {
+  label: string;
+  isCenter?: boolean;
+  isEdge?: boolean;
+  count: number;
+  overallPct: number;
+  rowImpact: number;
+  cols: GridCol[];
+};
+
+function computeApproachGrid(
+  enriched: PlanEnrichedHole[],
+  clubDistances: ClubDistances
+): { rows: ApproachRow[]; totalCount: number; baseline: number } {
+  const DIRS = ["Left", "Hit", "Right"] as const;
+  const withClub = enriched.filter(e => e.approachClub);
+  const total = withClub.length;
+  const baseline = wAvgE(withClub, e => e.stp);
+
+  const clubCounts: Record<string, number> = {};
+  for (const e of withClub) {
+    const c = e.approachClub!;
+    clubCounts[c] = (clubCounts[c] ?? 0) + 1;
+  }
+  const mostCommon = Object.entries(clubCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!mostCommon) return { rows: [], totalCount: total, baseline };
+
+  const ordered = sortedClubOrder(clubDistances);
+  const idx = ordered.indexOf(mostCommon);
+  const effectiveIdx = idx >= 0 ? idx : ordered.length;
+
+  const row2Club = effectiveIdx > 0 ? ordered[effectiveIdx - 1] : null;
+  const row4Club = effectiveIdx < ordered.length - 1 ? ordered[effectiveIdx + 1] : null;
+
+  const row2Idx = row2Club ? ordered.indexOf(row2Club) : -1;
+  const row4Idx = row4Club ? ordered.indexOf(row4Club) : ordered.length;
+  const longerSet = new Set(ordered.slice(0, Math.max(0, row2Idx)));
+  const shorterSet = new Set(ordered.slice(row4Idx + 1));
+
+  function makeRow(label: string, filter: (e: PlanEnrichedHole) => boolean, opts?: { isCenter?: boolean; isEdge?: boolean }): ApproachRow {
+    const holes = withClub.filter(filter);
+    const count = holes.length;
+    const overallPct = total > 0 ? count / total : 0;
+    const rowAvg = wAvgE(holes, e => e.stp);
+    const rowImpact = isNaN(rowAvg) ? NaN : rowAvg - baseline;
+    const cols: GridCol[] = DIRS.map(dir => {
+      const dh = holes.filter(e => e.approachAccuracy === dir);
+      const avg = wAvgE(dh, e => e.stp);
+      return { count: dh.length, impact: isNaN(avg) ? NaN : avg - baseline, likelihood: count > 0 ? dh.length / count : 0 };
+    });
+    return { label, count, overallPct, rowImpact, cols, ...opts };
+  }
+
+  const rows: ApproachRow[] = [
+    makeRow("Longer", e => longerSet.has(e.approachClub!), { isEdge: true }),
+    ...(row2Club ? [makeRow(row2Club, e => e.approachClub === row2Club)] : []),
+    makeRow(mostCommon, e => e.approachClub === mostCommon, { isCenter: true }),
+    ...(row4Club ? [makeRow(row4Club, e => e.approachClub === row4Club)] : []),
+    makeRow("Shorter", e => shorterSet.has(e.approachClub!), { isEdge: true }),
+  ];
+
+  return { rows, totalCount: total, baseline };
+}
+
+export function ApproachStratGrid({ enriched, clubDistances }: {
+  enriched: PlanEnrichedHole[];
+  clubDistances: ClubDistances;
+}) {
+  const withClub = enriched.filter(e => e.approachClub);
+
+  if (enriched.length === 0 || withClub.length === 0) {
+    return (
+      <div style={{ color: "var(--muted)", fontSize: 12, fontStyle: "italic", padding: "12px 0" }}>
+        {enriched.length === 0
+          ? "No similar holes found — not enough history yet."
+          : "No approach club data recorded yet."}
+      </div>
+    );
+  }
+
+  const grid = computeApproachGrid(enriched, clubDistances);
+  if (grid.rows.length === 0) {
+    return <div style={{ color: "var(--muted)", fontSize: 12, fontStyle: "italic", padding: "12px 0" }}>Not enough approach data yet.</div>;
+  }
+
+  const DIR_COLS = "1fr auto 1fr";
+  const COL_TMPL = `${GRID_CLUB_W}px 1fr ${PILL_MAX}px`;
+  const LABEL_STYLE: React.CSSProperties = {
+    fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase",
+  };
+
+  function DirPills({ cols }: { cols: GridCol[] }) {
+    const [lCol, hCol, rCol] = cols;
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          {lCol.count > 0
+            ? <ImpactPill impact={lCol.impact} count={lCol.count} width={PILL_MAX} hoverText={`${lCol.count}x`} />
+            : <div style={{ width: PILL_MAX }} />}
+        </div>
+        {hCol.count > 0
+          ? <ImpactPill impact={hCol.impact} count={hCol.count} width={PILL_MAX} hoverText={`${hCol.count}x`} />
+          : <div style={{ width: PILL_MAX }} />}
+        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          {rCol.count > 0
+            ? <ImpactPill impact={rCol.impact} count={rCol.count} width={PILL_MAX} hoverText={`${rCol.count}x`} />
+            : <div style={{ width: PILL_MAX }} />}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: GRID_TOTAL_W }}>
+      <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 10 }}>
+        Approach club · {grid.totalCount} similar holes
+      </div>
+
+      {/* Header */}
+      <div style={{ display: "grid", gridTemplateColumns: COL_TMPL, gap: 5, marginBottom: 5, alignItems: "center" }}>
+        <div style={{ ...LABEL_STYLE, paddingLeft: 4 }}>Club</div>
+        <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, gap: 8, alignItems: "center" }}>
+          <div style={{ ...LABEL_STYLE, textAlign: "right", paddingRight: 2 }}>Left</div>
+          <div style={{ ...LABEL_STYLE, textAlign: "center" }}>Hit</div>
+          <div style={{ ...LABEL_STYLE, textAlign: "left", paddingLeft: 2 }}>Right</div>
+        </div>
+        <div style={{ ...LABEL_STYLE, textAlign: "center" }}>Ovr</div>
+      </div>
+
+      {/* Rows */}
+      {grid.rows.map(row => (
+        <div key={row.label} style={{
+          display: "grid", gridTemplateColumns: COL_TMPL,
+          gap: 5, marginBottom: 3, alignItems: "center",
+          border: row.isCenter ? "1px solid var(--ink)" : "1px solid transparent",
+          borderRadius: 8, padding: "3px 0",
+        }}>
+          <div style={{
+            background: row.isCenter ? "var(--ink)" : row.isEdge ? "var(--paper-alt)" : "var(--paper)",
+            borderRadius: 6, padding: "3px 4px",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <span style={{
+              fontSize: row.isEdge ? 9 : 11, fontWeight: 700,
+              color: row.isCenter ? "var(--paper)" : "var(--ink)",
+              fontStyle: row.isEdge ? "italic" : "normal",
+            }}>
+              {row.label}
+            </span>
+          </div>
+          <DirPills cols={row.cols} />
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <ImpactPill impact={row.rowImpact} count={row.count} width={PILL_MAX} hoverText={pct(row.overallPct)} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main card ────────────────────────────────────────────────────────────────
 
-export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, holeHistory, enriched, onClubChange, onAimChange }: Props) {
+export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, holeHistory, enriched, clubDistances, onClubChange, onAimChange }: Props) {
   const parColor = hole.par === 3 ? "var(--accent)" : hole.par === 5 ? "var(--green)" : "var(--ink-soft)";
   const hazards = hazardList(hole);
   const risk = hazards.length >= 2 ? "high" : hazards.length === 1 ? "med" : "low";
@@ -539,15 +706,27 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
       {expanded && (
         <div style={{ borderTop: "1px dashed var(--line)", padding: "18px 16px", background: "var(--paper-alt)" }}>
 
-          {/* Tee strategy — par 4 and 5 only */}
-          {hole.par >= 4 && (
-            <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: "1px dashed var(--line)" }}>
+          {/* Strategy grid — approach club for par 3, tee club for par 4/5 */}
+          <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: "1px dashed var(--line)" }}>
               {enriched === undefined ? (
-                /* Still loading */
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", color: "var(--muted)", fontSize: 12, fontStyle: "italic" }}>
                   <div style={{ width: 14, height: 14, border: "2px solid var(--line)", borderTopColor: "var(--ink)", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
                   Loading similar holes…
                   <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+                </div>
+              ) : hole.par === 3 ? (
+                <div style={{ display: "flex", gap: 36, alignItems: "flex-start" }}>
+                  <ApproachStratGrid
+                    enriched={enriched}
+                    clubDistances={clubDistances ?? DEFAULT_CLUB_DISTANCES}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 160, flexShrink: 0 }}>
+                    <AimDial
+                      value={strategy.aim as AimPos}
+                      onChange={(aim) => onAimChange?.(aim)}
+                      hole={hole}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 36, alignItems: "flex-start" }}>
@@ -576,7 +755,6 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                 </div>
               )}
             </div>
-          )}
 
           {/* Hazards + Why */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -611,20 +789,22 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Date</div>
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Score</div>
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>+/-</div>
-                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Club</div>
-                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Tee</div>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>{hole.par === 3 ? "Appr" : "Club"}</div>
+                <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>{hole.par === 3 ? "Acc" : "Tee"}</div>
                 {holeHistory.slice(0, 6).map((entry, i) => {
                   const tp = entry.score - entry.par;
                   const tpStr = tp === 0 ? "E" : tp > 0 ? `+${tp}` : String(tp);
                   const scoreColor = tp < 0 ? "var(--good)" : tp === 0 ? "var(--ink)" : tp === 1 ? "var(--muted)" : "var(--bad)";
-                  const accColor = entry.tee_accuracy === "Hit" ? "var(--good)" : entry.tee_accuracy ? "var(--muted)" : "var(--muted-2)";
+                  const clubVal = hole.par === 3 ? (entry.appr_distance || "—") : (entry.club || "—");
+                  const accVal  = hole.par === 3 ? (entry.appr_accuracy || "—") : (entry.tee_accuracy || "—");
+                  const accColor = accVal === "Hit" ? "var(--good)" : accVal !== "—" ? "var(--muted)" : "var(--muted-2)";
                   return (
                     <React.Fragment key={i}>
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>{entry.date}</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: scoreColor }}>{entry.score}</div>
                       <div style={{ fontSize: 11, color: scoreColor }}>{tpStr}</div>
-                      <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{entry.club || "—"}</div>
-                      <div style={{ fontSize: 11, color: accColor }}>{entry.tee_accuracy || "—"}</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{clubVal}</div>
+                      <div style={{ fontSize: 11, color: accColor }}>{accVal}</div>
                     </React.Fragment>
                   );
                 })}

@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
   const result: Record<number, PlanEnrichedHole[]> = {};
 
   for (const targetHole of (courseRow.holes ?? []) as HD[]) {
-    if (targetHole.par < 4) continue; // skip par 3s
+    const isPar3 = targetHole.par === 3;
 
     const scored: { rh: any; sim: number; isExact: boolean }[] = [];
     for (const round of rounds) {
@@ -269,6 +269,10 @@ export async function POST(req: NextRequest) {
       .map(({ rh, sim, isExact }) => ({
         club: rh.club ?? "",
         teeAccuracy: rh.tee_accuracy ?? "",
+        ...(isPar3 ? {
+          approachClub: rh.appr_distance ?? "",
+          approachAccuracy: rh.appr_accuracy ?? "",
+        } : {}),
         stp: Number(rh.score) - Number(rh.par),
         simScore: sim,
         isExact,
