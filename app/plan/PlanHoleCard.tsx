@@ -469,8 +469,9 @@ type ApproachRow = {
 
 function computeApproachGrid(
   enriched: PlanEnrichedHole[],
-  clubDistances: ClubDistances
-): { rows: ApproachRow[]; totalCount: number; baseline: number } {
+  clubDistances: ClubDistances,
+  anchorClub?: string
+): { rows: ApproachRow[]; totalCount: number; baseline: number; longerClubs: string[]; shorterClubs: string[] } {
   const DIRS = ["Left", "Hit", "Right"] as const;
   const withClub = enriched.filter(e => e.approachClub);
   const total = withClub.length;
@@ -482,10 +483,13 @@ function computeApproachGrid(
     clubCounts[c] = (clubCounts[c] ?? 0) + 1;
   }
   const mostCommon = Object.entries(clubCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-  if (!mostCommon) return { rows: [], totalCount: total, baseline };
 
   const ordered = sortedClubOrder(clubDistances);
-  const idx = ordered.indexOf(mostCommon);
+  // Anchor: use the provided club if it's in the player's bag, otherwise fall back to most common
+  const anchor = (anchorClub && ordered.includes(anchorClub)) ? anchorClub : mostCommon;
+  if (!anchor) return { rows: [], totalCount: total, baseline, longerClubs: [], shorterClubs: [] };
+
+  const idx = ordered.indexOf(anchor);
   const effectiveIdx = idx >= 0 ? idx : ordered.length;
 
   const row2Club = effectiveIdx > 0 ? ordered[effectiveIdx - 1] : null;
@@ -493,8 +497,10 @@ function computeApproachGrid(
 
   const row2Idx = row2Club ? ordered.indexOf(row2Club) : -1;
   const row4Idx = row4Club ? ordered.indexOf(row4Club) : ordered.length;
-  const longerSet = new Set(ordered.slice(0, Math.max(0, row2Idx)));
-  const shorterSet = new Set(ordered.slice(row4Idx + 1));
+  const longerClubs = ordered.slice(0, Math.max(0, row2Idx)); // clubs longer than row 2
+  const shorterClubs = ordered.slice(row4Idx + 1);            // clubs shorter than row 4
+  const longerSet = new Set(longerClubs);
+  const shorterSet = new Set(shorterClubs);
 
   function makeRow(label: string, filter: (e: PlanEnrichedHole) => boolean, opts?: { isCenter?: boolean; isEdge?: boolean }): ApproachRow {
     const holes = withClub.filter(filter);
@@ -513,18 +519,21 @@ function computeApproachGrid(
   const rows: ApproachRow[] = [
     makeRow("Longer", e => longerSet.has(e.approachClub!), { isEdge: true }),
     ...(row2Club ? [makeRow(row2Club, e => e.approachClub === row2Club)] : []),
-    makeRow(mostCommon, e => e.approachClub === mostCommon, { isCenter: true }),
+    makeRow(anchor, e => e.approachClub === anchor, { isCenter: true }),
     ...(row4Club ? [makeRow(row4Club, e => e.approachClub === row4Club)] : []),
     makeRow("Shorter", e => shorterSet.has(e.approachClub!), { isEdge: true }),
   ];
 
-  return { rows, totalCount: total, baseline };
+  return { rows, totalCount: total, baseline, longerClubs, shorterClubs };
 }
 
-export function ApproachStratGrid({ enriched, clubDistances }: {
+export function ApproachStratGrid({ enriched, clubDistances, selected, onChange }: {
   enriched: PlanEnrichedHole[];
   clubDistances: ClubDistances;
+  selected?: string;
+  onChange?: (club: string) => void;
 }) {
+  const [subpick, setSubpick] = useState<"longer" | "shorter" | null>(null);
   const withClub = enriched.filter(e => e.approachClub);
 
   if (enriched.length === 0 || withClub.length === 0) {
@@ -537,7 +546,8 @@ export function ApproachStratGrid({ enriched, clubDistances }: {
     );
   }
 
-  const grid = computeApproachGrid(enriched, clubDistances);
+  // anchor = selected club so the plan's recommended club is always row 3
+  const grid = computeApproachGrid(enriched, clubDistances, selected);
   if (grid.rows.length === 0) {
     return <div style={{ color: "var(--muted)", fontSize: 12, fontStyle: "italic", padding: "12px 0" }}>Not enough approach data yet.</div>;
   }
@@ -548,22 +558,46 @@ export function ApproachStratGrid({ enriched, clubDistances }: {
     fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase",
   };
 
-  function DirPills({ cols }: { cols: GridCol[] }) {
+  function DirPills({ cols, onPick }: { cols: GridCol[]; onPick?: () => void }) {
     const [lCol, hCol, rCol] = cols;
     return (
       <div style={{ display: "grid", gridTemplateColumns: DIR_COLS, alignItems: "center", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           {lCol.count > 0
-            ? <ImpactPill impact={lCol.impact} count={lCol.count} width={PILL_MAX} hoverText={`${lCol.count}x`} />
+            ? <ImpactPill impact={lCol.impact} count={lCol.count} width={PILL_MAX} hoverText={`${lCol.count}×`} onClick={onPick} />
             : <div style={{ width: PILL_MAX }} />}
         </div>
         {hCol.count > 0
-          ? <ImpactPill impact={hCol.impact} count={hCol.count} width={PILL_MAX} hoverText={`${hCol.count}x`} />
+          ? <ImpactPill impact={hCol.impact} count={hCol.count} width={PILL_MAX} hoverText={`${hCol.count}×`} onClick={onPick} />
           : <div style={{ width: PILL_MAX }} />}
         <div style={{ display: "flex", justifyContent: "flex-start" }}>
           {rCol.count > 0
-            ? <ImpactPill impact={rCol.impact} count={rCol.count} width={PILL_MAX} hoverText={`${rCol.count}x`} />
+            ? <ImpactPill impact={rCol.impact} count={rCol.count} width={PILL_MAX} hoverText={`${rCol.count}×`} onClick={onPick} />
             : <div style={{ width: PILL_MAX }} />}
+        </div>
+      </div>
+    );
+  }
+
+  function SubpickPanel({ clubs }: { clubs: string[] }) {
+    return (
+      <div style={{ padding: "8px 10px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, marginBottom: 4 }}>
+        <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>
+          Pick a club:
+        </div>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {clubs.map(club => (
+            <button
+              key={club}
+              onClick={() => { onChange?.(club); setSubpick(null); }}
+              style={{
+                background: club === selected ? "var(--ink)" : "var(--paper-alt)",
+                color: club === selected ? "var(--paper)" : "var(--ink)",
+                border: "1px solid var(--line)", borderRadius: 999,
+                padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer",
+              }}
+            >{club}</button>
+          ))}
         </div>
       </div>
     );
@@ -587,33 +621,55 @@ export function ApproachStratGrid({ enriched, clubDistances }: {
       </div>
 
       {/* Rows */}
-      {grid.rows.map(row => (
-        <div key={row.label} style={{
-          display: "grid", gridTemplateColumns: COL_TMPL,
-          gap: 5, marginBottom: 3, alignItems: "center",
-          border: row.isCenter ? "2px solid var(--ink)" : "1px solid transparent",
-          borderRadius: 999, padding: row.isCenter ? "3px 6px" : "3px 0",
-        }}>
-          <div style={{
-            background: row.isCenter ? "var(--ink)" : row.isEdge ? "var(--paper-alt)" : "var(--paper)",
-            borderRadius: 999, padding: "4px 8px",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: row.isCenter ? "none" : "1px solid var(--line)",
-          }}>
-            <span style={{
-              fontSize: row.isEdge ? 9 : 11, fontWeight: 700,
-              color: row.isCenter ? "var(--paper)" : "var(--ink)",
-              fontStyle: row.isEdge ? "italic" : "normal",
-            }}>
-              {row.label}
-            </span>
-          </div>
-          <DirPills cols={row.cols} />
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <ImpactPill impact={row.rowImpact} count={row.count} width={PILL_MAX} hoverText={pct(row.overallPct)} />
-          </div>
-        </div>
-      ))}
+      {grid.rows.map(row => {
+        const handleClick = row.isEdge
+          ? (e: React.MouseEvent) => { e.stopPropagation(); setSubpick(prev => { const t = row.label === "Longer" ? "longer" : "shorter"; return prev === t ? null : t; }); }
+          : (e: React.MouseEvent) => { e.stopPropagation(); onChange?.(row.label); };
+
+        return (
+          <React.Fragment key={row.label}>
+            <div
+              onClick={handleClick}
+              style={{
+                display: "grid", gridTemplateColumns: COL_TMPL,
+                gap: 5, marginBottom: 3, alignItems: "center",
+                border: row.isCenter ? "2px solid var(--ink)" : "1px solid transparent",
+                borderRadius: 999, padding: row.isCenter ? "3px 6px" : "3px 0",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{
+                background: row.isCenter ? "var(--ink)" : row.isEdge ? "var(--paper-alt)" : "var(--paper)",
+                borderRadius: 999, padding: "4px 8px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: row.isCenter ? "none" : "1px solid var(--line)",
+              }}>
+                <span style={{
+                  fontSize: row.isEdge ? 9 : 11, fontWeight: 700,
+                  color: row.isCenter ? "var(--paper)" : "var(--ink)",
+                  fontStyle: row.isEdge ? "italic" : "normal",
+                }}>
+                  {row.label}{row.isEdge ? " ▾" : ""}
+                </span>
+              </div>
+              <DirPills
+                cols={row.cols}
+                onPick={row.isEdge ? undefined : () => onChange?.(row.label)}
+              />
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <ImpactPill impact={row.rowImpact} count={row.count} width={PILL_MAX} hoverText={pct(row.overallPct)} />
+              </div>
+            </div>
+
+            {row.label === "Longer" && subpick === "longer" && grid.longerClubs.length > 0 && (
+              <SubpickPanel clubs={grid.longerClubs} />
+            )}
+            {row.label === "Shorter" && subpick === "shorter" && grid.shorterClubs.length > 0 && (
+              <SubpickPanel clubs={grid.shorterClubs} />
+            )}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -787,6 +843,8 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                   <ApproachStratGrid
                     enriched={enriched}
                     clubDistances={clubDistances ?? DEFAULT_CLUB_DISTANCES}
+                    selected={strategy.pref}
+                    onChange={onClubChange}
                   />
                   <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexShrink: 0 }}>
                     <div style={{ minWidth: 160 }}>
