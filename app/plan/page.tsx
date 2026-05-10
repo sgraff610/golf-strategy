@@ -21,6 +21,7 @@ import { FORM_CLUBS, QUESTIONS } from "./questions";
 import { FormRanger } from "./FormRanger";
 import { PlanHoleCard } from "./PlanHoleCard";
 import { buildPosture, buildStrategies, targetScore, leavesYardage, windClubAdjust, wetnessRollLoss } from "./planEngine";
+import { useIsMobile } from "@/app/hooks/useIsMobile";
 
 export type HoleClubStat = { club: string; count: number; avgOverPar: number };
 export type HoleHistEntry = { date: string; score: number; par: number; club: string; tee_accuracy: string; appr_distance?: string; appr_accuracy?: string };
@@ -188,6 +189,7 @@ type Stage = typeof STAGES[number];
 
 export default function PlanPage() {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [stage, setStage] = useState<Stage>("setup");
   const [answers, setAnswers] = useState<PlanAnswers>({});
   const [form, setForm] = useState<PlayerForm>(
@@ -474,7 +476,7 @@ export default function PlanPage() {
     <>
       <style dangerouslySetInnerHTML={{ __html: TOKENS }} />
       <div className="plan-root">
-        <div style={{ padding: "0 40px" }}>
+        <div style={{ padding: isMobile ? "0 16px" : "0 40px" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto" }}>
             <StageNav stage={stage} setStage={setStage} answered={answered} courseReady={courseReady} />
             <div style={{ padding: "40px 0 60px" }}>
@@ -594,6 +596,7 @@ function WeatherGrid({ windScore, wetnessScore, onChange }: {
   wetnessScore: number;
   onChange: (wind: number, wet: number) => void;
 }) {
+  const isMobile = useIsMobile();
   // Snap 0–10 scores to the nearest of 4 grid steps
   const selRow = Math.round((1 - windScore / 10) * 3);   // 0=strong(top) → 3=calm(bottom)
   const selCol = Math.round(wetnessScore / 10 * 3);       // 0=dry(left)   → 3=wet(right)
@@ -630,7 +633,7 @@ function WeatherGrid({ windScore, wetnessScore, onChange }: {
   const gridWidth = ROW_LABEL_W + 4 * CELL_W + 3 * GAP;
 
   return (
-    <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 20, alignItems: "flex-start" }}>
       {/* Left: grid */}
       <div style={{ display: "inline-block" }}>
         <div style={{ marginBottom: 8, fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>
@@ -731,6 +734,7 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
   setTeeTime: (t: string) => void;
   onNext: () => void;
 }) {
+  const isMobile = useIsMobile();
   const [selectedName, setSelectedName] = useState("");
 
   // Unique course names in alphabetical order
@@ -756,7 +760,7 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 56, alignItems: "start", minHeight: 520 }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.1fr .9fr", gap: isMobile ? 32 : 56, alignItems: "start", minHeight: isMobile ? undefined : 520 }}>
       <div>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 500, fontSize: 56, lineHeight: 1.02, margin: "0 0 16px", color: "var(--ink)" }}>
           Let&apos;s build <em style={{ fontStyle: "italic", color: "var(--green-deep)" }}>your</em> strategy
@@ -923,7 +927,7 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
             )}
             {history && history.rounds_played > 0 && (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, paddingBottom: 18, borderBottom: "1px dashed var(--line)", marginBottom: 18 }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20, paddingBottom: 18, borderBottom: "1px dashed var(--line)", marginBottom: 18 }}>
                   <div>
                     <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>Best here</div>
                     <div style={{ fontFamily: "var(--font-display)", fontSize: 40, fontWeight: 500, fontStyle: "italic", color: "var(--green-deep)" }}>{history.best_score ?? "—"}</div>
@@ -1088,6 +1092,7 @@ function heatLabel(v: number) {
 }
 
 function RangeRecapHistory({ recaps }: { recaps: Record<string, any>[] }) {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   return (
     <div style={{ marginTop: 8 }}>
@@ -1105,7 +1110,7 @@ function RangeRecapHistory({ recaps }: { recaps: Record<string, any>[] }) {
       </button>
 
       {open && (
-        <div style={{ display: "grid", gridTemplateColumns: recaps.length > 1 ? "1fr 1fr" : "1fr", gap: 12, marginTop: 4 }}>
+        <div style={{ display: "grid", gridTemplateColumns: (!isMobile && recaps.length > 1) ? "1fr 1fr" : "1fr", gap: 12, marginTop: 4 }}>
           {recaps.map((r, i) => {
             const dials = (r.dials ?? {}) as Record<string, number>;
             const groupNotes = (r.group_notes ?? {}) as Record<string, string>;
@@ -1215,6 +1220,7 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
   teeTime: string;
   onNext: () => void;
 }) {
+  const isMobile = useIsMobile();
   const [step, setStep] = useState(0);
   const [goalMode, setGoalMode] = useState<"score" | "diff">("score");
   const [goalDiff, setGoalDiff] = useState(defaultGoalDiff);
@@ -1396,7 +1402,7 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
       )}
 
       {q.kind === "choice" && (
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${q.opts.length},1fr)`, gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${q.opts.length},1fr)`, gap: 14 }}>
           {q.opts.map((o) => {
             const active = (answers as Record<string, string | undefined>)[q.id] === o.v;
             return (
@@ -1428,7 +1434,7 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
       )}
 
       {q.kind === "score_dial" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 24 : 48, alignItems: "start" }}>
           <div>
             {/* Mode toggle */}
             <div style={{ display: "flex", gap: 8, marginBottom: 32, justifyContent: "center" }}>

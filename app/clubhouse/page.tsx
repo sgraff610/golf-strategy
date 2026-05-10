@@ -5,6 +5,7 @@ import { getClubDistances, saveClubDistances } from "@/lib/storage";
 import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
 import type { ClubDistances } from "@/lib/planTypes";
 import { Pencil, Trash2 } from "lucide-react";
+import { useIsMobile } from "@/app/hooks/useIsMobile";
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
@@ -167,6 +168,7 @@ function CourseGlyph({ name, size = 30 }: { name: string; size?: number }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ClubhousePage() {
+  const isMobile = useIsMobile();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [courseInfoMap, setCourseInfoMap] = useState<Record<string, CourseInfo>>({});
   const [profile, setProfile] = useState({ strengths: "", weaknesses: "" });
@@ -383,8 +385,8 @@ export default function ClubhousePage() {
           {/* Subtle radial glow top-right */}
           <div style={{ position: "absolute", top: 0, right: 0, width: 160, height: 160, background: "radial-gradient(circle,rgba(200,168,75,.12) 0%,transparent 70%)", pointerEvents: "none" }} />
 
-          {/* 2-row × 2-col grid: each row shares height so items align cleanly */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "auto auto", columnGap: 16, rowGap: 10 }}>
+          {/* 2-row × 2-col grid: stacks to single column on mobile */}
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gridTemplateRows: "auto auto", columnGap: 16, rowGap: 10 }}>
 
             {/* Row 1, Col 1: HI + trend */}
             <div>
@@ -506,7 +508,7 @@ export default function ClubhousePage() {
               </>
             );
             return (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
                 {/* Best round — links to round */}
                 <a href={bestRound ? `/rounds/${bestRound.id}/edit` : undefined} style={trophyCardBase}>
                   {trophyInner(

@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
+import { useIsMobile } from "@/app/hooks/useIsMobile";
 import { HoleData } from "@/lib/types";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -709,6 +710,7 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
 }
 
 export default function RoundsInsights() {
+  const isMobile = useIsMobile();
   const [allHoles, setAllHoles] = useState<EnrichedHole[]>([]);
   const [roundSummaries, setRoundSummaries] = useState<RoundSummary[]>([]);
   const [totalRounds, setTotalRounds] = useState(0);
@@ -1003,7 +1005,7 @@ export default function RoundsInsights() {
     (filters.diffBucket.size>0?1:0)
 
   return (
-    <main style={{ maxWidth: 1400, width: "100%", margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px", boxSizing: "border-box" }}>
+    <main style={{ maxWidth: 1400, width: "100%", margin: isMobile ? "16px auto" : "40px auto", fontFamily: "sans-serif", padding: isMobile ? "0 16px" : "0 24px", boxSizing: "border-box" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
         <a href="/rounds/chat" style={{ fontSize: 13, fontWeight: 600, padding: "6px 14px", borderRadius: 8, background: "#0f6e56", color: "white", textDecoration: "none" }}>Ask Coach →</a>
@@ -1015,7 +1017,7 @@ export default function RoundsInsights() {
       {!loading && allHoles.length === 0 && <p style={{ color: "white" }}>No hole data found. Add some rounds first.</p>}
 
       {!loading && allHoles.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, alignItems: "flex-start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 24, alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
             <TrendsView summaries={roundSummaries} />
           </div>
