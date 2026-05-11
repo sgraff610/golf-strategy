@@ -911,13 +911,14 @@ function CoachBriefing({
   );
 }
 
-const LOCAL_CACHE_KEY = "golf-coach-v1";
+const LOCAL_CACHE_KEY = "golf-coach-v2";
 interface LocalCache {
   roundCount: number;
   latestDate: string | null;
   allHoles: EnrichedHole[];
   summaries: RoundSummary[];
   availableYears: number[];
+  coachingInsights: CoachingInsights | null;
 }
 function readLocalCache(): LocalCache | null {
   try { const r = localStorage.getItem(LOCAL_CACHE_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
@@ -945,28 +946,29 @@ export default function RoundsInsights() {
 
   useEffect(() => {
     async function init() {
-      // 1. Load coaching insights immediately for briefing display
-      const { data: ciData } = await supabase.from("player_data").select("coaching_insights").eq("id", "singleton").single();
-      if (ciData?.coaching_insights) {
-        const ci = ciData.coaching_insights as CoachingInsights;
-        setCoachingInsights(ci);
-        cachedHoleCount.current = ci.totalHoles;
+      // 1. Synchronous: restore from localStorage immediately — no network wait
+      const local = readLocalCache();
+      if (local?.coachingInsights) {
+        setCoachingInsights(local.coachingInsights);
+        cachedHoleCount.current = local.coachingInsights.totalHoles;
+      }
+      if (local && local.allHoles.length > 0) {
+        setAllHoles(local.allHoles);
+        setRoundSummaries(local.summaries);
+        setAvailableYears(local.availableYears);
+        setTotalRounds(local.roundCount);
+        setLoading(false);
+        setHeavyReady(true);
       }
 
-      // 2. Lightweight metadata check — just round count + latest date
+      // 2. Background metadata check — validate cache is still current
       const { data: meta } = await supabase.from("rounds").select("id, date").order("date", { ascending: false });
       const roundCount = meta?.length ?? 0;
       const latestDate = meta?.[0]?.date ?? null;
       setTotalRounds(roundCount);
 
-      // 3. Try localStorage cache
-      const local = readLocalCache();
+      // Cache is valid — nothing more to do
       if (local && local.roundCount === roundCount && local.latestDate === latestDate && local.allHoles.length > 0) {
-        setAllHoles(local.allHoles);
-        setRoundSummaries(local.summaries);
-        setAvailableYears(local.availableYears);
-        setLoading(false);
-        setHeavyReady(true);
         return;
       }
 
@@ -1068,6 +1070,8 @@ export default function RoundsInsights() {
       setAllHoles(enriched);
       setRoundSummaries(summaries_);
 
+      let freshInsights: CoachingInsights | null = local?.coachingInsights ?? null;
+
       if (cachedHoleCount.current !== enriched.length) {
         const baseline_ = enriched.length > 0
           ? enriched.reduce((s, h) => s + (h.score - h.par), 0) / enriched.length
@@ -1113,11 +1117,12 @@ export default function RoundsInsights() {
           avg5: avg5_, avg20: avg20_,
           summaries: summaries_,
         };
+        freshInsights = ci;
         setCoachingInsights(ci);
         supabase.from("player_data").upsert({ id: "singleton", coaching_insights: ci });
       }
 
-      writeLocalCache({ roundCount: rounds.length, latestDate, allHoles: enriched, summaries: summaries_, availableYears: Array.from(years).sort((a,b) => b-a) });
+      writeLocalCache({ roundCount: rounds.length, latestDate, allHoles: enriched, summaries: summaries_, availableYears: Array.from(years).sort((a,b) => b-a), coachingInsights: freshInsights });
 
       setLoading(false);
       setHeavyReady(true);
