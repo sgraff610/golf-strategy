@@ -213,11 +213,20 @@ export default function PlanPage() {
   const [selectedCourseName, setSelectedCourseName] = useState("");
   const [roundDate, setRoundDate] = useState<string>("");
   const [teeTime, setTeeTime] = useState<string>("08:00");
+  const [openRounds, setOpenRounds] = useState<{ id: string; course_id: string; course_name: string; date: string }[]>([]);
 
   useEffect(() => {
     // Set date on client only — avoids SSR/UTC vs local-timezone hydration mismatch
     setRoundDate(new Date().toLocaleDateString("en-CA")); // "YYYY-MM-DD" in local time
     loadCourses().then(setCourseList);
+    // Find incomplete rounds (any hole with a blank score)
+    supabase.from("rounds").select("id, course_id, course_name, date, holes").order("date", { ascending: false }).limit(20)
+      .then(({ data }) => {
+        const open = (data ?? []).filter((r: any) =>
+          (r.holes ?? []).some((h: any) => h.score === "" || h.score == null)
+        ).map((r: any) => ({ id: r.id, course_id: r.course_id, course_name: r.course_name, date: r.date }));
+        setOpenRounds(open);
+      });
     getClubDistances().then(setClubDistances);
     // Load most recent recap dials as form defaults; fall back to saved form
     Promise.all([
@@ -479,6 +488,36 @@ export default function PlanPage() {
         <div style={{ padding: isMobile ? "0 16px" : "0 40px" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto" }}>
             <StageNav stage={stage} setStage={setStage} answered={answered} courseReady={courseReady} />
+            {openRounds.length > 0 && (
+              <div style={{ margin: "16px 0 0" }}>
+                {openRounds.map(r => (
+                  <div key={r.id} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
+                    background: "var(--green-soft)", border: "1px solid var(--green)", borderRadius: 12,
+                    padding: "12px 16px", marginBottom: 8,
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green-deep)" }}>
+                        Round in progress — {r.course_name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                        {r.date ? new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => router.push(`/rounds/play?roundId=${r.id}&courseId=${r.course_id}`)}
+                      style={{
+                        background: "var(--green-deep)", color: "#fff", border: "none",
+                        borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600,
+                        cursor: "pointer", whiteSpace: "nowrap" as const,
+                      }}
+                    >
+                      Resume Round
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ padding: "40px 0 60px" }}>
               {stage === "setup" && (
                 <StageSetup
