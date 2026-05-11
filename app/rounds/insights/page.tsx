@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
 import { useIsMobile } from "@/app/hooks/useIsMobile";
@@ -709,6 +709,18 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
   );
 }
 
+const COACH_ROOT: React.CSSProperties = {
+  "--bg": "#eef1f4", "--paper": "#f7f9fb", "--paper-alt": "#e6ebf0",
+  "--ink": "#131821", "--ink-soft": "#253041", "--muted": "#5d6b7a", "--muted-2": "#8995a3",
+  "--line": "#d7dde3", "--line-soft": "#e5eaef",
+  "--green": "#0f6e56", "--green-deep": "#084634", "--green-soft": "#d2e8df",
+  "--accent": "#f29450", "--accent-soft": "#fde0c8",
+  "--sand": "#c8a84b", "--sand-soft": "#f5ecd0", "--sand-deep": "#8c6a26",
+  background: "#eef1f4", color: "#131821",
+  fontFamily: "system-ui, -apple-system, sans-serif",
+  minHeight: "100vh",
+} as React.CSSProperties;
+
 type CachedLeak = {
   id: string;
   label: string;
@@ -725,6 +737,7 @@ type CoachingInsights = {
   totalHoles: number;
   avg5: number | null;
   avg20: number | null;
+  summaries: RoundSummary[];
 };
 
 function CoachBriefing({
@@ -744,26 +757,30 @@ function CoachBriefing({
 
   return (
     <div style={{ maxWidth: 600 }}>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "#d0d0d0", textTransform: "uppercase" as const, fontWeight: 600 }}>Coach</div>
-          <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.1, marginTop: 2, color: "white", fontStyle: "italic" }}>The Briefing</div>
+          <div style={{ fontSize: 11, letterSpacing: 1.5, color: "var(--muted)", textTransform: "uppercase" as const, fontWeight: 700 }}>Coach</div>
+          <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", fontWeight: 500, fontSize: 28, color: "var(--ink)", lineHeight: 1.1, marginTop: 4 }}>
+            The Briefing
+          </div>
         </div>
         {insights && (
-          <div style={{ fontSize: 10, color: "#aaa", textAlign: "right" as const, marginTop: 4 }}>
+          <div style={{ fontSize: 10, color: "var(--muted)", textAlign: "right" as const, marginTop: 6 }}>
             <div>{totalRounds} rounds tracked</div>
             {insights.avg5 !== null && (
-              <div style={{ marginTop: 2 }}>
-                Last 5: <strong style={{ color: insights.avg5 <= 0 ? "#0f6e56" : "#c8a84b" }}>
+              <div style={{ marginTop: 3, fontWeight: 700 }}>
+                Last 5: <span style={{ color: insights.avg5 <= 0 ? "var(--green)" : "var(--accent)", fontFeatureSettings: '"tnum" 1' }}>
                   {insights.avg5 >= 0 ? "+" : ""}{insights.avg5.toFixed(1)}
-                </strong>
+                </span>
               </div>
             )}
           </div>
         )}
       </div>
 
-      <div style={{ background: "#f9f9f9", borderRadius: 16, padding: 14, border: "1px solid #eee", display: "flex", gap: 12, marginBottom: 14 }}>
+      {/* Coach card */}
+      <div style={{ background: "var(--paper)", borderRadius: 16, padding: 14, border: "1px solid var(--line)", display: "flex", gap: 12, marginBottom: 14 }}>
         <svg width={52} height={52} viewBox="0 0 60 60" style={{ flexShrink: 0 }}>
           <defs>
             <linearGradient id="cb-skin" x1="0" y1="0" x2="0" y2="1">
@@ -771,84 +788,98 @@ function CoachBriefing({
               <stop offset="100%" stopColor="#b8946d"/>
             </linearGradient>
           </defs>
-          <circle cx="30" cy="30" r="29" fill="#e8f4f0" />
-          <ellipse cx="30" cy="46" rx="22" ry="14" fill="#0f6e56" />
+          <circle cx="30" cy="30" r="29" fill="var(--green-soft)" />
+          <ellipse cx="30" cy="46" rx="22" ry="14" fill="var(--green)" />
           <circle cx="30" cy="28" r="13" fill="url(#cb-skin)" />
-          <path d="M 14 24 Q 30 18 46 24 L 46 28 Q 30 25 14 28 Z" fill="#c8a84b" />
-          <rect x="14" y="22" width="32" height="3" fill="#a07830" />
-          <rect x="19" y="27" width="9" height="5" rx="1.5" fill="#1a1a1a" />
-          <rect x="32" y="27" width="9" height="5" rx="1.5" fill="#1a1a1a" />
-          <rect x="28" y="29" width="4" height="1" fill="#1a1a1a" />
-          <path d="M 22 35 Q 30 42 38 35" stroke="#1a1a1a" strokeWidth="0.6" fill="none" opacity="0.4"/>
+          <path d="M 14 24 Q 30 18 46 24 L 46 28 Q 30 25 14 28 Z" fill="var(--sand)" />
+          <rect x="14" y="22" width="32" height="3" fill="var(--sand-deep)" />
+          <rect x="19" y="27" width="9" height="5" rx="1.5" fill="var(--ink)" />
+          <rect x="32" y="27" width="9" height="5" rx="1.5" fill="var(--ink)" />
+          <rect x="28" y="29" width="4" height="1" fill="var(--ink)" />
+          <path d="M 22 35 Q 30 42 38 35" stroke="var(--ink)" strokeWidth="0.6" fill="none" opacity="0.4"/>
         </svg>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56" }}>Coach Vance</div>
-          <div style={{ fontSize: 10, color: "#999", marginBottom: 6 }}>Your personal caddie, no guessing</div>
-          <div style={{ fontSize: 14, lineHeight: 1.35, color: "#1a1a1a", fontStyle: "italic" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--green-deep)" }}>Coach Vance</div>
+          <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6 }}>Your personal caddie, no guessing</div>
+          <div style={{ fontFamily: "Georgia,serif", fontSize: 14, lineHeight: 1.4, color: "var(--ink-soft)", fontStyle: "italic" }}>
             "The data doesn't lie — here's where you're bleeding strokes."
           </div>
         </div>
       </div>
 
+      {/* Biggest leak hero — dark green gradient matching clubhouse */}
       {topLeak ? (
-        <div style={{ background: "#1a1a1a", borderRadius: 16, padding: "14px 16px", marginBottom: 14 }}>
-          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "#c8a84b", textTransform: "uppercase" as const, fontWeight: 700, marginBottom: 6 }}>Your biggest leak</div>
-          <div style={{ fontSize: 20, lineHeight: 1.2, fontWeight: 600, marginBottom: 8, color: "white" }}>
+        <div style={{
+          background: "linear-gradient(135deg,#1a4f3e 0%,var(--green-deep) 65%,#051f14 100%)",
+          borderRadius: 18, padding: "18px 20px", marginBottom: 16,
+          position: "relative", overflow: "hidden",
+          boxShadow: "0 4px 24px rgba(8,70,52,.25)",
+        }}>
+          <div style={{ position: "absolute", top: 0, right: 0, width: 120, height: 120, background: "radial-gradient(circle,rgba(242,148,80,.1) 0%,transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: "var(--accent)", textTransform: "uppercase" as const, fontWeight: 700, marginBottom: 8 }}>Your biggest leak</div>
+          <div style={{ fontFamily: "Georgia,serif", fontSize: 22, lineHeight: 1.2, fontWeight: 600, marginBottom: 8, color: "white" }}>
             {topLeak.label} is{" "}
-            <span style={{ color: "#c8a84b" }}>costing you +{topLeak.impact.toFixed(2)} strokes</span>{" "}
+            <span style={{ color: "var(--accent)" }}>costing you +{topLeak.impact.toFixed(2)} strokes</span>{" "}
             per hole.
           </div>
-          <div style={{ fontSize: 11, color: "#cfd6de", lineHeight: 1.4 }}>{topLeak.tactic}</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.65)", lineHeight: 1.5 }}>{topLeak.tactic}</div>
         </div>
       ) : (
-        <div style={{ background: "#222", borderRadius: 16, padding: "14px 16px", marginBottom: 14, minHeight: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ color: "#888", fontSize: 13, fontStyle: "italic" }}>
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 16, padding: "20px 16px", marginBottom: 16, minHeight: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: "var(--muted)", fontSize: 13, fontStyle: "italic" }}>
             {insights === null ? "Analysing your rounds…" : "Not enough data yet — keep logging rounds!"}
           </span>
         </div>
       )}
 
+      {/* Nav buttons */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 8, marginBottom: 24 }}>
-        <button onClick={() => onNavigate("trends")} style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #0f6e56", background: "white", cursor: "pointer", textAlign: "left" as const }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56" }}>Performance Trend</div>
-          <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>{heavyReady ? "Score over time" : "Loading…"}</div>
-        </button>
-        <a href="/rounds/chat" style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #0f6e56", background: "white", cursor: "pointer", textDecoration: "none", display: "block" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56" }}>Ask Coach</div>
-          <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>AI-powered Q&A</div>
-        </a>
-        <button onClick={() => onNavigate("factors")} style={{ padding: "10px 12px", borderRadius: 12, border: "1px solid #0f6e56", background: "white", cursor: "pointer", textAlign: "left" as const }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#0f6e56" }}>Factor Correlations</div>
-          <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>{heavyReady ? "What moves your score" : "Loading…"}</div>
-        </button>
+        {([
+          { label: "Performance Trend", sub: heavyReady ? "Score over time" : "Loading…", action: () => onNavigate("trends") },
+          { label: "Ask Coach", sub: "AI-powered Q&A", href: "/rounds/chat" },
+          { label: "Factor Correlations", sub: heavyReady ? "What moves your score" : "Loading…", action: () => onNavigate("factors") },
+        ] as const).map(nav => (
+          "href" in nav ? (
+            <a key={nav.label} href={nav.href} style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", textDecoration: "none", display: "block" }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--green-deep)" }}>{nav.label}</div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>{nav.sub}</div>
+            </a>
+          ) : (
+            <button key={nav.label} onClick={nav.action} style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--paper)", cursor: "pointer", textAlign: "left" as const }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--green-deep)" }}>{nav.label}</div>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3 }}>{nav.sub}</div>
+            </button>
+          )
+        ))}
       </div>
 
+      {/* Leaks list */}
       {insights && insights.leaks.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.2, color: "#999", textTransform: "uppercase" as const, fontWeight: 600, marginBottom: 10 }}>
-            Top leaks · ranked by impact
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", fontWeight: 500, fontSize: 20, color: "var(--ink)", marginBottom: 12 }}>
+            Top leaks
           </div>
           <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
             {insights.leaks.map((leak, i) => {
               const open = expandedLeak === leak.id;
               return (
-                <div key={leak.id} style={{ background: "white", border: `1px solid ${open ? "#c8a84b" : "#eee"}`, borderRadius: 12, overflow: "hidden" }}>
-                  <button onClick={() => setExpandedLeak(open ? null : leak.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 12px", background: "none", border: "none", textAlign: "left" as const, cursor: "pointer" }}>
-                    <div style={{ fontSize: 13, color: "#999", width: 18, fontWeight: 600 }}>{i + 1}</div>
+                <div key={leak.id} style={{ background: "var(--paper)", border: `1px solid ${open ? "var(--accent)" : "var(--line)"}`, borderRadius: 14, overflow: "hidden" }}>
+                  <button onClick={() => setExpandedLeak(open ? null : leak.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 14px", background: "none", border: "none", textAlign: "left" as const, cursor: "pointer" }}>
+                    <div style={{ fontSize: 13, color: "var(--muted-2)", width: 20, fontWeight: 700, fontFeatureSettings: '"tnum" 1' }}>{i + 1}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{leak.label}</div>
-                      <div style={{ fontSize: 10, color: "#999" }}>{leak.count} holes</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{leak.label}</div>
+                      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{leak.count} holes</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: "#c8a84b" }}>+{leak.impact.toFixed(2)}</div>
-                      <div style={{ fontSize: 14, color: "#999", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", display: "inline-block" }}>›</div>
+                      <div style={{ fontFamily: "Georgia,serif", fontSize: 16, fontWeight: 600, color: "var(--accent)", fontFeatureSettings: '"tnum" 1' }}>+{leak.impact.toFixed(2)}</div>
+                      <div style={{ fontSize: 14, color: "var(--muted-2)", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", display: "inline-block" }}>›</div>
                     </div>
                   </button>
                   {open && (
-                    <div style={{ padding: "4px 12px 12px", borderTop: "1px solid #f0f0f0" }}>
-                      <div style={{ marginTop: 8, padding: "8px 10px", background: "#fffbf0", borderRadius: 8, borderLeft: "3px solid #c8a84b" }}>
-                        <div style={{ fontSize: 10, color: "#a07830", fontWeight: 600, textTransform: "uppercase" as const, letterSpacing: 1, marginBottom: 2 }}>The fix</div>
-                        <div style={{ fontSize: 12, color: "#1a1a1a", lineHeight: 1.4 }}>{leak.tactic}</div>
+                    <div style={{ padding: "4px 14px 14px", borderTop: "1px solid var(--line-soft)" }}>
+                      <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--accent-soft)", borderRadius: 10, borderLeft: "3px solid var(--accent)" }}>
+                        <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 1, marginBottom: 4 }}>The fix</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-soft)", lineHeight: 1.5 }}>{leak.tactic}</div>
                       </div>
                     </div>
                   )}
@@ -859,17 +890,18 @@ function CoachBriefing({
         </div>
       )}
 
+      {/* Strengths */}
       {insights && insights.strengths.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1.2, color: "#999", textTransform: "uppercase" as const, fontWeight: 600, marginBottom: 10 }}>
+          <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", fontWeight: 500, fontSize: 20, color: "var(--ink)", marginBottom: 12 }}>
             What's working
           </div>
           <div style={{ display: "grid", gridTemplateColumns: insights.strengths.length === 1 ? "1fr" : isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
             {insights.strengths.map(s => (
-              <div key={s.id} style={{ background: "#e8f4f0", border: "1px solid #b9d8cc", borderRadius: 12, padding: "10px 11px" }}>
-                <div style={{ fontSize: 18, fontWeight: 600, color: "#0f6e56" }}>{s.impact.toFixed(2)}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#0f6e56", marginTop: 1 }}>{s.label}</div>
-                <div style={{ fontSize: 10, color: "#666", marginTop: 3, lineHeight: 1.3 }}>{s.count} holes tracked</div>
+              <div key={s.id} style={{ background: "var(--green-soft)", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 14px" }}>
+                <div style={{ fontFamily: "Georgia,serif", fontSize: 20, fontWeight: 600, color: "var(--green-deep)", fontFeatureSettings: '"tnum" 1' }}>{s.impact.toFixed(2)}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--green-deep)", marginTop: 2 }}>{s.label}</div>
+                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3, lineHeight: 1.3 }}>{s.count} holes tracked</div>
               </div>
             ))}
           </div>
@@ -894,10 +926,15 @@ export default function RoundsInsights() {
   const [tab, setTab] = useState<"briefing" | "trends" | "factors">("briefing");
   const [coachingInsights, setCoachingInsights] = useState<CoachingInsights | null>(null);
   const [heavyReady, setHeavyReady] = useState(false);
+  const cachedHoleCount = React.useRef<number | null>(null);
 
   useEffect(() => {
     supabase.from("player_data").select("coaching_insights").eq("id", "singleton").single().then(({ data }) => {
-      if (data?.coaching_insights) setCoachingInsights(data.coaching_insights as CoachingInsights);
+      if (data?.coaching_insights) {
+        const ci = data.coaching_insights as CoachingInsights;
+        setCoachingInsights(ci);
+        cachedHoleCount.current = ci.totalHoles;
+      }
     });
   }, []);
 
@@ -1001,51 +1038,54 @@ export default function RoundsInsights() {
       setAllHoles(enriched);
       setRoundSummaries(summaries_);
 
-      const baseline_ = enriched.length > 0
-        ? enriched.reduce((s, h) => s + (h.score - h.par), 0) / enriched.length
-        : 0;
+      if (cachedHoleCount.current !== enriched.length) {
+        const baseline_ = enriched.length > 0
+          ? enriched.reduce((s, h) => s + (h.score - h.par), 0) / enriched.length
+          : 0;
 
-      function corrItem(id: string, label: string, holes: EnrichedHole[], tactic: string): CachedLeak | null {
-        if (holes.length < 5) return null;
-        const avg_ = holes.reduce((s, h) => s + (h.score - h.par), 0) / holes.length;
-        return { id, label, impact: avg_ - baseline_, count: holes.length, detail: "", tactic };
+        function corrItem(id: string, label: string, holes: EnrichedHole[], tactic: string): CachedLeak | null {
+          if (holes.length < 5) return null;
+          const avg_ = holes.reduce((s, h) => s + (h.score - h.par), 0) / holes.length;
+          return { id, label, impact: avg_ - baseline_, count: holes.length, detail: "", tactic };
+        }
+
+        const candidates_: CachedLeak[] = [
+          corrItem("drive-hit",   "Driving the fairway",   enriched.filter(h => h.tee_accuracy === "Hit"),    "Keep doing what you're doing off the tee."),
+          corrItem("drive-left",  "Drive left misses",     enriched.filter(h => h.tee_accuracy === "Left"),   "Aim center or right — compensate for your miss pattern."),
+          corrItem("drive-right", "Drive right misses",    enriched.filter(h => h.tee_accuracy === "Right"),  "Tee up left and aim center when right is trouble."),
+          corrItem("drive-short", "Drive short",           enriched.filter(h => h.tee_accuracy === "Short"),  "Club up or tee it higher to get more distance."),
+          corrItem("appr-hit",    "Approach on target",    enriched.filter(h => h.appr_accuracy === "Hit"),   "Your approach accuracy is a strength — keep it up."),
+          corrItem("appr-short",  "Approach short",        enriched.filter(h => h.appr_accuracy === "Short"), "Take one more club — most amateur misses are short."),
+          corrItem("appr-long",   "Approach long",         enriched.filter(h => h.appr_accuracy === "Long"),  "Club down, especially when the pin is back."),
+          corrItem("appr-left",   "Approach left misses",  enriched.filter(h => h.appr_accuracy === "Left"),  "Check alignment — you may be set up too far left."),
+          corrItem("appr-right",  "Approach right misses", enriched.filter(h => h.appr_accuracy === "Right"), "Stay through the shot — you may be pulling off at impact."),
+          corrItem("gir",         "Greens in regulation",  enriched.filter(h => h.gir),                       "GIR holes are your best scoring opportunity."),
+          corrItem("non-gir",     "Missing greens",        enriched.filter(h => !h.gir),                      "Improve approach accuracy or short game from off the green."),
+          corrItem("putt-1",      "1-putt holes",          enriched.filter(h => h.putts === 1),               "Short putting and lag putting are working — keep it up."),
+          corrItem("putt-3",      "3+ putt holes",         enriched.filter(h => h.putts >= 3),                "Work on lag putting — get within 3ft from distance."),
+          corrItem("par3",        "Par 3 holes",           enriched.filter(h => h.par === 3),                 "Take one more club — most par 3 misses are short."),
+          corrItem("par5",        "Par 5 holes",           enriched.filter(h => h.par === 5),                 "Par 5s are a scoring opportunity — play to your strengths."),
+          corrItem("gs-bunker",   "Greenside bunker",      enriched.filter(h => h.greenside_bunker > 0),      "Avoid short-siding yourself — miss on the safe side."),
+        ].filter((c): c is CachedLeak => c !== null);
+
+        const leaks_: CachedLeak[] = candidates_.filter(c => c.impact > 0).sort((a, b) => b.impact - a.impact).slice(0, 5);
+        const strengths_: CachedLeak[] = candidates_.filter(c => c.impact < 0).sort((a, b) => a.impact - b.impact).slice(0, 3);
+
+        const last5_ = summaries_.slice(-5);
+        const last20_ = summaries_.slice(-20);
+        const avg5_: number | null = last5_.length > 0 ? last5_.reduce((s, r) => s + r.toPar, 0) / last5_.length : null;
+        const avg20_: number | null = last20_.length > 0 ? last20_.reduce((s, r) => s + r.toPar, 0) / last20_.length : null;
+
+        const ci: CoachingInsights = {
+          leaks: leaks_, strengths: strengths_,
+          computedAt: new Date().toISOString(),
+          totalHoles: enriched.length,
+          avg5: avg5_, avg20: avg20_,
+          summaries: summaries_,
+        };
+        setCoachingInsights(ci);
+        supabase.from("player_data").upsert({ id: "singleton", coaching_insights: ci });
       }
-
-      const candidates_: CachedLeak[] = [
-        corrItem("drive-hit",   "Driving the fairway",   enriched.filter(h => h.tee_accuracy === "Hit"),    "Keep doing what you're doing off the tee."),
-        corrItem("drive-left",  "Drive left misses",     enriched.filter(h => h.tee_accuracy === "Left"),   "Aim center or right — compensate for your miss pattern."),
-        corrItem("drive-right", "Drive right misses",    enriched.filter(h => h.tee_accuracy === "Right"),  "Tee up left and aim center when right is trouble."),
-        corrItem("drive-short", "Drive short",           enriched.filter(h => h.tee_accuracy === "Short"),  "Club up or tee it higher to get more distance."),
-        corrItem("appr-hit",    "Approach on target",    enriched.filter(h => h.appr_accuracy === "Hit"),   "Your approach accuracy is a strength — keep it up."),
-        corrItem("appr-short",  "Approach short",        enriched.filter(h => h.appr_accuracy === "Short"), "Take one more club — most amateur misses are short."),
-        corrItem("appr-long",   "Approach long",         enriched.filter(h => h.appr_accuracy === "Long"),  "Club down, especially when the pin is back."),
-        corrItem("appr-left",   "Approach left misses",  enriched.filter(h => h.appr_accuracy === "Left"),  "Check alignment — you may be set up too far left."),
-        corrItem("appr-right",  "Approach right misses", enriched.filter(h => h.appr_accuracy === "Right"), "Stay through the shot — you may be pulling off at impact."),
-        corrItem("gir",         "Greens in regulation",  enriched.filter(h => h.gir),                       "GIR holes are your best scoring opportunity."),
-        corrItem("non-gir",     "Missing greens",        enriched.filter(h => !h.gir),                      "Improve approach accuracy or short game from off the green."),
-        corrItem("putt-1",      "1-putt holes",          enriched.filter(h => h.putts === 1),               "Short putting and lag putting are working — keep it up."),
-        corrItem("putt-3",      "3+ putt holes",         enriched.filter(h => h.putts >= 3),                "Work on lag putting — get within 3ft from distance."),
-        corrItem("par3",        "Par 3 holes",           enriched.filter(h => h.par === 3),                 "Take one more club — most par 3 misses are short."),
-        corrItem("par5",        "Par 5 holes",           enriched.filter(h => h.par === 5),                 "Par 5s are a scoring opportunity — play to your strengths."),
-        corrItem("gs-bunker",   "Greenside bunker",      enriched.filter(h => h.greenside_bunker > 0),      "Avoid short-siding yourself — miss on the safe side."),
-      ].filter((c): c is CachedLeak => c !== null);
-
-      const leaks_: CachedLeak[] = candidates_.filter(c => c.impact > 0).sort((a, b) => b.impact - a.impact).slice(0, 5);
-      const strengths_: CachedLeak[] = candidates_.filter(c => c.impact < 0).sort((a, b) => a.impact - b.impact).slice(0, 3);
-
-      const last5_ = summaries_.slice(-5);
-      const last20_ = summaries_.slice(-20);
-      const avg5_: number | null = last5_.length > 0 ? last5_.reduce((s, r) => s + r.toPar, 0) / last5_.length : null;
-      const avg20_: number | null = last20_.length > 0 ? last20_.reduce((s, r) => s + r.toPar, 0) / last20_.length : null;
-
-      const ci: CoachingInsights = {
-        leaks: leaks_, strengths: strengths_,
-        computedAt: new Date().toISOString(),
-        totalHoles: enriched.length,
-        avg5: avg5_, avg20: avg20_,
-      };
-      setCoachingInsights(ci);
-      supabase.from("player_data").upsert({ id: "singleton", coaching_insights: ci });
 
       setLoading(false);
       setHeavyReady(true);
@@ -1231,24 +1271,42 @@ export default function RoundsInsights() {
     (filters.doglegFilter?1:0) + (filters.apprDistBucket?1:0) +
     (filters.diffBucket.size>0?1:0)
 
+  const visibleSummaries = roundSummaries.length > 0 ? roundSummaries : (coachingInsights?.summaries ?? []);
+
   return (
-    <main style={{ maxWidth: 1400, width: "100%", margin: isMobile ? "16px auto" : "40px auto", fontFamily: "sans-serif", padding: isMobile ? "0 16px" : "0 24px", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
+    <div style={COACH_ROOT}>
+    <main style={{ maxWidth: 900, width: "100%", margin: "0 auto", padding: isMobile ? "0 16px 80px" : "0 24px 80px", boxSizing: "border-box" }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 0 16px" }}>
+        <div>
+          <a href="/rounds" style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, letterSpacing: 0.3, textDecoration: "none" }}>← Rounds</a>
+          <div style={{ fontFamily: "Georgia,serif", fontWeight: 500, fontStyle: "italic", fontSize: 28, color: "var(--ink)", lineHeight: 1.1, marginTop: 4 }}>
+            Coach
+          </div>
+        </div>
+        <a href="/rounds/chat" style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          background: "var(--green-deep)", color: "white", border: "none",
+          borderRadius: 999, padding: "9px 16px", fontSize: 13, fontWeight: 600,
+          cursor: "pointer", textDecoration: "none", whiteSpace: "nowrap",
+        }}>Ask Coach</a>
       </div>
 
-      <div style={{ display: "flex", marginBottom: 28, borderBottom: "1px solid #333" }}>
+      {/* Tab bar — matches clubhouse exactly */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 24, gap: 0 }}>
         {([
           { id: "briefing" as const, label: "The Briefing" },
           { id: "trends" as const, label: "Performance Trend" },
           { id: "factors" as const, label: "Factor Correlations" },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            padding: "8px 16px", border: "none", background: "none", cursor: "pointer",
-            fontSize: 13, fontWeight: tab === t.id ? 600 : 400,
-            color: tab === t.id ? "white" : "#888",
-            borderBottom: `2px solid ${tab === t.id ? "#c8a84b" : "transparent"}`,
-            marginBottom: -1, whiteSpace: "nowrap" as const,
+            flex: 1, background: "none", border: "none",
+            borderBottom: tab === t.id ? "2px solid var(--green-deep)" : "2px solid transparent",
+            padding: "10px 4px", marginBottom: -1, cursor: "pointer",
+            fontSize: 13, fontWeight: 600,
+            color: tab === t.id ? "var(--green-deep)" : "var(--muted)",
+            whiteSpace: "nowrap" as const,
           }}>{t.label}</button>
         ))}
       </div>
@@ -1258,20 +1316,20 @@ export default function RoundsInsights() {
       </div>
 
       <div style={{ display: tab === "trends" ? "block" : "none" }}>
-        {loading ? (
-          <p style={{ color: "white" }}>Loading rounds…</p>
-        ) : allHoles.length === 0 ? (
-          <p style={{ color: "white" }}>No hole data found. Add some rounds first.</p>
+        {visibleSummaries.length > 0 ? (
+          <TrendsView summaries={visibleSummaries} />
+        ) : loading ? (
+          <p style={{ color: "var(--muted)", fontStyle: "italic" }}>Loading rounds…</p>
         ) : (
-          <TrendsView summaries={roundSummaries} />
+          <p style={{ color: "var(--muted)" }}>No hole data found. Add some rounds first.</p>
         )}
       </div>
 
       <div style={{ display: tab === "factors" ? "block" : "none" }}>
-        {loading ? (
-          <p style={{ color: "white" }}>Loading rounds…</p>
-        ) : allHoles.length === 0 ? (
-          <p style={{ color: "white" }}>No hole data found. Add some rounds first.</p>
+        {loading && allHoles.length === 0 ? (
+          <p style={{ color: "var(--muted)", fontStyle: "italic" }}>Loading rounds…</p>
+        ) : !loading && allHoles.length === 0 ? (
+          <p style={{ color: "var(--muted)" }}>No hole data found. Add some rounds first.</p>
         ) : (
           <div>
         <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
@@ -1622,5 +1680,6 @@ export default function RoundsInsights() {
         )}
       </div>
     </main>
+    </div>
   );
 }
