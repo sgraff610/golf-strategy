@@ -491,6 +491,7 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
 
   const chartData = filtered.map((s, i) => ({
     name: s.date.slice(5),
+    date: s.date,
     courseName: s.courseName,
     score: s.score,
     par: s.par,
@@ -513,7 +514,7 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
     .map(s => ({
       x: Number(s[scatterX as keyof RoundSummary]),
       y: Number(s[scatterY as keyof RoundSummary]),
-      label: `${s.courseName} · ${s.date.slice(5)} · ${s.totalHoles}H`,
+      label: `${s.courseName} · ${new Date(s.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · ${s.totalHoles}H`,
     }));
 
   const r = pearsonR(scatterData.map(d => d.x), scatterData.map(d => d.y));
@@ -553,11 +554,14 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
     const primVal = d?.primary;
     const toParStr = typeof primVal === "number" && !isNaN(primVal)
       ? (primVal >= 0 ? "+" : "") + primVal.toFixed(0) : "—";
+    const fullDate = d?.date
+      ? new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : d?.name;
     return (
       <div style={{ background: "white", border: "1px solid #ddd", borderRadius: 8, padding: "8px 10px", fontSize: 11, boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
         <p style={{ fontWeight: 700, margin: "0 0 2px", color: "#1a1a1a" }}>{d?.courseName}</p>
-        <p style={{ margin: "0 0 5px", color: "#999", fontSize: 10 }}>{d?.name} · {d?.totalHoles}H</p>
-        <p style={{ margin: "1px 0", color: "#1a1a1a" }}>Score: <strong>{d?.score}</strong> ({toParStr})</p>
+        <p style={{ margin: "0 0 5px", color: "#999", fontSize: 10 }}>{fullDate} · {d?.totalHoles}H</p>
+        <p style={{ margin: "1px 0", color: "#1a1a1a" }}>Score: <strong>{d?.score}</strong> (par {d?.par}) <strong>{toParStr}</strong></p>
         {payload.find((p: any) => p.dataKey === "overlay") && (
           <p style={{ margin: "1px 0", color: overlayColor }}>
             {metricLabel(overlayMetric)}: {(payload.find((p: any) => p.dataKey === "overlay")?.value ?? 0).toFixed(1)}
