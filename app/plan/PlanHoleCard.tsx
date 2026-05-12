@@ -922,7 +922,7 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>Score</div>
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>+/-</div>
                 <div style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 600, textTransform: "uppercase" }}>{hole.par === 3 ? "Appr · Acc" : "Club · Tee"}</div>
-                {holeHistory.slice(0, 6).map((entry, i) => {
+                {holeHistory.slice(0, 10).map((entry, i) => {
                   const tp = entry.score - entry.par;
                   const tpStr = tp === 0 ? "E" : tp > 0 ? `+${tp}` : String(tp);
                   const scoreColor = tp < 0 ? "var(--good)" : tp === 0 ? "var(--ink)" : tp === 1 ? "var(--muted)" : "var(--bad)";

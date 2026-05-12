@@ -460,7 +460,7 @@ export default function PlanPage() {
       return;
     }
     router.push(`/rounds/play?roundId=${id}&courseId=${course.id}`);
-  }, [course, planHoles, strategies, router]);
+  }, [course, planHoles, strategies, router, roundDate, teeTime]);
 
   function prefetchEnriched(cId: string) {
     setPlanEnrichedReady(false);
