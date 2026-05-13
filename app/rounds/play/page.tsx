@@ -15,6 +15,8 @@ type RoundHole = {
   water_penalty: number | ""; drop_or_out: number | "";
   tree_haz: number | ""; fairway_bunker: number | ""; greenside_bunker: number | "";
   gir: boolean; grints: boolean;
+  preferred_club_override: string;
+  plan_club: string;
 };
 
 const CLUBS = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
@@ -38,6 +40,7 @@ function blankHole(h: any): RoundHole {
     club:"", tee_accuracy:"", appr_distance:"", appr_accuracy:"",
     water_penalty:"", drop_or_out:"", tree_haz:"",
     fairway_bunker:"", greenside_bunker:"", gir:false, grints:false,
+    preferred_club_override:"", plan_club:"",
   };
 }
 function pct(n: number) { return `${Math.round(n*100)}%`; }
@@ -772,7 +775,7 @@ function scoreBg(score: number|"", par: number): string {
                 if (Math.abs(dx)>40) setScorecardPanel(dx<0?1:0);
                 setTouchStartX(null);
               }}>
-              <table style={{ borderCollapse:"collapse", fontSize:11, whiteSpace:"nowrap" }}>
+              <table style={{ borderCollapse:"collapse", fontSize:11, whiteSpace:"nowrap", width:"100%" }}>
                 <tbody>
                   <tr style={{ background:"var(--green)" }}>
                     <td style={{ ...lc, background:"var(--green)", color:"white" }}>#</td>
@@ -808,7 +811,7 @@ function scoreBg(score: number|"", par: number): string {
                   </tr>
                   <tr>
                     <td style={{ ...lc }}>Club</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); return <td key={i} style={{ ...tc, color:"var(--green)", fontWeight:600, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{(ch2 as any)?.preferred_club||"—"}</td>; })}
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const dispClub=h.preferred_club_override||(ch2 as any)?.preferred_club||""; return <td key={i} style={{ ...tc, color:"var(--green)", fontWeight:600, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{dispClub||"—"}</td>; })}
                     <td style={sc}></td>
                   </tr>
                   <tr>
@@ -1076,6 +1079,31 @@ function scoreBg(score: number|"", par: number): string {
           </div>
         )}
 
+        {/* Club reference */}
+        {currentHole && (
+          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12 }}>
+            <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 10px" }}>Tee Club</p>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div>
+                <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:4 }}>Course Preferred</label>
+                <select
+                  style={{ width:"100%", padding:"7px 8px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", fontWeight:600, boxSizing:"border-box" }}
+                  value={currentHole.preferred_club_override || (selectedCourse?.holes.find((x:any)=>x.hole===currentHole.hole) as any)?.preferred_club || ""}
+                  onChange={e => updateHoleFieldTracked("preferred_club_override", e.target.value)}>
+                  <option value="">—</option>
+                  {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:4 }}>Plan Recommendation</label>
+                <div style={{ padding:"7px 10px", fontSize:14, fontWeight:700, color: currentHole.plan_club ? "var(--green)" : "var(--muted-2)", background:"var(--green-soft)", border:"1px solid var(--green-soft)", borderRadius:8, minHeight:36, display:"flex", alignItems:"center" }}>
+                  {currentHole.plan_club || "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loadingStrategy && <p style={{ color:"var(--muted)", fontSize:13, textAlign:"center", marginTop:24 }}>Loading strategy...</p>}
 
         {!loadingStrategy && strategy && hole && strat && (
@@ -1091,19 +1119,6 @@ function scoreBg(score: number|"", par: number): string {
                   {showThisHoleOnly?"This hole only":"All similar"}
                 </button>
               </div>
-            </div>
-
-            <div style={card("#f0f0f0")}>
-              <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>HOLE INFO</p>
-              <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:4 }}>
-                <span style={{ fontSize:14, color:"#333" }}>Par {hole.par}</span>
-                <span style={{ fontSize:14, color:"#333" }}>{hole.yards} yds</span>
-                <span style={{ fontSize:14, color:"#333" }}>SI {hole.stroke_index}</span>
-                {course?.rating&&<span style={{ fontSize:14, color:"#0f6e56" }}>Rating {course.rating}</span>}
-                {course?.slope&&<span style={{ fontSize:14, color:"#0f6e56" }}>Slope {course.slope}</span>}
-              </div>
-              {hole.dogleg_direction&&<p style={{ fontSize:13, color:"#0f6e56", margin:"4px 0 0" }}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>}
-              {hole.approach_green_depth>0&&<p style={{ fontSize:13, color:"#0f6e56", margin:"4px 0 0" }}>Green depth: {hole.approach_green_depth} yds</p>}
             </div>
 
             <div style={{ ...card("#f0f0f0"), display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 20px" }}>
@@ -1158,7 +1173,7 @@ function scoreBg(score: number|"", par: number): string {
                   <textarea value={holeNotesText} onChange={e=>setHoleNotesText(e.target.value)}
                     placeholder="Add notes about this hole..."
                     rows={8}
-                    style={{width:"100%",padding:"8px 10px",fontSize:13,border:"1px solid #ddd",borderRadius:8,boxSizing:"border-box",resize:"vertical",fontFamily:"sans-serif",lineHeight:1.5}}
+                    style={{width:"100%",padding:"8px 10px",fontSize:13,border:"1px solid #ddd",borderRadius:8,boxSizing:"border-box",resize:"vertical",fontFamily:"sans-serif",lineHeight:1.5,background:"white",color:"#131821"}}
                   />
                   <button onClick={saveHoleNotes} disabled={savingNotes}
                     style={{marginTop:6,padding:"6px 16px",fontSize:12,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:6,cursor:"pointer",opacity:savingNotes?0.6:1}}>
@@ -1223,7 +1238,7 @@ function scoreBg(score: number|"", par: number): string {
                     <span style={{ fontSize:11, color:"#0f6e56" }}>Distance (yds)</span>
                     <input type="number" min={0} max={700} value={approachDist}
                       onChange={e=>setApproachDist(Number(e.target.value))}
-                      style={{ width:64, padding:"3px 6px", fontSize:13, border:"1px solid #0f6e56", borderRadius:6, color:"#0f6e56", fontWeight:600, textAlign:"center" }} />
+                      style={{ width:64, padding:"3px 6px", fontSize:13, border:"1px solid #0f6e56", borderRadius:6, color:"#0f6e56", fontWeight:600, textAlign:"center", background:"white" }} />
                   </div>
                 )}
               </div>

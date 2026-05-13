@@ -442,6 +442,8 @@ export default function PlanPage() {
         first_putt_distance: "",
         club: strat?.pref ?? "",
         aim: strat?.aim ?? "",
+        plan_club: strat?.pref ?? "",
+        preferred_club_override: "",
       };
     });
     const { error } = await supabase.from("rounds").insert({
