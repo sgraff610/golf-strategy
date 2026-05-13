@@ -359,7 +359,7 @@ export default function PlanPage() {
       holesMode === "loop18" ? 18
       : (holesMode === "front9" || holesMode === "back9") ? 9
       : courseHoleCount;
-    const rounds = rawRounds.filter((r: any) => (r.holes_played ?? courseHoleCount) === targetHolesPlayed);
+    const rounds = allCourseRounds.filter((r: any) => (r.holes_played ?? courseHoleCount) === targetHolesPlayed);
     const sums: Record<number, Record<string, { total: number; count: number }>> = {};
     for (const round of rounds) {
       for (const h of round.holes ?? []) {
@@ -382,7 +382,7 @@ export default function PlanPage() {
       });
     }
     return result;
-  }, [rawRounds, holesMode, course]);
+  }, [allCourseRounds, holesMode, course]);
   // Per-hole recent score history (date, score, club, tee_accuracy) for plan card display
   const holeHistEntries = useMemo<Record<number, HoleHistEntry[]>>(() => {
     if (!course) return {};
@@ -391,7 +391,7 @@ export default function PlanPage() {
       holesMode === "loop18" ? 18
       : (holesMode === "front9" || holesMode === "back9") ? 9
       : courseHoleCount;
-    const rounds = rawRounds.filter((r: any) => (r.holes_played ?? courseHoleCount) === targetHolesPlayed);
+    const rounds = allCourseRounds.filter((r: any) => (r.holes_played ?? courseHoleCount) === targetHolesPlayed);
     const result: Record<number, HoleHistEntry[]> = {};
     for (const round of rounds) {
       for (const h of round.holes ?? []) {
@@ -411,7 +411,7 @@ export default function PlanPage() {
       }
     }
     return result;
-  }, [rawRounds, holesMode, course]);
+  }, [allCourseRounds, holesMode, course]);
 
   const posture = useMemo(() => buildPosture(answers), [answers]);
   const target = useMemo(() => targetScore(answers), [answers]);
@@ -450,13 +450,13 @@ export default function PlanPage() {
       course_name: course.name,
       tee_box: course.tee_box,
       date: roundDate,
-      tee_time: teeTime,
       holes_played: planHoles.length,
       starting_hole: planHoles[0]?.hole ?? 1,
       holes,
     });
     if (error) {
-      alert("Failed to create round. Please try again.");
+      console.error("Failed to create round:", error);
+      alert(`Failed to create round: ${error.message}`);
       return;
     }
     router.push(`/rounds/play?roundId=${id}&courseId=${course.id}`);
