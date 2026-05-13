@@ -133,6 +133,27 @@ function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: num
     .slice(0,4);
 }
 
+const APPR_DIRS = [
+  { key:"Long",  label:"Far",   col:2, row:1 },
+  { key:"Left",  label:"Left",  col:1, row:2 },
+  { key:"Hit",   label:"Hit",   col:2, row:2 },
+  { key:"Right", label:"Right", col:3, row:2 },
+  { key:"Short", label:"Short", col:2, row:3 },
+] as const;
+
+function computeApprDirs(enriched: EnrichedHole[], baseline: number, clubFilter?: string) {
+  const holes = clubFilter
+    ? enriched.filter(e => (e.roundHole.appr_distance || "") === clubFilter)
+    : enriched;
+  return APPR_DIRS.map(({ key, label, col, row }) => {
+    const matching = holes.filter(e => (e.roundHole.appr_accuracy || "") === key);
+    const count = matching.length;
+    const avg = count > 0 ? wAvg(matching, scoreToPar) : NaN;
+    const impact = !isNaN(avg) ? avg - baseline : NaN;
+    return { key, label, col, row, count, impact };
+  });
+}
+
 function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; impact:number; count:number; greyed?:boolean }) {
   const fmtSTP = (s:number) => s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
   if (greyed) return (
@@ -370,6 +391,7 @@ function PlayCourseInner() {
   const [showThisHoleOnly, setShowThisHoleOnly] = useState(false);
   const [approachDist, setApproachDist] = useState<number|null>(null);
   const [approachClub, setApproachClub] = useState<string>("");
+  const [apprTooltip, setApprTooltip] = useState<{x:number;y:number;label:string;impact:number;count:number}|null>(null);
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const [clubDistances, setClubDistances] = useState<ClubDistances | null>(null);
@@ -1257,35 +1279,42 @@ function scoreBg(score: number|"", par: number): string {
               <div style={{ fontSize:22, fontWeight:700, color:"#0f6e56", marginBottom:8 }}>
                 {t?pct(t.girPct):"—"} <span style={{ fontSize:14, color:"#0f6e56", fontWeight:400 }}>GIR</span>
               </div>
-              {t&&(
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gridTemplateRows:"auto auto auto", gap:5, marginBottom:8, maxWidth:220 }}>
-                  {/* Far — top center */}
-                  <div style={{ gridColumn:2, gridRow:1, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Far</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#c0392b" }}>{pct(t.apprMissLongPct)}</div>
+              {displayEnriched.length > 0 && (() => {
+                const renderApprGrid = (dirs: ReturnType<typeof computeApprDirs>, title: string) => (
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontSize:9, fontWeight:600, color:"var(--muted)", textTransform:"uppercase", letterSpacing:0.5, textAlign:"center", margin:"0 0 4px" }}>{title}</p>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gridTemplateRows:"auto auto auto", gap:4 }}>
+                      {dirs.map(({ key, label, col, row, count, impact }) => {
+                        const isHit = key === "Hit";
+                        const colors = count === 0 || isNaN(impact)
+                          ? { bg:"var(--paper-alt)", color:"var(--muted-2)" }
+                          : impactColor(impact, count <= 2);
+                        return (
+                          <div key={key}
+                            style={{ gridColumn:col, gridRow:row, background:colors.bg, borderRadius:7, padding:"5px 3px", textAlign:"center",
+                              border: isHit ? "1.5px solid var(--green)" : "1px solid transparent", cursor:"default" }}
+                            onMouseEnter={e => setApprTooltip({ x:(e as any).clientX, y:(e as any).clientY, label, impact, count })}
+                            onMouseLeave={() => setApprTooltip(null)}>
+                            <div style={{ fontSize:9, color:colors.color, fontWeight:700, textTransform:"uppercase", opacity: count===0?0.35:0.8 }}>{label}</div>
+                            {count > 0 ? <>
+                              <div style={{ fontSize:12, fontWeight:700, color:colors.color }}>{isNaN(impact)?"—":fmtSTP(impact)}</div>
+                              <div style={{ fontSize:9, color:colors.color, opacity:0.7 }}>{count}</div>
+                            </> : <div style={{ fontSize:9, color:"var(--muted-2)", lineHeight:"2.2" }}>—</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  {/* Left */}
-                  <div style={{ gridColumn:1, gridRow:2, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Left</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#2980b9" }}>{pct(t.apprMissLeftPct)}</div>
+                );
+                const allDirs = computeApprDirs(displayEnriched, baseline);
+                const clubDirs = approachClub ? computeApprDirs(displayEnriched, baseline, approachClub) : null;
+                return (
+                  <div style={{ display:"flex", gap:10, marginBottom:8 }}>
+                    {renderApprGrid(allDirs, approachClub ? "All Similar" : "Direction")}
+                    {clubDirs && renderApprGrid(clubDirs, `With ${approachClub}`)}
                   </div>
-                  {/* Hit — center */}
-                  <div style={{ gridColumn:2, gridRow:2, background:"var(--green-soft)", borderRadius:8, padding:"5px 4px", textAlign:"center", border:"1px solid var(--green)" }}>
-                    <div style={{ fontSize:9, color:"var(--green-deep)", fontWeight:700, textTransform:"uppercase" }}>Hit</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:"var(--green)" }}>{pct(t.apprHitPct)}</div>
-                  </div>
-                  {/* Right */}
-                  <div style={{ gridColumn:3, gridRow:2, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Right</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#8e44ad" }}>{pct(t.apprMissRightPct)}</div>
-                  </div>
-                  {/* Short — bottom center */}
-                  <div style={{ gridColumn:2, gridRow:3, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Short</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#e67e22" }}>{pct(t.apprMissShortPct)}</div>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
               {t&&(
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   {(hole.approach_water_out_left||hole.approach_water_out_right||hole.approach_water_out_short||hole.approach_water_out_long)&&(
@@ -1333,6 +1362,12 @@ function scoreBg(score: number|"", par: number): string {
         </div>
 
       </div>
+
+      {apprTooltip && (
+        <div style={{ position:"fixed", left:apprTooltip.x+12, top:apprTooltip.y-38, background:"var(--ink)", color:"white", borderRadius:6, padding:"5px 10px", fontSize:11, fontWeight:600, zIndex:9999, pointerEvents:"none", whiteSpace:"nowrap", boxShadow:"0 2px 8px rgba(0,0,0,0.3)" }}>
+          {apprTooltip.label}: {isNaN(apprTooltip.impact) ? "—" : fmtSTP(apprTooltip.impact)} · {apprTooltip.count} shot{apprTooltip.count !== 1 ? "s" : ""}
+        </div>
+      )}
     </main>
   );
 }
