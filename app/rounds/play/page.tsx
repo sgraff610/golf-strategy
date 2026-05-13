@@ -1267,13 +1267,29 @@ function scoreBg(score: number|"", par: number): string {
             <div style={card("#f6f6f6")}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
                 <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:0 }}>APPROACH</p>
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ fontSize:11, color:"var(--green)" }}>Approach Club</span>
-                  <select value={approachClub} onChange={e => setApproachClub(e.target.value)}
-                    style={{ padding:"3px 8px", fontSize:13, border:"1px solid var(--green)", borderRadius:6, color:"var(--green)", fontWeight:600, background:"white" }}>
-                    <option value="">—</option>
-                    {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <input type="number" min={0} max={700} value={approachDist ?? ""}
+                      onChange={e => {
+                        const d = e.target.value === "" ? null : Number(e.target.value);
+                        setApproachDist(d);
+                        if (d && Object.keys(CLUB_DIST).length > 0) {
+                          let best="", bestDiff=Infinity;
+                          for (const [c,cd] of Object.entries(CLUB_DIST)) { const df=Math.abs(cd-d); if(df<bestDiff){bestDiff=df;best=c;} }
+                          setApproachClub(best);
+                        }
+                      }}
+                      style={{ width:54, padding:"3px 5px", fontSize:12, border:"1px solid var(--line)", borderRadius:6, color:"var(--ink)", fontWeight:600, textAlign:"center", background:"white" }} />
+                    <span style={{ fontSize:11, color:"var(--muted)" }}>yds</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <span style={{ fontSize:11, color:"var(--green)" }}>Club</span>
+                    <select value={approachClub} onChange={e => setApproachClub(e.target.value)}
+                      style={{ padding:"3px 8px", fontSize:13, border:"1px solid var(--green)", borderRadius:6, color:"var(--green)", fontWeight:600, background:"white" }}>
+                      <option value="">—</option>
+                      {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div style={{ fontSize:22, fontWeight:700, color:"#0f6e56", marginBottom:8 }}>
@@ -1306,11 +1322,15 @@ function scoreBg(score: number|"", par: number): string {
                     </div>
                   </div>
                 );
-                const allDirs = computeApprDirs(displayEnriched, baseline);
+                const distFiltered = approachDist != null && Object.keys(CLUB_DIST).length > 0
+                  ? displayEnriched.filter(e => { const d=CLUB_DIST[e.roundHole.appr_distance||""]; return d!=null&&Math.abs(d-approachDist)<=25; })
+                  : displayEnriched;
+                const allDirs = computeApprDirs(distFiltered, baseline);
                 const clubDirs = approachClub ? computeApprDirs(displayEnriched, baseline, approachClub) : null;
+                const allTitle = approachDist != null ? `~${approachDist}yds` : (approachClub ? "All Similar" : "Direction");
                 return (
                   <div style={{ display:"flex", gap:10, marginBottom:8 }}>
-                    {renderApprGrid(allDirs, approachClub ? "All Similar" : "Direction")}
+                    {renderApprGrid(allDirs, allTitle)}
                     {clubDirs && renderApprGrid(clubDirs, `With ${approachClub}`)}
                   </div>
                 );
