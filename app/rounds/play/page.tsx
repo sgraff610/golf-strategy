@@ -369,6 +369,7 @@ function PlayCourseInner() {
   const [saving, setSaving] = useState(false);
   const [showThisHoleOnly, setShowThisHoleOnly] = useState(false);
   const [approachDist, setApproachDist] = useState<number|null>(null);
+  const [approachClub, setApproachClub] = useState<string>("");
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const [clubDistances, setClubDistances] = useState<ClubDistances | null>(null);
@@ -481,7 +482,16 @@ function PlayCourseInner() {
       });
       const data = await res.json();
       setStrategy(data);
-      setApproachDist(data.defaultApproachDist ?? null);
+      const dist = data.defaultApproachDist ?? null;
+      setApproachDist(dist);
+      if (dist && clubDistances) {
+        const mids = Object.fromEntries(Object.entries(clubDistances).map(([k,v])=>[k,Math.round((v.min+v.max)/2)]));
+        let best="", bestDiff=Infinity;
+        for (const [c,d] of Object.entries(mids)) { const df=Math.abs((d as number)-dist); if(df<bestDiff){bestDiff=df;best=c;} }
+        setApproachClub(best);
+      } else {
+        setApproachClub("");
+      }
       // Load notes from all tee boxes of this course and merge
       const { data: allTeeNotes } = await supabase.from("courses").select("hole_notes").eq("name", selectedCourse?.name ?? "");
       const mergedNotes: Record<string,string> = {};
@@ -707,6 +717,7 @@ function scoreBg(score: number|"", par: number): string {
 
       {/* ── Sticky scorecard ── */}
       <div style={{ position:"sticky", top:0, zIndex:100, background:"var(--paper)", borderBottom:"2px solid var(--green)", boxShadow:"0 2px 8px rgba(0,0,0,0.08)" }}>
+        <div style={{ maxWidth:520, margin:"0 auto" }}>
 
         {/* Top bar */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px" }}>
@@ -867,6 +878,7 @@ function scoreBg(score: number|"", par: number): string {
             </div>
           );
         })()}
+        </div>
       </div>
 
       {/* ── Hole detail ── */}
@@ -1233,25 +1245,45 @@ function scoreBg(score: number|"", par: number): string {
             <div style={card("#f6f6f6")}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
                 <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:0 }}>APPROACH</p>
-                {approachDist!=null&&(
-                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                    <span style={{ fontSize:11, color:"#0f6e56" }}>Distance (yds)</span>
-                    <input type="number" min={0} max={700} value={approachDist}
-                      onChange={e=>setApproachDist(Number(e.target.value))}
-                      style={{ width:64, padding:"3px 6px", fontSize:13, border:"1px solid #0f6e56", borderRadius:6, color:"#0f6e56", fontWeight:600, textAlign:"center", background:"white" }} />
-                  </div>
-                )}
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:11, color:"var(--green)" }}>Approach Club</span>
+                  <select value={approachClub} onChange={e => setApproachClub(e.target.value)}
+                    style={{ padding:"3px 8px", fontSize:13, border:"1px solid var(--green)", borderRadius:6, color:"var(--green)", fontWeight:600, background:"white" }}>
+                    <option value="">—</option>
+                    {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
               <div style={{ fontSize:22, fontWeight:700, color:"#0f6e56", marginBottom:8 }}>
                 {t?pct(t.girPct):"—"} <span style={{ fontSize:14, color:"#0f6e56", fontWeight:400 }}>GIR</span>
               </div>
               {t&&(
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
-                  {[{label:"Hit",v:t.apprHitPct,c:"#27ae60"},{label:"Left",v:t.apprMissLeftPct,c:"#2980b9"},{label:"Right",v:t.apprMissRightPct,c:"#8e44ad"},{label:"Short",v:t.apprMissShortPct,c:"#e67e22"},{label:"Long",v:t.apprMissLongPct,c:"#c0392b"}].map(({label,v,c})=>(
-                    <div key={label} style={{background:"#eee",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                      <span style={{color:"#0f6e56"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
-                    </div>
-                  ))}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gridTemplateRows:"auto auto auto", gap:5, marginBottom:8, maxWidth:220 }}>
+                  {/* Far — top center */}
+                  <div style={{ gridColumn:2, gridRow:1, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Far</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#c0392b" }}>{pct(t.apprMissLongPct)}</div>
+                  </div>
+                  {/* Left */}
+                  <div style={{ gridColumn:1, gridRow:2, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Left</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#2980b9" }}>{pct(t.apprMissLeftPct)}</div>
+                  </div>
+                  {/* Hit — center */}
+                  <div style={{ gridColumn:2, gridRow:2, background:"var(--green-soft)", borderRadius:8, padding:"5px 4px", textAlign:"center", border:"1px solid var(--green)" }}>
+                    <div style={{ fontSize:9, color:"var(--green-deep)", fontWeight:700, textTransform:"uppercase" }}>Hit</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"var(--green)" }}>{pct(t.apprHitPct)}</div>
+                  </div>
+                  {/* Right */}
+                  <div style={{ gridColumn:3, gridRow:2, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Right</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#8e44ad" }}>{pct(t.apprMissRightPct)}</div>
+                  </div>
+                  {/* Short — bottom center */}
+                  <div style={{ gridColumn:2, gridRow:3, background:"#eee", borderRadius:8, padding:"5px 4px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"var(--muted)", fontWeight:600, textTransform:"uppercase" }}>Short</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#e67e22" }}>{pct(t.apprMissShortPct)}</div>
+                  </div>
                 </div>
               )}
               {t&&(
