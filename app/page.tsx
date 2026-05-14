@@ -1,993 +1,632 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
-import { CourseRecord } from "@/lib/types";
-import { loadCourses } from "@/lib/storage";
+import { useState, useEffect } from "react";
 
-// ─── Shared types ─────────────────────────────────────────────────────────────
-type RoundHole = {
-  hole: number; par: number; yards: number; stroke_index: number;
-  score: number|""; putts: number|""; chips: number|""; club: string;
-  tee_accuracy: string; appr_accuracy: string; appr_distance: string;
-  water_penalty: number|""; drop_or_out: number|""; tree_haz: number|"";
-  fairway_bunker: number|""; greenside_bunker: number|""; gir: boolean;
-  first_putt_distance: string;
-};
-type HoleData = any;
-type EnrichedHole = {
-  roundHole: RoundHole; courseHole: HoleData|null;
-  courseRating: number|null; courseSlope: number|null;
-  similarityScore: number; roundDate: string; courseId: string; isExactHole: boolean;
-};
-type CellValue = 0|1|2;
-type GreensideState = { long_left:CellValue; long_middle:CellValue; long_right:CellValue; middle_left:CellValue; middle_right:CellValue; short_left:CellValue; short_middle:CellValue; short_right:CellValue; };
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const ROOT = {
+  "--bg": "#eef1f4",
+  "--paper": "#f7f9fb",
+  "--paper-alt": "#e6ebf0",
+  "--ink": "#131821",
+  "--ink-soft": "#253041",
+  "--ink-mute": "#5d6b7a",
+  "--muted": "#5d6b7a",
+  "--muted-2": "#8995a3",
+  "--line": "#d7dde3",
+  "--green": "#0f6e56",
+  "--green-deep": "#084634",
+  "--green-soft": "#d2e8df",
+  "--accent": "#f29450",
+  "--accent-deep": "#b85320",
+  "--accent-soft": "#fde0c8",
+  "--sand": "#c8a84b",
+  "--flag": "#c94a2a",
+  "--good": "#1e8449",
+  "--font-display": "Georgia, 'Times New Roman', serif",
+  "--font-ui": "system-ui, -apple-system, sans-serif",
+  "--font-mono": "'Courier New', Courier, monospace",
+  background: "var(--bg)",
+  color: "var(--ink)",
+  fontFamily: "var(--font-ui)",
+  minHeight: "100vh",
+} as React.CSSProperties;
 
-// ─── Tee Shot Grid helpers ────────────────────────────────────────────────────
-const IRONS = ["4i","5i","6i","7i","8i","9i","PW","SW","LW"];
-
-function impactColor(impact: number, lowCount=false): { bg: string; color: string } {
-  if (lowCount) {
-    if (impact > 0.1)  return { bg:"#f9d6d6", color:"#1a1a1a" };
-    if (impact < -0.1) return { bg:"#d6f0e0", color:"#1a1a1a" };
-    return              { bg:"white", color:"#1a1a1a" };
-  }
-  if (impact >= 0.3)  return { bg:"#c0392b", color:"white" };
-  if (impact >= 0.1)  return { bg:"#f1948a", color:"#1a1a1a" };
-  if (impact > -0.1)  return { bg:"white",   color:"#1a1a1a" };
-  if (impact > -0.3)  return { bg:"#a9dfbf", color:"#1a1a1a" };
-  return               { bg:"#1e8449", color:"white" };
-}
-
-function wAvgGrid(holes: EnrichedHole[], fn: (e: EnrichedHole)=>number|null): number {
-  let n=0,d=0;
-  for (const e of holes) { const v=fn(e); if(v!==null&&!isNaN(v)){n+=v*e.similarityScore;d+=e.similarityScore;} }
-  return d>0?n/d:0;
-}
-
-function scoreToPar(e: EnrichedHole) { return Number(e.roundHole.score)-e.roundHole.par; }
-
-function clubGroup(club: string): string {
-  if (!club) return "Unknown";
-  if (club==="Driver") return "Driver";
-  if (club==="3W") return "3W";
-  if (club==="5W") return "5W";
-  if (club==="7W") return "7W";
-  if (IRONS.includes(club)) return "Irons";
-  return "Unknown";
-}
-
-function computeGridData(enriched: EnrichedHole[], baseline: number) {
-  const rows = ["Driver","3W","5W","7W","Irons","Unknown"];
-  const dirs = ["Left","Hit","Right","Unknown"] as const;
-  return rows.map(rowClub => {
-    const clubHoles = enriched.filter(e => clubGroup(e.roundHole.club||"")=== rowClub);
-    const count = clubHoles.length;
-    const cols = dirs.map(dir => {
-      const dirHoles = dir==="Unknown"
-        ? clubHoles.filter(e => !e.roundHole.tee_accuracy)
-        : clubHoles.filter(e => e.roundHole.tee_accuracy===dir);
-      const total = clubHoles.length;
-      const likelihood = total>0 ? dirHoles.length/total : 0;
-      const avg = dirHoles.length>0 ? wAvgGrid(dirHoles, scoreToPar) : NaN;
-      const impact = !isNaN(avg) ? avg-baseline : NaN;
-      return { likelihood, impact, count: dirHoles.length };
-    });
-    return { club: rowClub, count, cols };
-  });
-}
-
-function computeHazardImpacts(enriched: EnrichedHole[], hole: any, baseline: number) {
-  const hazards = [
-    { label:"OB/Water Left",   key:"tee_water_out_left",   filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Left" },
-    { label:"OB/Water Right",  key:"tee_water_out_right",  filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 && e.roundHole.tee_accuracy==="Right" },
-    { label:"OB/Water Across", key:"tee_water_out_across", filterFn:(e:EnrichedHole)=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0 },
-    { label:"Trees Left",      key:"tee_tree_hazard_left", filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Left" },
-    { label:"Trees Right",     key:"tee_tree_hazard_right",filterFn:(e:EnrichedHole)=>Number(e.roundHole.tree_haz)>0 && e.roundHole.tee_accuracy==="Right" },
-    { label:"Bunker Left",     key:"tee_bunkers_left",     filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Left" },
-    { label:"Bunker Right",    key:"tee_bunkers_right",    filterFn:(e:EnrichedHole)=>Number(e.roundHole.fairway_bunker)>0 && e.roundHole.tee_accuracy==="Right" },
-  ];
-  return hazards
-    .filter(h => hole?.[h.key])
-    .map(h => {
-      const matching = enriched.filter(h.filterFn);
-      const avg = matching.length>0 ? wAvgGrid(matching, scoreToPar) : NaN;
-      const impact = !isNaN(avg) ? avg-baseline : NaN;
-      return { label:h.label, impact, count:matching.length };
-    })
-    .filter(h => !isNaN(h.impact))
-    .sort((a,b)=>b.impact-a.impact)
-    .slice(0,4);
-}
-
-function GridCell({ likelihood, impact, count, greyed }: { likelihood:number; impact:number; count:number; greyed?:boolean }) {
-  const fmtSTP = (s:number) => s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
-  if (greyed) return (
-    <div style={{ background:"#f0f0f0", borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40 }}>
-      <p style={{ fontSize:9, color:"#0f6e56", margin:0 }}>N/A</p>
-    </div>
-  );
-  const lowCount = count <= 2;
-  const colors = isNaN(impact) ? { bg:"#f6f6f6", color:"#aaa" } : impactColor(impact, lowCount);
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function Sparkline({ data, w, h, stroke, fill }: { data: number[]; w: number; h: number; stroke: string; fill: string }) {
+  if (data.length < 2) return <svg width={w} height={h} />;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const pad = 2;
+  const xs = data.map((_, i) => pad + (i / (data.length - 1)) * (w - pad * 2));
+  const ys = data.map(v => pad + (1 - (v - min) / range) * (h - pad * 2));
+  const linePts = xs.map((x, i) => `${x},${ys[i]}`).join(" L ");
+  const fillPts = `M ${xs[0]},${ys[0]} L ${linePts.slice(2)} L ${xs[xs.length - 1]},${h} L ${xs[0]},${h} Z`;
   return (
-    <div style={{ background:colors.bg, borderRadius:4, padding:"4px 2px", textAlign:"center", minHeight:40, display:"flex", flexDirection:"column", justifyContent:"center" }}>
-      {count>0 ? <>
-        <p style={{ fontSize:10, fontWeight:600, color:colors.color, margin:0 }}>{isNaN(impact)?"-":fmtSTP(impact)}</p>
-        <p style={{ fontSize:9, color:colors.color, margin:0, opacity:0.85 }}>{count}</p>
-      </> : <p style={{ fontSize:9, color:"#0f6e56", margin:0 }}>—</p>}
-    </div>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block", overflow: "visible" }}>
+      <path d={fillPts} fill={fill} />
+      <path d={`M ${linePts}`} fill="none" stroke={stroke} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
-// ─── Greenside radial ─────────────────────────────────────────────────────────
-const GS_SEGMENTS = [
-  {key:"long_left"as keyof GreensideState,abbr:"FL",angle:315},{key:"long_middle"as keyof GreensideState,abbr:"F",angle:0},
-  {key:"long_right"as keyof GreensideState,abbr:"FR",angle:45},{key:"middle_right"as keyof GreensideState,abbr:"R",angle:90},
-  {key:"short_right"as keyof GreensideState,abbr:"SR",angle:135},{key:"short_middle"as keyof GreensideState,abbr:"S",angle:180},
-  {key:"short_left"as keyof GreensideState,abbr:"SL",angle:225},{key:"middle_left"as keyof GreensideState,abbr:"L",angle:270},
-];
-const CX=80,CY=80,RI=38,RO=67,GAP=3.5,SPAN=45;
-function toRad(d:number){return d*Math.PI/180;}
-function polar(a:number,r:number){const rad=toRad(90-a);return{x:CX+r*Math.cos(rad),y:CY-r*Math.sin(rad)};}
-function arcPath(ca:number,ri:number,ro:number){
-  const h=SPAN/2-GAP/2;
-  const s1=polar(ca-h,ro),e1=polar(ca+h,ro),s2=polar(ca+h,ri),e2=polar(ca-h,ri);
-  return `M ${s1.x} ${s1.y} A ${ro} ${ro} 0 0 1 ${e1.x} ${e1.y} L ${s2.x} ${s2.y} A ${ri} ${ri} 0 0 0 ${e2.x} ${e2.y} Z`;
-}
-function lpos(ca:number){const r=RI+(RO-RI)*0.5;return polar(ca,r);}
-const GS_COLORS:{fill:string;text:string}[]=[{fill:"#e8e8e8",text:"#666"},{fill:"#0f6e56",text:"#fff"},{fill:"#c8a84b",text:"#fff"}];
-
-function GreensideWidget({value,onChange,readOnly=false}:{value:GreensideState;onChange?:(v:GreensideState)=>void;readOnly?:boolean}){
-  return(
-    <div>
-      <svg viewBox="0 0 200 190" style={{width:"100%",maxWidth:180,height:"auto",display:"block"}}>
-        <text x={CX} y={CY-RO-6} textAnchor="middle" fontSize={8} fontStyle="italic" fill="#999">↑ Far</text>
-        <text x={CX-RO-6} y={CY+3} textAnchor="end" fontSize={8} fontStyle="italic" fill="#999">← L</text>
-        <text x={CX+RO+6} y={CY+3} textAnchor="start" fontSize={8} fontStyle="italic" fill="#999">R →</text>
-        {GS_SEGMENTS.map(seg=>{
-          const v=value[seg.key];
-          const col=GS_COLORS[v]??GS_COLORS[0];
-          const lp=lpos(seg.angle);
-          const d=arcPath(seg.angle,RI+2,RO);
-          return(
-            <g key={seg.key} onClick={readOnly?undefined:()=>{if(onChange)onChange({...value,[seg.key]:((v+1)%3)as CellValue});}} style={{cursor:readOnly?"default":"pointer"}}>
-              <path d={d} fill={col.fill} stroke="#fff" strokeWidth={1.5} style={{transition:"fill 0.15s"}}/>
-              <text x={lp.x} y={lp.y+3} textAnchor="middle" fontSize={8} fontWeight={500} fill={col.text} style={{pointerEvents:"none"}}>{seg.abbr}</text>
-              {!readOnly&&<path d={d} fill="transparent" stroke="none" style={{pointerEvents:"all"}}/>}
-            </g>
-          );
-        })}
-        <circle cx={CX} cy={CY} r={RI} fill="#0f6e56" style={{pointerEvents:"none"}}/>
-        <text x={CX} y={CY-4} textAnchor="middle" fontSize={13} style={{pointerEvents:"none"}}>🚩</text>
-        <text x={CX} y={CY+11} textAnchor="middle" fontSize={7} fontWeight={500} fill="#fff" style={{pointerEvents:"none"}}>GREEN</text>
-      </svg>
-      <div style={{textAlign:"center",fontSize:9,color:"#999",fontStyle:"italic"}}>↓ Short</div>
-    </div>
-  );
+const WX_ICONS: Record<string, string> = { sunny: "☀️", "partly-cloudy": "⛅", cloudy: "☁️", rainy: "🌧️", stormy: "⛈️", windy: "💨" };
+function WxIcon({ kind, size }: { kind: string; size: number }) {
+  return <span style={{ fontSize: size, lineHeight: 1, display: "block" }}>{WX_ICONS[kind] ?? "⛅"}</span>;
 }
 
-// ─── Collapsible section ──────────────────────────────────────────────────────
-function Section({title,badge,defaultOpen=false,children}:{title:string;badge?:number;defaultOpen?:boolean;children:React.ReactNode}){
-  const [open,setOpen]=useState(defaultOpen);
-  return(
-    <div style={{borderTop:"1px solid #eee",paddingTop:10,marginTop:10}}>
-      <button onClick={()=>setOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:0}}>
-        <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>{title}</span>
-        <span style={{display:"flex",alignItems:"center",gap:6}}>
-          {!!badge&&<span style={{fontSize:10,background:"#0f6e56",color:"#fff",borderRadius:10,padding:"1px 6px",fontWeight:600}}>{badge}</span>}
-          <span style={{fontSize:13,color:"#999"}}>{open?"▲":"▼"}</span>
-        </span>
-      </button>
-      {open&&<div style={{marginTop:10}}>{children}</div>}
-    </div>
-  );
-}
-
-// ─── Tendency recomputation ───────────────────────────────────────────────────
-function recomputeTendencies(enriched:EnrichedHole[]){
-  const valid=enriched.filter(e=>e.roundHole.score!==""&&e.similarityScore>0);
-  if(!valid.length)return null;
-  const wPct=(pred:(e:EnrichedHole)=>boolean,denom?:(e:EnrichedHole)=>boolean)=>{
-    let n=0,d=0;
-    for(const e of valid){const ok=denom?denom(e):true;if(ok){d+=e.similarityScore;if(pred(e))n+=e.similarityScore;}}
-    return d>0?n/d:0;
-  };
-  const wAvg=(fn:(e:EnrichedHole)=>number|null)=>{
-    let n=0,d=0;
-    for(const e of valid){const v=fn(e);if(v!==null&&!isNaN(v)){n+=v*e.similarityScore;d+=e.similarityScore;}}
-    return d>0?n/d:0;
-  };
-  const stp=(e:EnrichedHole)=>Number(e.roundHole.score)-e.roundHole.par;
-  const drv=(e:EnrichedHole)=>e.roundHole.par>=4;
-  return{
-    sampleSize:valid.length,
-    avgScoreToPar:wAvg(stp),
-    driveHitPct:wPct(e=>e.roundHole.tee_accuracy==="Hit",drv),
-    driveMissLeftPct:wPct(e=>e.roundHole.tee_accuracy==="Left",drv),
-    driveMissRightPct:wPct(e=>e.roundHole.tee_accuracy==="Right",drv),
-    driveWaterPct:wPct(e=>(Number(e.roundHole.water_penalty)||0)+(Number(e.roundHole.drop_or_out)||0)>0,drv),
-    driveTreePct:wPct(e=>(Number(e.roundHole.tree_haz)||0)>0,drv),
-    driveBunkerPct:wPct(e=>(Number(e.roundHole.fairway_bunker)||0)>0,drv),
-    apprHitPct:wPct(e=>e.roundHole.appr_accuracy==="Hit"),
-    apprMissLeftPct:wPct(e=>e.roundHole.appr_accuracy==="Left"),
-    apprMissRightPct:wPct(e=>e.roundHole.appr_accuracy==="Right"),
-    apprMissShortPct:wPct(e=>e.roundHole.appr_accuracy==="Short"),
-    apprMissLongPct:wPct(e=>e.roundHole.appr_accuracy==="Long"),
-    girPct:wPct(e=>!!e.roundHole.gir),
-    apprWaterPct:wPct(e=>(Number(e.roundHole.water_penalty)||0)>0),
-    apprTreePct:wPct(e=>(Number(e.roundHole.tree_haz)||0)>0),
-    apprBunkerPct:wPct(e=>(Number(e.roundHole.greenside_bunker)||0)>0),
-    avgPutts:wAvg(e=>e.roundHole.putts!==""?Number(e.roundHole.putts):null),
-  };
-}
-
-// ─── Filter logic ─────────────────────────────────────────────────────────────
-const DRIVE_CLUBS=["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
-const APPROACH_CLUBS=["3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
-const defaultGS=():GreensideState=>({long_left:0,long_middle:0,long_right:0,middle_left:0,middle_right:0,short_left:0,short_middle:0,short_right:0});
-
-type StratFilters={
-  useLastN:boolean; lastN:number; pars:Set<string>; siDelta:string; yardsDelta:string;
-  drivingClubs:Set<string>;
-  teeHazards:{teeTreeLeft:boolean;teeTreeRight:boolean;teeBunkerLeft:boolean;teeBunkerRight:boolean;teeWaterLeft:boolean;teeWaterRight:boolean};
-  apprClubs:Set<string>; greenDepth:string; greensideFilter:GreensideState;
-};
-const DEFAULT_FILTERS=(totalRounds:number):StratFilters=>({
-  useLastN:false,lastN:Math.min(10,totalRounds),pars:new Set(),siDelta:"",yardsDelta:"",
-  drivingClubs:new Set(),
-  teeHazards:{teeTreeLeft:false,teeTreeRight:false,teeBunkerLeft:false,teeBunkerRight:false,teeWaterLeft:false,teeWaterRight:false},
-  apprClubs:new Set(),greenDepth:"",greensideFilter:defaultGS(),
-});
-
-function toggleSet(s:Set<string>,v:string):Set<string>{const n=new Set(s);n.has(v)?n.delete(v):n.add(v);return n;}
-
-function applyFilters(enriched:EnrichedHole[],f:StratFilters,targetHole:HoleData,totalRounds:number):EnrichedHole[]{
-  const isExact=(e:EnrichedHole)=>e.isExactHole===true;
-  let pool=enriched;
-  if(f.useLastN&&f.lastN>0){
-    const dates=[...new Set(enriched.map(e=>e.roundDate))].sort().reverse().slice(0,f.lastN);
-    const dateSet=new Set(dates);
-    pool=pool.filter(e=>dateSet.has(e.roundDate));
-  }
-  if(f.pars.size>0) pool=pool.filter(e=>f.pars.has(String(e.roundHole.par)));
-  if(f.siDelta&&targetHole?.stroke_index){
-    const si=targetHole.stroke_index;
-    const delta=f.siDelta==="pm1"?1:f.siDelta==="pm2"?2:3;
-    pool=pool.filter(e=>Math.abs((e.courseHole?.stroke_index??e.roundHole.stroke_index)-si)<=delta);
-  }
-  if(f.yardsDelta&&targetHole?.yards){
-    const y=targetHole.yards;
-    const delta=f.yardsDelta==="pm10"?10:f.yardsDelta==="pm20"?20:30;
-    pool=pool.filter(e=>Math.abs((e.courseHole?.yards??e.roundHole.yards)-y)<=delta);
-  }
-  if(f.drivingClubs.size>0) pool=pool.filter(e=>f.drivingClubs.has(e.roundHole.club));
-  const th=f.teeHazards;
-  if(th.teeTreeLeft)   pool=pool.filter(e=>e.courseHole?.tee_tree_hazard_left);
-  if(th.teeTreeRight)  pool=pool.filter(e=>e.courseHole?.tee_tree_hazard_right);
-  if(th.teeBunkerLeft) pool=pool.filter(e=>e.courseHole?.tee_bunkers_left);
-  if(th.teeBunkerRight)pool=pool.filter(e=>e.courseHole?.tee_bunkers_right);
-  if(th.teeWaterLeft)  pool=pool.filter(e=>e.courseHole?.tee_water_out_left);
-  if(th.teeWaterRight) pool=pool.filter(e=>e.courseHole?.tee_water_out_right);
-  if(f.apprClubs.size>0) pool=pool.filter(e=>f.apprClubs.has(e.roundHole.appr_distance));
-  if(f.greenDepth){
-    const gd=(e:EnrichedHole)=>e.courseHole?.approach_green_depth??0;
-    if(f.greenDepth==="lt20")  pool=pool.filter(e=>gd(e)>0&&gd(e)<20);
-    if(f.greenDepth==="20-24") pool=pool.filter(e=>gd(e)>=20&&gd(e)<=24);
-    if(f.greenDepth==="25-29") pool=pool.filter(e=>gd(e)>=25&&gd(e)<=29);
-    if(f.greenDepth==="30-34") pool=pool.filter(e=>gd(e)>=30&&gd(e)<=34);
-    if(f.greenDepth==="35-39") pool=pool.filter(e=>gd(e)>=35&&gd(e)<=39);
-    if(f.greenDepth==="gt40")  pool=pool.filter(e=>gd(e)>=40);
-  }
-  const gsAny=Object.values(f.greensideFilter).some(v=>v!==0);
-  if(gsAny){
-    const keys=Object.keys(f.greensideFilter)as(keyof GreensideState)[];
-    pool=pool.filter(e=>{
-      for(const k of keys){
-        const fv=f.greensideFilter[k]; if(fv===0)continue;
-        const isBunker=e.courseHole?.[`approach_bunker_${k}`];
-        const isGreen=e.courseHole?.[`approach_green_${k}`];
-        const cv:CellValue=isBunker?2:isGreen?1:0;
-        if(cv!==fv)return false;
-      }
-      return true;
-    });
-  }
-  const exactHoles=enriched.filter(isExact);
-  const poolKeys=new Set(pool.map(e=>`${e.roundDate}|${e.courseId}|${e.roundHole.hole}`));
-  for(const e of exactHoles){
-    const key=`${e.roundDate}|${e.courseId}|${e.roundHole.hole}`;
-    if(!poolKeys.has(key)){pool=[...pool,e];poolKeys.add(key);}
-  }
-  return pool;
-}
-
-const DOGLEG_LABELS:Record<string,string>={
-  severe_left:"Severe Left",moderate_left:"Moderate Left",slight_left:"Slight Left",straight:"Straight",
-  slight_right:"Slight Right",moderate_right:"Moderate Right",severe_right:"Severe Right",
-};
-const pill=(active:boolean):React.CSSProperties=>({
-  padding:"4px 10px",borderRadius:20,fontSize:12,fontWeight:500,cursor:"pointer",border:"1px solid",
-  background:active?"#0f6e56":"white",color:active?"white":"#0f6e56",borderColor:"#0f6e56",whiteSpace:"nowrap",
-});
-const fl:React.CSSProperties={fontSize:11,color:"#0f6e56",margin:"0 0 6px",fontWeight:600};
-
-function hazardCode(h:any):string{
-  const parts:string[]=[];
-  const ob=(Number(h.water_penalty)||0)+(Number(h.drop_or_out)||0);
-  const th=Number(h.tree_haz)||0;
-  const fb=Number(h.fairway_bunker)||0;
-  const gb=Number(h.greenside_bunker)||0;
-  if(ob>0)parts.push(ob>1?`${ob}O`:"O");
-  if(th>0)parts.push(th>1?`${th}H`:"H");
-  if(fb>0)parts.push(fb>1?`${fb}F`:"F");
-  if(gb>0)parts.push(gb>1?`${gb}S`:"S");
-  return parts.join(" ")||"—";
-}
-function scoreColor(score:number,par:number):string{
-  const d=score-par;
-  if(d<=-2)return"#1a6fd4"; if(d===-1)return"#27ae60"; if(d===0)return"#333"; if(d===1)return"#e67e22"; return"#c0392b";
-}
-
-function HoleHistorySection({history}:{history:any[]}){
-  const avgScore=history.reduce((s,h)=>s+(Number(h.score)-h.par),0)/history.length;
-  const fmt0=(n:number)=>n>=0?`+${n.toFixed(1)}`:n.toFixed(1);
-  const COLS="60px 28px 32px 30px 26px 26px 28px 1fr";
-  return(
-    <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <p style={{fontSize:12,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:0}}>My History — This Hole</p>
-        <span style={{fontSize:13,fontWeight:700,color:avgScore>0?"#c0392b":avgScore<0?"#27ae60":"#333"}}>
-          avg {fmt0(avgScore)} · {history.length} rounds
-        </span>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",marginBottom:4}}>
-        {["Date","Sc","Club","Tee","Ap","Pu","Haz","Appr"].map(h=>(
-          <span key={h} style={{fontSize:9,color:"#0f6e56",fontWeight:600,textTransform:"uppercase"}}>{h}</span>
-        ))}
-      </div>
-      {history.map((h:any,i:number)=>(
-        <div key={i} style={{display:"grid",gridTemplateColumns:COLS,gap:"0 4px",alignItems:"center",padding:"3px 0",borderTop:i>0?"1px solid #f0f0f0":"none"}}>
-          <span style={{fontSize:10,color:"#0f6e56"}}>{h.date?.slice(2,10)||"—"}</span>
-          <span style={{fontSize:13,fontWeight:700,color:scoreColor(Number(h.score),h.par)}}>
-            {Number(h.score)-h.par===0?"E":Number(h.score)-h.par>0?`+${Number(h.score)-h.par}`:Number(h.score)-h.par}
-          </span>
-          <span style={{fontSize:10,color:"#555"}}>{h.club||"—"}</span>
-          <span style={{fontSize:10,color:"#555"}}>{h.tee_accuracy?.slice(0,3)||"—"}</span>
-          <span style={{fontSize:10,color:"#555"}}>{h.appr_accuracy?.slice(0,3)||"—"}</span>
-          <span style={{fontSize:10,color:"#555"}}>{h.putts||"—"}</span>
-          <span style={{fontSize:10,color:"#e67e22",fontWeight:500}}>{hazardCode(h)}</span>
-          <span style={{fontSize:10,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.appr_distance||"—"}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
-export default function Home(){
-  const [courses,setCourses]=useState<CourseRecord[]>([]);
-  const [courseId,setCourseId]=useState("");
-  const [holeNumber,setHoleNumber]=useState(1);
-  const [result,setResult]=useState<any>(null);
-  const [approachDist,setApproachDist]=useState<number|null>(null);
-  const [approachDistOverride,setApproachDistOverride]=useState<number|null>(null);
-  const [holeNotesOpen,setHoleNotesOpen]=useState(false);
-  const [holeNotesText,setHoleNotesText]=useState("");
-  const [savingNotes,setSavingNotes]=useState(false);
-  const [notesSaved,setNotesSaved]=useState(false);
-  const [loading,setLoading]=useState(false);
-  const [loadingCourses,setLoadingCourses]=useState(true);
-  const [error,setError]=useState("");
-  const [filters,setFilters]=useState<StratFilters>(DEFAULT_FILTERS(0));
-  const [totalRounds,setTotalRounds]=useState(0);
-  const [hiAgs,setHiAgs]=useState<string>("");
-  const [hiRating,setHiRating]=useState<string>("");
-  const [hiSlope,setHiSlope]=useState<string>("");
-  const [existingDiffs,setExistingDiffs]=useState<number[]|null>(null);
-
-  useEffect(()=>{
-    loadCourses().then(data=>{setCourses(data);if(data.length>0)setCourseId(data[0].id);setLoadingCourses(false);});
-  },[]);
-
-  useEffect(()=>{
-    import("@/lib/supabase").then(({supabase})=>{
-      supabase.from("rounds").select("holes_played,score_differential,holes,course_id").order("date",{ascending:true}).then(async({data})=>{
-        if(!data)return;
-        const courseIds=[...new Set(data.map((r:any)=>r.course_id).filter(Boolean))];
-        let courseMap:Record<string,{rating:number|null;slope:number|null;hole_count:number|null}>={};
-        if(courseIds.length>0){
-          const {data:cs}=await supabase.from("courses").select("id,rating,slope,hole_count").in("id",courseIds);
-          (cs??[]).forEach((c:any)=>{courseMap[c.id]={rating:c.rating,slope:c.slope,hole_count:c.hole_count};});
-        }
-        const diffs=data.map((r:any)=>{
-          if(r.score_differential!=null) return r.holes_played<=9?r.score_differential*2:r.score_differential;
-          const ci=courseMap[r.course_id];
-          if(!ci?.rating||!ci?.slope)return null;
-          const scored=(r.holes??[]).filter((h:any)=>h.score&&Number(h.score)>0);
-          if(!scored.length)return null;
-          const ags=scored.reduce((s:number,h:any)=>s+Math.min(Number(h.score)||0,(h.par||4)+2),0);
-          const is9=(r.holes_played??scored.length)<=9;
-          const is9C=(ci.hole_count??18)<=9;
-          let rat=ci.rating;
-          if(is9&&!is9C)rat/=2;else if(!is9&&is9C)rat*=2;
-          const diff=is9?(113/ci.slope*(ags-rat))*2:(ags-rat)*113/ci.slope;
-          return diff;
-        }).filter((d:any):d is number=>d!==null);
-        setExistingDiffs(diffs);
-      });
-    });
-  },[]);
-
-  const selectedCourse=courses.find(c=>c.id===courseId);
-  const availableHoles=Array.from({length:selectedCourse?.holes.length??18},(_,i)=>i+1);
-  const targetHole=selectedCourse?.holes.find((h:any)=>h.hole===holeNumber);
-  const totalHoles=selectedCourse?.holes.length??18;
-
-  const handleSubmit=async(apprOverride?:number, holeOverride?:number)=>{
-    if(!selectedCourse)return;
-    setLoading(true);setError("");setResult(null);
-    const hNum = holeOverride ?? holeNumber;
-    try{
-      const body:any={courseId,hole:hNum};
-      if(apprOverride!=null)body.approachDistance=apprOverride;
-      const res=await fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-      const data=await res.json();
-      if(!res.ok)setError(data.error??"Something went wrong.");
-      else{
-        setResult(data);
-        if(apprOverride==null){setApproachDist(data.defaultApproachDist??null);setApproachDistOverride(null);}
-        else{setApproachDist(apprOverride);}
-        const rounds=new Set((data.enrichedHoles as EnrichedHole[]).map((e:EnrichedHole)=>e.roundDate));
-        setTotalRounds(rounds.size);
-        setFilters(DEFAULT_FILTERS(rounds.size));
-        // Load hole notes fresh
-        const { supabase: sbNotes } = await import("@/lib/supabase");
-        const courseName = selectedCourse?.name ?? "";
-        const { data: allTeeNotes } = await sbNotes.from("courses").select("hole_notes").eq("name", courseName);
-        const mergedNotes: Record<string,string> = {};
-        for (const row of allTeeNotes ?? []) {
-          if (row.hole_notes) Object.assign(mergedNotes, row.hole_notes);
-        }
-        setHoleNotesText(mergedNotes[String(hNum)] ?? "");
-        setHoleNotesOpen(false);
-      }
-    }catch{setError("Something went wrong. Please try again.");}
-    setLoading(false);
-  };
-
-  async function saveHoleNotes() {
-    if (!hole) return;
-    setSavingNotes(true);
-    const { supabase: sb } = await import("@/lib/supabase");
-    const { data: allTees } = await sb.from("courses").select("id").eq("name", selectedCourse?.name ?? "");
-    for (const tee of allTees ?? []) {
-      await sb.rpc('upsert_hole_note', {
-        p_course_id: tee.id,
-        p_hole: hole.hole,
-        p_note: holeNotesText,
-      });
-    }
-    setNotesSaved(true);
-    setTimeout(() => setNotesSaved(false), 2000);
-    setSavingNotes(false);
-  }
-
-  async function goToHole(n: number) {
-    setHoleNumber(n);
-    setResult(null);
-    setApproachDist(null);
-    setApproachDistOverride(null);
-    // Load hole notes fresh from Supabase
-    const { supabase: sb } = await import("@/lib/supabase");
-    const courseName = selectedCourse?.name ?? "";
-    const { data: allTeeNotes } = await sb.from("courses").select("hole_notes").eq("name", courseName);
-    const mergedNotes: Record<string,string> = {};
-    for (const row of allTeeNotes ?? []) {
-      if (row.hole_notes) Object.assign(mergedNotes, row.hole_notes);
-    }
-    setHoleNotesText(mergedNotes[String(n)] ?? "");
-    handleSubmit(undefined, n);
-  }
-
-  const filteredEnriched=useMemo(()=>{
-    if(!result?.enrichedHoles)return[];
-    return applyFilters(result.enrichedHoles as EnrichedHole[],filters,targetHole,totalRounds);
-  },[result,filters,targetHole,totalRounds]);
-
-  const filteredTendencies=useMemo(()=>recomputeTendencies(filteredEnriched),[filteredEnriched]);
-
-  const baseline=useMemo(()=>{
-    if(!filteredEnriched.length)return 0;
-    return wAvgGrid(filteredEnriched, e=>Number(e.roundHole.score)-e.roundHole.par);
-  },[filteredEnriched]);
-
-  const gridData=useMemo(()=>computeGridData(filteredEnriched,baseline),[filteredEnriched,baseline]);
-  const hazardImpacts=useMemo(()=>computeHazardImpacts(filteredEnriched,result?.hole,baseline),[filteredEnriched,result?.hole,baseline]);
-
-  const filterCount=
-    (filters.useLastN?1:0)+filters.pars.size+
-    (filters.siDelta?1:0)+(filters.yardsDelta?1:0)+
-    filters.drivingClubs.size+Object.values(filters.teeHazards).filter(Boolean).length+
-    filters.apprClubs.size+(filters.greenDepth?1:0)+
-    (Object.values(filters.greensideFilter).some(v=>v!==0)?1:0);
-
-  const selectStyle:React.CSSProperties={width:"100%",padding:"8px 12px",fontSize:15,border:"1px solid #ddd",borderRadius:8,background:"white",boxSizing:"border-box",color:"#0f6e56"};
-  const labelStyle:React.CSSProperties={fontSize:13,color:"white",display:"block",marginBottom:4};
-  const card=(bg:string):React.CSSProperties=>({background:bg,borderRadius:12,padding:"16px 20px"});
-  const pct=(n:number)=>`${Math.round(n*100)}%`;
-  const fmtSTP=(s:number)=>s>=0?`+${s.toFixed(2)}`:s.toFixed(2);
-
-  const t=filteredTendencies;
-  const hole=result?.hole;
-  const strategy=result?.strategy;
-  const course=result?.course;
-  const conf=strategy?.confidence;
-  const ds=strategy?.data_summary;
-  const confidenceColor:Record<string,string>={high:"#27ae60",medium:"#e67e22",low:"#95a5a6"};
-  const aimColors:Record<string,string>={left:"#2980b9",right:"#8e44ad",center:"#27ae60",short:"#e67e22",long:"#c0392b"};
-
-  if(loadingCourses)return <main style={{maxWidth:480,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><p style={{color:"white"}}>Loading courses...</p></main>;
-  if(!courses.length)return <main style={{maxWidth:480,margin:"60px auto",fontFamily:"sans-serif",padding:"0 24px"}}><h1 style={{fontSize:24,fontWeight:600,marginBottom:8,color:"#d0d0d0"}}>Golf Strategy Engine</h1><p style={{color:"white",marginBottom:24}}>No courses found. Add one first.</p><a href="/add-course" style={{padding:"10px 20px",fontSize:15,fontWeight:600,background:"#1a1a1a",color:"white",borderRadius:8,textDecoration:"none"}}>Add a course</a></main>;
-
-  return(
-    <main style={{maxWidth:520,margin:"40px auto",fontFamily:"sans-serif",padding:"0 24px"}}>
-      <h1 style={{fontSize:22,fontWeight:600,marginBottom:4,color:"#d0d0d0"}}>Strategy Engine</h1>
-      <p style={{color:"white",marginBottom:16,fontSize:13}}>Select a course and hole to get your personalised strategy.</p>
-
-      {/* Clubhouse nav widget */}
-      {(()=>{
-        if(!existingDiffs||existingDiffs.length<3)return null;
-        const last20=existingDiffs.slice(-20);
-        const sorted=[...last20].sort((a,b)=>a-b);
-        const count=last20.length<=6?1:last20.length<=8?2:last20.length<=11?3:last20.length<=14?4:last20.length<=16?5:last20.length<=18?6:last20.length===19?7:8;
-        const hi=Math.floor(sorted.slice(0,count).reduce((s,d)=>s+d,0)/count*10)/10;
-        const threshold=sorted[count-1];
-        const recent=last20.slice(-8);
-        return(
-          <a href="/clubhouse" style={{display:"block",textDecoration:"none",marginBottom:20}}>
-            <div style={{background:"linear-gradient(135deg,#0d3d2d 0%,#0f6e56 60%,#083d2a 100%)",borderRadius:14,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-              <div>
-                <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",marginBottom:2}}>Handicap Index</div>
-                <div style={{fontSize:42,fontWeight:600,color:"#fff",lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{hi.toFixed(1)}</div>
-                <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:3}}>
-                  {recent.map((d,i)=>{
-                    const used=d<=threshold;
-                    return<span key={i} style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:99,background:used?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.15)",color:used?"#0a3d2c":"rgba(255,255,255,0.7)",fontVariantNumeric:"tabular-nums"}}>{d.toFixed(1)}</span>;
-                  })}
-                </div>
-              </div>
-              <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",fontWeight:500}}>Clubhouse</div>
-                <div style={{fontSize:13,color:"#fff",fontWeight:700,marginTop:2}}>Rounds & Profile →</div>
-              </div>
-            </div>
-          </a>
+function ImpactBars({ data, width, height }: { data: Array<{ x: string; v: number; hi?: boolean }>; width: number; height: number }) {
+  if (!data.length) return null;
+  const maxAbs = Math.max(...data.map(d => Math.abs(d.v)), 0.01);
+  const rows = data.length;
+  const barH = Math.max(14, Math.floor((height - (rows - 1) * 8) / rows));
+  const labelW = 70;
+  const barMaxW = width - labelW - 40;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: "visible" }}>
+      {data.map((d, i) => {
+        const y = i * (barH + 8);
+        const bw = Math.abs(d.v) / maxAbs * barMaxW;
+        const col = d.hi ? "#f29450" : d.v > 0 ? "#c94a2a" : "#1e8449";
+        const valStr = (d.v > 0 ? "+" : "") + d.v.toFixed(2);
+        return (
+          <g key={d.x}>
+            <text x={labelW - 6} y={y + barH / 2 + 4} textAnchor="end" fill="rgba(255,255,255,0.55)" fontSize={10}>{d.x}</text>
+            <rect x={labelW} y={y} width={bw} height={barH} fill={col} rx={3} />
+            <text x={labelW + bw + 5} y={y + barH / 2 + 4} fill={col} fontSize={10} fontWeight={700}>{valStr}</text>
+          </g>
         );
-      })()}
+      })}
+    </svg>
+  );
+}
 
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        <div>
-          <label style={labelStyle}>Course</label>
-          <select style={selectStyle} value={courseId} onChange={e=>{setCourseId(e.target.value);setHoleNumber(1);setResult(null);}}>
-            {courses.map(c=><option key={c.id} value={c.id}>{c.name} — {c.tee_box} tees ({c.city}, {c.state})</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>Hole</label>
-          <select style={selectStyle} value={holeNumber} onChange={e=>{setHoleNumber(Number(e.target.value));setResult(null);setApproachDist(null);setApproachDistOverride(null);}}>
-            {availableHoles.map(n=>{const hd=selectedCourse?.holes.find((h:any)=>h.hole===n);return<option key={n} value={n}>Hole {n}{hd?` — Par ${hd.par}, ${hd.yards} yds, SI ${hd.stroke_index}`:""}</option>;})}
-          </select>
-        </div>
+// ─── Data helpers ─────────────────────────────────────────────────────────────
+function computeHI(diffs: number[]): number | null {
+  const last20 = diffs.slice(-20);
+  if (last20.length < 3) return null;
+  const sorted = [...last20].sort((a, b) => a - b);
+  const count = last20.length <= 6 ? 1 : last20.length <= 8 ? 2 : last20.length <= 11 ? 3 : last20.length <= 14 ? 4 : last20.length <= 16 ? 5 : last20.length <= 18 ? 6 : last20.length === 19 ? 7 : 8;
+  const hi = sorted.slice(0, count).reduce((s, d) => s + d, 0) / count;
+  return Math.floor(hi * 10) / 10;
+}
 
-        {/* Side-by-side buttons */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <button onClick={()=>handleSubmit()} disabled={loading} style={{padding:"12px",fontSize:15,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:8,cursor:loading?"not-allowed":"pointer",opacity:loading?0.6:1}}>
-            {loading?"Analysing...":"Get Strategy"}
-          </button>
-          <a href={courseId?`/rounds/play?courseId=${courseId}`:"#"}
-            style={{padding:"12px",fontSize:15,fontWeight:600,background:"white",color:"#0f6e56",border:"2px solid #0f6e56",borderRadius:8,cursor:"pointer",textAlign:"center",textDecoration:"none",display:"block"}}>
-            ⛳ Play Course
-          </a>
-        </div>
-      </div>
+function fmtDate(iso: string): string {
+  try {
+    const d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch { return iso; }
+}
 
-      {error&&<p style={{color:"red",marginTop:20}}>{error}</p>}
+function issueDate(): string {
+  const now = new Date();
+  return now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }).toUpperCase();
+}
 
-      {result&&hole&&strategy&&(<div style={{marginTop:28,display:"flex",flexDirection:"column",gap:12}}>
+function issueNum(rounds: number): number {
+  return Math.max(1, rounds);
+}
 
-        {/* Prev / Next hole buttons */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-          <button
-            onClick={()=>goToHole(holeNumber-1)}
-            disabled={holeNumber<=1}
-            style={{padding:"6px 14px",fontSize:13,fontWeight:600,background:"white",color:holeNumber<=1?"#ccc":"#0f6e56",border:`1px solid ${holeNumber<=1?"#eee":"#0f6e56"}`,borderRadius:8,cursor:holeNumber<=1?"not-allowed":"pointer"}}>
-            ← Prev Hole
-          </button>
-          <span style={{fontSize:13,fontWeight:600,color:"#0f6e56"}}>Hole {holeNumber}</span>
-          <button
-            onClick={()=>goToHole(holeNumber+1)}
-            disabled={holeNumber>=totalHoles}
-            style={{padding:"6px 14px",fontSize:13,fontWeight:600,background:"white",color:holeNumber>=totalHoles?"#ccc":"#0f6e56",border:`1px solid ${holeNumber>=totalHoles?"#eee":"#0f6e56"}`,borderRadius:8,cursor:holeNumber>=totalHoles?"not-allowed":"pointer"}}>
-            Next Hole →
-          </button>
-        </div>
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export default function Home() {
+  const [diffs, setDiffs] = useState<number[]>([]);
+  const [lastRound, setLastRound] = useState<any>(null);
+  const [lastCourse, setLastCourse] = useState<string>("");
+  const [planPeek, setPlanPeek] = useState<Array<{ hole: number; par: number; club: string; aim: string; note: string }>>([]);
+  const [leakData, setLeakData] = useState<Array<{ x: string; v: number; hi?: boolean }>>([]);
+  const [leakTitle, setLeakTitle] = useState("—");
+  const [leakImpact, setLeakImpact] = useState(0);
+  const [leakCount, setLeakCount] = useState(0);
+  const [totalRounds, setTotalRounds] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-        {/* Confidence badge */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:11,fontWeight:700,letterSpacing:1,color:confidenceColor[conf]??"#666",textTransform:"uppercase"}}>{conf} confidence</span>
-          <span style={{fontSize:11,color:"white"}}>
-            {filterCount>0?`${filteredEnriched.length} holes (filtered)`:(ds?.exact_hole_history>0?`${ds.exact_hole_history}× this hole · ${ds.similar_holes_used} similar`:`${ds?.similar_holes_used} similar holes`)}
-          </span>
-        </div>
+  useEffect(() => {
+    async function load() {
+      const { supabase } = await import("@/lib/supabase");
 
-        {/* Hole info */}
-        <div style={card("#f0f0f0")}>
-          <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 8px"}}>HOLE INFO</p>
-          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:4}}>
-            <span style={{fontSize:14,color:"#333"}}>Par {hole.par}</span>
-            <span style={{fontSize:14,color:"#333"}}>{hole.yards} yds</span>
-            <span style={{fontSize:14,color:"#333"}}>SI {hole.stroke_index}</span>
-            {course?.rating&&<span style={{fontSize:14,color:"#666"}}>Rating {course.rating}</span>}
-            {course?.slope&&<span style={{fontSize:14,color:"#666"}}>Slope {course.slope}</span>}
+      // Load rounds with full hole data
+      const { data: rounds } = await supabase
+        .from("rounds")
+        .select("id,course_id,course_name,date,holes_played,holes,score_differential,tee_box")
+        .order("date", { ascending: true });
+
+      if (!rounds?.length) { setLoading(false); return; }
+
+      setTotalRounds(rounds.length);
+
+      // Load course ratings/slopes for differential computation
+      const courseIds = [...new Set(rounds.map((r: any) => r.course_id).filter(Boolean))];
+      let courseMap: Record<string, { rating: number | null; slope: number | null; hole_count: number | null; name: string }> = {};
+      if (courseIds.length) {
+        const { data: cs } = await supabase.from("courses").select("id,rating,slope,hole_count,name").in("id", courseIds);
+        (cs ?? []).forEach((c: any) => { courseMap[c.id] = { rating: c.rating, slope: c.slope, hole_count: c.hole_count, name: c.name }; });
+      }
+
+      // Compute differentials
+      const allDiffs = rounds.map((r: any) => {
+        if (r.score_differential != null) return r.holes_played <= 9 ? r.score_differential * 2 : r.score_differential;
+        const ci = courseMap[r.course_id];
+        if (!ci?.rating || !ci?.slope) return null;
+        const scored = (r.holes ?? []).filter((h: any) => h.score && Number(h.score) > 0);
+        if (!scored.length) return null;
+        const ags = scored.reduce((s: number, h: any) => s + Math.min(Number(h.score) || 0, (h.par || 4) + 2), 0);
+        const is9 = (r.holes_played ?? scored.length) <= 9;
+        const is9C = (ci.hole_count ?? 18) <= 9;
+        let rat = ci.rating;
+        if (is9 && !is9C) rat /= 2; else if (!is9 && is9C) rat *= 2;
+        return is9 ? (113 / ci.slope * (ags - rat)) * 2 : (ags - rat) * 113 / ci.slope;
+      }).filter((d: any): d is number => d !== null);
+
+      setDiffs(allDiffs);
+
+      // Last completed round (has at least some scores)
+      const completedRounds = [...rounds].reverse().find((r: any) =>
+        (r.holes ?? []).some((h: any) => Number(h.score) > 0)
+      );
+      if (completedRounds) {
+        setLastRound(completedRounds);
+        setLastCourse(courseMap[completedRounds.course_id]?.name ?? completedRounds.course_name ?? "");
+      }
+
+      // Plan peek: most recent round where holes have aim data
+      const planRound = [...rounds].reverse().find((r: any) =>
+        (r.holes ?? []).some((h: any) => h.aim && h.aim.length)
+      );
+      if (planRound) {
+        const peek = (planRound.holes ?? [])
+          .filter((h: any) => h.aim)
+          .slice(0, 4)
+          .map((h: any) => ({
+            hole: h.hole,
+            par: h.par,
+            club: h.plan_club || h.club || "—",
+            aim: h.aim || "CF",
+            note: h.note || "",
+          }));
+        setPlanPeek(peek);
+      }
+
+      // Biggest leak: compute score-to-par by category
+      const allHoles: any[] = rounds.flatMap((r: any) => (r.holes ?? []).filter((h: any) => Number(h.score) > 0));
+      if (allHoles.length > 10) {
+        const baseline = allHoles.reduce((s: number, h: any) => s + (Number(h.score) - h.par), 0) / allHoles.length;
+
+        const groups: Record<string, number[]> = {};
+        const addSTP = (key: string, h: any) => {
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(Number(h.score) - h.par);
+        };
+
+        allHoles.forEach((h: any) => {
+          const par = h.par;
+          addSTP(`Par ${par}`, h);
+          if (par >= 4 && h.tee_accuracy) addSTP(`Drive ${h.tee_accuracy}`, h);
+          if (h.appr_accuracy) addSTP(`Approach ${h.appr_accuracy}`, h);
+        });
+
+        const leaks = Object.entries(groups)
+          .filter(([, vals]) => vals.length >= 5)
+          .map(([key, vals]) => ({
+            key,
+            avg: vals.reduce((s, v) => s + v, 0) / vals.length,
+            count: vals.length,
+          }))
+          .map(g => ({ ...g, impact: g.avg - baseline }))
+          .sort((a, b) => b.impact - a.impact);
+
+        if (leaks.length >= 2) {
+          const worst = leaks[0];
+          setLeakTitle(worst.key);
+          setLeakImpact(worst.impact);
+          setLeakCount(worst.count);
+          // Build comparison bars
+          const topLeaks = leaks.slice(0, 4);
+          setLeakData(topLeaks.map((l, i) => ({ x: l.key, v: l.impact, hi: i === 0 })));
+        }
+      }
+
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const hi = computeHI(diffs);
+  const last20 = diffs.slice(-20);
+  const prev20 = diffs.slice(-40, -20);
+  const trend30 = last20.length >= 4 && prev20.length >= 4
+    ? (computeHI(prev20) ?? 0) - (hi ?? 0)
+    : null;
+  const sparkData = last20.map(d => -d); // invert so lower HI = up
+
+  // Last round stats
+  const lastHoles: any[] = lastRound?.holes ?? [];
+  const scoredHoles = lastHoles.filter((h: any) => Number(h.score) > 0);
+  const totalScore = scoredHoles.reduce((s: number, h: any) => s + Number(h.score), 0);
+  const totalPar = scoredHoles.reduce((s: number, h: any) => s + (h.par || 4), 0);
+  const fwyHit = scoredHoles.filter((h: any) => h.par >= 4 && h.tee_accuracy === "Hit").length;
+  const fwyTotal = scoredHoles.filter((h: any) => h.par >= 4 && h.tee_accuracy).length;
+  const totalPutts = scoredHoles.reduce((s: number, h: any) => s + (Number(h.putts) || 0), 0);
+  const lastScoreToPar = totalScore - totalPar;
+
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }).toUpperCase();
+
+  return (
+    <div style={ROOT}>
+      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "20px 32px 60px" }}>
+
+        {/* ── Masthead ──────────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, letterSpacing: 3, color: "var(--ink)" }}>
+              GOLF STRATEGY
+            </span>
+            <span style={{ fontSize: 10, color: "var(--ink-mute)", letterSpacing: 2.2, fontFamily: "var(--font-mono)", fontWeight: 500 }}>
+              VOL. I · ISSUE {issueNum(totalRounds)} · {today}
+            </span>
           </div>
-          {hole.dogleg_direction&&<p style={{fontSize:13,color:"#555",margin:"4px 0 0"}}>Dogleg: {DOGLEG_LABELS[hole.dogleg_direction]??hole.dogleg_direction}</p>}
-          {hole.approach_green_depth>0&&<p style={{fontSize:13,color:"#555",margin:"4px 0 0"}}>Green depth: {hole.approach_green_depth} yds</p>}
-        </div>
-
-        {/* Avg score */}
-        <div style={{...card("#f0f0f0"),display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px"}}>
-          <span style={{fontSize:13,color:"#0f6e56"}}>Avg on {filterCount>0?"filtered":"similar"} holes</span>
-          <span style={{fontSize:20,fontWeight:700,color:(t?.avgScoreToPar??0)>0?"#c0392b":"#27ae60"}}>
-            {t?fmtSTP(t.avgScoreToPar??0):ds?.avg_score_to_par}
-          </span>
-        </div>
-
-        {/* Hole Notes */}
-        <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 16px"}}>
-          <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:0}}>
-            <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {holeNotesText?"✓":""}</span>
-            <span style={{fontSize:13,color:"#999"}}>{holeNotesOpen?"▲":"▼"}</span>
-          </button>
-          {holeNotesOpen&&(
-            <div style={{marginTop:10}}>
-              <textarea value={holeNotesText} onChange={e=>setHoleNotesText(e.target.value)}
-                placeholder="Add notes about this hole..."
-                rows={8}
-                style={{width:"100%",padding:"8px 10px",fontSize:13,border:"1px solid #ddd",borderRadius:8,boxSizing:"border-box",resize:"vertical",fontFamily:"sans-serif",lineHeight:1.5}}
-              />
-              <button onClick={saveHoleNotes} disabled={savingNotes}
-                style={{marginTop:6,padding:"6px 16px",fontSize:12,fontWeight:600,background:"#0f6e56",color:"white",border:"none",borderRadius:6,cursor:"pointer",opacity:savingNotes?0.6:1}}>
-                {notesSaved?"Saved!":savingNotes?"Saving...":"Save Notes"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Tee strategy — grid + hazards (par 4/5 only) */}
-        {hole.par>=4&&(
-          <div style={card("#f6f6f6")}>
-            <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 12px"}}>TEE STRATEGY</p>
-
-            {/* Tee Shot Hazards */}
-            {hazardImpacts.length>0&&(
-              <div style={{marginBottom:14}}>
-                <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>TEE SHOT HAZARDS</p>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6}}>
-                  {hazardImpacts.map((h,i)=>{
-                    const colors=impactColor(h.impact);
-                    return(
-                      <div key={i} style={{background:colors.bg,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <span style={{fontSize:12,color:colors.color,fontWeight:500}}>{h.label}</span>
-                        <div style={{textAlign:"right"}}>
-                          <p style={{fontSize:13,fontWeight:700,color:colors.color,margin:0}}>{fmtSTP(h.impact)}</p>
-                          <p style={{fontSize:10,color:colors.color,opacity:0.75,margin:0}}>{h.count} holes</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Tee Shot Grid */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
-              {["Club","Left","Hit","Right","Unk"].map(h=>(
-                <div key={h} style={{fontSize:9,fontWeight:600,color:"#0f6e56",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
-              ))}
-            </div>
-            {gridData.map(row=>(
-              <div key={row.club} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
-                <div style={{background:"#f6f6f6",borderRadius:4,padding:"3px 4px",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"center"}}>
-                  <p style={{fontSize:10,fontWeight:600,color:"#1a1a1a",margin:0}}>{row.club}</p>
-                  <p style={{fontSize:9,color:"#0f6e56",margin:0}}>{row.count}</p>
-                </div>
-                {row.cols.map((col,ci)=>{
-                  const isLeftCol=ci===0;
-                  const isRightCol=ci===2;
-                  const leftHazard=hole.tee_water_out_left||hole.tee_tree_hazard_left||hole.tee_bunkers_left;
-                  const rightHazard=hole.tee_water_out_right||hole.tee_tree_hazard_right||hole.tee_bunkers_right;
-                  const greyed=(isLeftCol&&!leftHazard)||(isRightCol&&!rightHazard);
-                  return <GridCell key={ci} likelihood={col.likelihood} impact={col.impact} count={col.count} greyed={greyed}/>;
-                })}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Approach strategy */}
-        <div style={card("#f6f6f6")}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-            <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:0}}>APPROACH</p>
-            {approachDist!=null&&(
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:11,color:"#0f6e56"}}>Distance (yds)</span>
-                <input type="number" min={0} max={700}
-                  value={approachDistOverride??approachDist}
-                  onChange={e=>{setApproachDistOverride(Number(e.target.value));}}
-                  onBlur={e=>{const v=Number(e.target.value);if(v!==(approachDistOverride??approachDist)){setApproachDistOverride(v);handleSubmit(v);}}}
-                  onKeyDown={e=>{if(e.key==="Enter"){const v=Number((e.target as HTMLInputElement).value);setApproachDistOverride(v);handleSubmit(v);}}}
-                  style={{width:64,padding:"3px 6px",fontSize:13,border:"1px solid #0f6e56",borderRadius:6,color:"#0f6e56",fontWeight:600,textAlign:"center"}}
-                />
-              </div>
-            )}
-          </div>
-          <div style={{fontSize:22,fontWeight:700,color:"#0f6e56",marginBottom:8}}>
-            {t?pct(t.girPct):"—"} <span style={{fontSize:14,color:"#0f6e56",fontWeight:400}}>GIR</span>
-          </div>
-          {t&&(
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-              {[{label:"Hit",v:t.apprHitPct,c:"#27ae60"},{label:"Left",v:t.apprMissLeftPct,c:"#2980b9"},{label:"Right",v:t.apprMissRightPct,c:"#8e44ad"},{label:"Short",v:t.apprMissShortPct,c:"#e67e22"},{label:"Long",v:t.apprMissLongPct,c:"#c0392b"}].map(({label,v,c})=>(
-                <div key={label} style={{background:"#eee",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#0f6e56"}}>{label}: </span><span style={{fontWeight:600,color:c}}>{pct(v)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {t&&(
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {(hole.approach_water_out_left||hole.approach_water_out_right||hole.approach_water_out_short||hole.approach_water_out_long)&&(
-                <div style={{background:"#fff3e0",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#0f6e56"}}>OB/Water: </span><span style={{fontWeight:600,color:"#e67e22"}}>{pct(t.apprWaterPct)}</span>
-                </div>
-              )}
-              {(hole.approach_bunker_short_left||hole.approach_bunker_short_middle||hole.approach_bunker_short_right||hole.approach_bunker_middle_left||hole.approach_bunker_middle_right||hole.approach_bunker_long_left||hole.approach_bunker_long_middle||hole.approach_bunker_long_right)&&(
-                <div style={{background:"#fef9e7",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#0f6e56"}}>Bunker: </span><span style={{fontWeight:600,color:"#c8a84b"}}>{pct(t.apprBunkerPct)}</span>
-                </div>
-              )}
-              {(hole.approach_tree_hazard_left||hole.approach_tree_hazard_right||hole.approach_tree_hazard_long)&&(
-                <div style={{background:"#eafaf1",borderRadius:8,padding:"4px 10px",fontSize:12}}>
-                  <span style={{color:"#0f6e56"}}>Trees/Haz: </span><span style={{fontWeight:600,color:"#27ae60"}}>{pct(t.apprTreePct)}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Warning */}
-        {strategy.warning&&(
-          <div style={{background:"#fff4e5",border:"1px solid #f0a500",borderRadius:12,padding:"14px 20px"}}>
-            <p style={{fontSize:11,color:"#b37400",fontWeight:700,letterSpacing:1,margin:"0 0 6px"}}>⚠ WATCH OUT</p>
-            <p style={{fontSize:13,color:"#7a4f00",margin:0}}>{strategy.warning}</p>
-          </div>
-        )}
-
-        {/* Tendencies */}
-        {ds?.insights?.length>0&&(
-          <div style={card("#f0f9f6")}>
-            <p style={{fontSize:11,color:"#0f6e56",fontWeight:700,letterSpacing:1,margin:"0 0 8px"}}>YOUR TENDENCIES ON SIMILAR HOLES</p>
-            <ul style={{margin:0,paddingLeft:16}}>
-              {ds.insights.map((ins:string,i:number)=><li key={i} style={{fontSize:13,color:"#333",marginBottom:4}}>{ins}</li>)}
-            </ul>
-          </div>
-        )}
-
-        {/* Hole History */}
-        {result.holeHistory&&result.holeHistory.length>0&&<HoleHistorySection history={result.holeHistory}/>}
-
-        {/* Hole Summary */}
-        <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
-          <Section title="Hole Summary">
+          <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
             {[
-              {label:"Trees/Haz left",v:hole.tee_tree_hazard_left},{label:"Trees/Haz right",v:hole.tee_tree_hazard_right},
-              {label:"Trees/Haz across",v:hole.tee_tree_hazard_across},{label:"Bunkers left",v:hole.tee_bunkers_left},
-              {label:"Bunkers right",v:hole.tee_bunkers_right},{label:"Water/OB left",v:hole.tee_water_out_left},
-              {label:"Water/OB right",v:hole.tee_water_out_right},{label:"Water/OB across",v:hole.tee_water_out_across},
-            ].some(x=>x.v)&&(
-              <div style={{marginBottom:12}}>
-                <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>TEE SHOT HAZARDS</p>
-                {[
-                  {label:"Trees/Haz left",v:hole.tee_tree_hazard_left},{label:"Bunkers left",v:hole.tee_bunkers_left},{label:"Water/OB left",v:hole.tee_water_out_left},
-                  {label:"Trees/Haz right",v:hole.tee_tree_hazard_right},{label:"Bunkers right",v:hole.tee_bunkers_right},{label:"Water/OB right",v:hole.tee_water_out_right},
-                  {label:"Trees/Haz across",v:hole.tee_tree_hazard_across},{label:"Water/OB across",v:hole.tee_water_out_across},
-                ].filter(x=>x.v).map(x=>(
-                  <span key={x.label} style={{display:"inline-block",background:"#eee",borderRadius:6,padding:"2px 8px",fontSize:12,marginRight:4,marginBottom:4,color:"#555"}}>{x.label}</span>
-                ))}
-              </div>
-            )}
-            {[hole.approach_tree_hazard_left,hole.approach_tree_hazard_right,hole.approach_tree_hazard_long,hole.approach_water_out_left,hole.approach_water_out_right,hole.approach_water_out_short,hole.approach_water_out_long].some(Boolean)&&(
-              <div style={{marginBottom:12}}>
-                <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>APPROACH HAZARDS</p>
-                {[
-                  {label:"Trees/Haz left",v:hole.approach_tree_hazard_left},{label:"Water/OB left",v:hole.approach_water_out_left},
-                  {label:"Trees/Haz right",v:hole.approach_tree_hazard_right},{label:"Water/OB right",v:hole.approach_water_out_right},
-                  {label:"Trees/Haz long",v:hole.approach_tree_hazard_long},{label:"Water/OB short",v:hole.approach_water_out_short},
-                  {label:"Water/OB long",v:hole.approach_water_out_long},
-                ].filter(x=>x.v).map(x=>(
-                  <span key={x.label} style={{display:"inline-block",background:"#eee",borderRadius:6,padding:"2px 8px",fontSize:12,marginRight:4,marginBottom:4,color:"#555"}}>{x.label}</span>
-                ))}
-              </div>
-            )}
-            <div>
-              <p style={{fontSize:11,color:"#0f6e56",fontWeight:600,letterSpacing:1,margin:"0 0 6px"}}>GREENSIDE</p>
-              <GreensideWidget readOnly value={{
-                long_left:  hole.approach_bunker_long_left?2:hole.approach_green_long_left?1:0,
-                long_middle:hole.approach_bunker_long_middle?2:hole.approach_green_long_middle?1:0,
-                long_right: hole.approach_bunker_long_right?2:hole.approach_green_long_right?1:0,
-                middle_left:hole.approach_bunker_middle_left?2:hole.approach_green_middle_left?1:0,
-                middle_right:hole.approach_bunker_middle_right?2:hole.approach_green_middle_right?1:0,
-                short_left: hole.approach_bunker_short_left?2:hole.approach_green_short_left?1:0,
-                short_middle:hole.approach_bunker_short_middle?2:hole.approach_green_short_middle?1:0,
-                short_right:hole.approach_bunker_short_right?2:hole.approach_green_short_right?1:0,
-              }}/>
-            </div>
-          </Section>
+              { label: "Plan", href: "/plan" },
+              { label: "Courses", href: "/courses" },
+              { label: "Coach", href: "/rounds/insights" },
+              { label: "Clubhouse", href: "/clubhouse" },
+            ].map(({ label, href }) => (
+              <a key={label} href={href} style={{ fontSize: 13, color: "var(--ink-soft)", fontWeight: 500, letterSpacing: 0.5, cursor: "pointer" }}>
+                {label}
+              </a>
+            ))}
+            <a href="/rounds/play" style={{ fontSize: 13, fontWeight: 600, padding: "8px 16px", background: "var(--ink)", color: "var(--paper)", borderRadius: 999, letterSpacing: 0.4, cursor: "pointer" }}>
+              + New round
+            </a>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"12px 14px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <p style={{fontSize:12,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:0}}>
-              Filters {filterCount>0&&<span style={{fontSize:10,background:"#0f6e56",color:"#fff",borderRadius:10,padding:"1px 6px",marginLeft:6}}>{filterCount}</span>}
-            </p>
-            {filterCount>0&&<button onClick={()=>setFilters(DEFAULT_FILTERS(totalRounds))} style={{fontSize:12,color:"#0f6e56",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset</button>}
-          </div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:12}}>
-            <div style={{flex:"1 1 120px"}}>
-              <p style={fl}>Rounds</p>
-              <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                <button style={pill(!filters.useLastN)} onClick={()=>setFilters(f=>({...f,useLastN:false}))}>All</button>
-                <button style={pill(filters.useLastN)} onClick={()=>setFilters(f=>({...f,useLastN:true}))}>Last</button>
-                {filters.useLastN&&(
-                  <input type="number" min={1} max={totalRounds} value={filters.lastN}
-                    onChange={e=>setFilters(f=>({...f,lastN:Math.max(1,Math.min(totalRounds,Number(e.target.value)))}))}
-                    style={{width:44,padding:"4px 5px",borderRadius:8,border:"1px solid #0f6e56",fontSize:12,color:"#0f6e56",textAlign:"center"}}/>
-                )}
-              </div>
-            </div>
-            <div style={{flex:"0 0 auto"}}>
-              <p style={fl}>Par</p>
-              <div style={{display:"flex",gap:4}}>
-                {["3","4","5"].map(p=>(
-                  <button key={p} style={pill(filters.pars.has(p))} onClick={()=>setFilters(f=>({...f,pars:toggleSet(f.pars,p)}))}>Par {p}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <Section title="Hole Similarity" badge={(filters.siDelta?1:0)+(filters.yardsDelta?1:0)}>
-            <div style={{marginBottom:10}}>
-              <p style={fl}>Hole Handicap (vs SI {targetHole?.stroke_index})</p>
-              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                {[{label:"±1",val:"pm1"},{label:"±2",val:"pm2"},{label:"±3",val:"pm3"}].map(({label,val})=>(
-                  <button key={val} style={pill(filters.siDelta===val)} onClick={()=>setFilters(f=>({...f,siDelta:f.siDelta===val?"":val}))}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p style={fl}>Hole Yards (vs {targetHole?.yards} yds)</p>
-              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                {[{label:"±10 yds",val:"pm10"},{label:"±20 yds",val:"pm20"},{label:"±30 yds",val:"pm30"}].map(({label,val})=>(
-                  <button key={val} style={pill(filters.yardsDelta===val)} onClick={()=>setFilters(f=>({...f,yardsDelta:f.yardsDelta===val?"":val}))}>{label}</button>
-                ))}
-              </div>
-            </div>
-          </Section>
-          <Section title="Driving / Tee" badge={filters.drivingClubs.size+Object.values(filters.teeHazards).filter(Boolean).length}>
-            <div style={{marginBottom:10}}>
-              <p style={fl}>Driving Club</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {DRIVE_CLUBS.map(c=>(
-                  <button key={c} style={pill(filters.drivingClubs.has(c))} onClick={()=>setFilters(f=>({...f,drivingClubs:toggleSet(f.drivingClubs,c)}))}>{c}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p style={fl}>Tee Hazards</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {([
-                  {label:"Trees L",key:"teeTreeLeft"},{label:"Trees R",key:"teeTreeRight"},
-                  {label:"Bkr L",key:"teeBunkerLeft"},{label:"Bkr R",key:"teeBunkerRight"},
-                  {label:"Water L",key:"teeWaterLeft"},{label:"Water R",key:"teeWaterRight"},
-                ] as {label:string;key:keyof typeof filters.teeHazards}[]).map(({label,key})=>(
-                  <button key={key} style={pill(filters.teeHazards[key])} onClick={()=>setFilters(f=>({...f,teeHazards:{...f.teeHazards,[key]:!f.teeHazards[key]}}))}>{label}</button>
-                ))}
-              </div>
-            </div>
-          </Section>
-          <Section title="Approach / Greenside" badge={filters.apprClubs.size+(filters.greenDepth?1:0)+(Object.values(filters.greensideFilter).some(v=>v!==0)?1:0)}>
-            <div style={{marginBottom:10}}>
-              <p style={fl}>Approach Club</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {APPROACH_CLUBS.map(c=>(
-                  <button key={c} style={pill(filters.apprClubs.has(c))} onClick={()=>setFilters(f=>({...f,apprClubs:toggleSet(f.apprClubs,c)}))}>{c}</button>
-                ))}
-              </div>
-            </div>
-            <div style={{marginBottom:10}}>
-              <p style={fl}>Green Depth (yards)</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                {[{label:"< 20",val:"lt20"},{label:"20-24",val:"20-24"},{label:"25-29",val:"25-29"},{label:"30-34",val:"30-34"},{label:"35-39",val:"35-39"},{label:"40+",val:"gt40"}].map(({label,val})=>(
-                  <button key={val} style={pill(filters.greenDepth===val)} onClick={()=>setFilters(f=>({...f,greenDepth:f.greenDepth===val?"":val}))}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p style={fl}>Greenside Position</p>
-              <p style={{fontSize:10,color:"#0f6e56",margin:"0 0 4px",fontStyle:"italic"}}>Tap to cycle: grey = any · teal = green side · sand = bunker</p>
-              <GreensideWidget value={filters.greensideFilter} onChange={v=>setFilters(f=>({...f,greensideFilter:v}))}/>
-              {Object.values(filters.greensideFilter).some(v=>v!==0)&&(
-                <button onClick={()=>setFilters(f=>({...f,greensideFilter:defaultGS()}))} style={{marginTop:4,fontSize:11,color:"#0f6e56",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0}}>Clear greenside</button>
-              )}
-            </div>
-          </Section>
-        </div>
+        <div style={{ height: 1, background: "var(--ink)", marginBottom: 32 }} />
 
-        {conf==="low"&&(
-          <p style={{fontSize:12,color:"white",textAlign:"center",margin:0}}>Limited data — strategy based on general tendencies. Play more rounds to improve accuracy.</p>
-        )}
-      </div>)}
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "80px 0", color: "var(--ink-mute)", fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: 2 }}>
+            LOADING YOUR SCORECARD…
+          </div>
+        ) : (
+          <>
+            {/* ── Cover hero ────────────────────────────────────────────────── */}
+            <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 48, alignItems: "stretch", marginBottom: 40 }}>
 
-      {/* HI Estimator */}
-      {(()=>{
-        const rating=selectedCourse?.rating??null;
-        const slope=(selectedCourse?.slope??null)||113;
-        const hiRatingNum=hiRating?parseFloat(hiRating):(rating??0);
-        const hiSlopeNum=hiSlope?parseFloat(hiSlope):(slope??113);
-        const hiAgsNum=parseFloat(hiAgs);
-        const hiDiff=!isNaN(hiAgsNum)&&hiRatingNum&&hiSlopeNum
-          ?(hiAgsNum-hiRatingNum)*113/hiSlopeNum:null;
-        const projectedHI=(()=>{
-          if(hiDiff===null||!existingDiffs)return null;
-          const all=[...existingDiffs,hiDiff].slice(-20);
-          if(all.length<3)return null;
-          const sorted=[...all].sort((a,b)=>a-b);
-          const count=all.length<=6?1:all.length<=8?2:all.length<=11?3:all.length<=14?4:all.length<=16?5:all.length<=18?6:all.length===19?7:8;
-          const best=sorted.slice(0,count);
-          return Math.floor(best.reduce((s,d)=>s+d,0)/best.length*10)/10;
-        })();
-        return(
-          <div style={{marginTop:24,background:"#f9f9f9",border:"1px solid #eee",borderRadius:12,padding:"16px 20px"}}>
-            <p style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,margin:"0 0 12px"}}>HI Estimator</p>
-            <p style={{fontSize:12,color:"#0f6e56",margin:"0 0 12px"}}>Enter a score to see what handicap index it would produce.</p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
-              <div>
-                <label style={labelStyle}>AGS</label>
-                <input type="number" placeholder="e.g. 88" value={hiAgs} onChange={e=>setHiAgs(e.target.value)} style={{...selectStyle,color:"#1a1a1a"}}/>
-              </div>
-              <div>
-                <label style={labelStyle}>Rating</label>
-                <input type="number" step="0.1" placeholder={rating?String(rating):"e.g. 71.4"} value={hiRating} onChange={e=>setHiRating(e.target.value)} style={{...selectStyle,color:"#1a1a1a"}}/>
-              </div>
-              <div>
-                <label style={labelStyle}>Slope</label>
-                <input type="number" placeholder={slope?String(slope):"e.g. 128"} value={hiSlope} onChange={e=>setHiSlope(e.target.value)} style={{...selectStyle,color:"#1a1a1a"}}/>
-              </div>
-            </div>
-            {hiDiff!==null&&(
-              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-                <div style={{background:"#eee",borderRadius:8,padding:"8px 14px"}}>
-                  <span style={{fontSize:11,color:"#0f6e56"}}>Differential: </span>
-                  <span style={{fontWeight:700,color:"#0f6e56",fontSize:15}}>{hiDiff.toFixed(1)}</span>
+              {/* Left: headline + lede */}
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 2.8, color: "var(--accent-deep)", textTransform: "uppercase" as const, display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
+                  The personal scoreboard · spring season
                 </div>
-                {projectedHI!==null&&(
-                  <div style={{background:"#0f6e56",borderRadius:8,padding:"8px 14px"}}>
-                    <span style={{fontSize:11,color:"rgba(255,255,255,0.7)"}}>Projected HI: </span>
-                    <span style={{fontWeight:700,color:"white",fontSize:15}}>{projectedHI.toFixed(1)}</span>
+
+                <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "clamp(72px, 9vw, 140px)", lineHeight: 0.92, letterSpacing: -4, margin: "0 0 28px", display: "flex", flexDirection: "column" as const }}>
+                  <span style={{ color: "var(--ink)" }}>Today is for</span>
+                  <em style={{
+                    fontStyle: "italic", fontWeight: 500,
+                    background: "linear-gradient(115deg, var(--green-deep) 0%, var(--green) 50%, var(--accent-deep) 100%)",
+                    WebkitBackgroundClip: "text", backgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                  }}>shaving</em>
+                  <span style={{ color: "var(--ink)" }}>strokes.</span>
+                </h1>
+
+                <p style={{ fontFamily: "var(--font-display)", fontWeight: 500, fontSize: 18, lineHeight: 1.5, color: "var(--ink-soft)", maxWidth: 520, marginBottom: 24 }}>
+                  {hi != null
+                    ? `Your handicap is ${hi.toFixed(1)}${trend30 != null && trend30 > 0 ? `, down ${trend30.toFixed(1)} over the last 20 rounds` : ""}. Open a plan, sharpen your strategy, take it to the first tee.`
+                    : "Track your rounds to unlock your personal strategy. Every hole tells a story — start writing yours."}
+                </p>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, color: "var(--ink-mute)", fontFamily: "var(--font-mono)", letterSpacing: 1.6, marginBottom: 24 }}>
+                  <span style={{ fontWeight: 600 }}>STRATEGY BY</span>
+                  <span style={{ color: "var(--ink)", fontWeight: 700, fontFamily: "var(--font-ui)", letterSpacing: 0.3, fontSize: 12 }}>Coach Vance</span>
+                  <span style={{ color: "var(--line)" }}>·</span>
+                  <span style={{ fontWeight: 600 }}>READ</span>
+                  <span style={{ color: "var(--ink)", fontWeight: 700, fontFamily: "var(--font-ui)", letterSpacing: 0.3, fontSize: 12 }}>4 min</span>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
+                  <a href="/plan" style={{ background: "var(--ink)", color: "var(--paper)", padding: "14px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, letterSpacing: 0.2, cursor: "pointer" }}>
+                    Open today's plan →
+                  </a>
+                  <a href="/rounds/insights" style={{ background: "var(--paper)", color: "var(--ink)", border: "1px solid var(--line)", padding: "14px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    Browse insights
+                  </a>
+                </div>
+              </div>
+
+              {/* Right: handicap hero card */}
+              <div style={{ display: "flex", alignItems: "stretch" }}>
+                <div style={{ width: "100%", borderRadius: 24, overflow: "hidden", background: "var(--ink)", position: "relative", minHeight: 440, boxShadow: "0 24px 48px -24px rgba(8,70,52,0.45)" }}>
+                  {/* SVG golf course illustration */}
+                  <svg viewBox="0 0 300 280" style={{ width: "100%", height: "100%", position: "absolute", inset: 0 }}>
+                    <defs>
+                      <linearGradient id="gsky" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#1a4530" />
+                        <stop offset="100%" stopColor="#0a2418" />
+                      </linearGradient>
+                      <linearGradient id="gfairway" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3a7a52" />
+                        <stop offset="100%" stopColor="#1a4530" />
+                      </linearGradient>
+                    </defs>
+                    <rect width="300" height="280" fill="url(#gsky)" />
+                    <path d="M 0 140 Q 80 90 160 130 T 300 110 L 300 280 L 0 280 Z" fill="#1a4530" opacity="0.65" />
+                    <path d="M 0 175 Q 100 155 200 168 T 300 162 L 300 280 L 0 280 Z" fill="url(#gfairway)" />
+                    <path d="M 80 280 Q 150 210 220 165 T 285 120" stroke="#a8d99a" strokeWidth="3" fill="none" opacity="0.45" strokeLinecap="round" />
+                    <g transform="translate(230, 110)">
+                      <line x1="0" y1="0" x2="0" y2="34" stroke="#fff" strokeWidth="1.5" />
+                      <path d="M 0 0 L 16 5 L 10 9 L 16 14 L 0 16 Z" fill="#f29450" />
+                      <circle cx="0" cy="36" r="2" fill="#fff" opacity="0.6" />
+                    </g>
+                    <circle cx="248" cy="42" r="22" fill="#f29450" opacity="0.18" />
+                    <circle cx="248" cy="42" r="11" fill="#f5b478" opacity="0.7" />
+                  </svg>
+
+                  {/* Stat overlay */}
+                  <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "28px 30px", background: "linear-gradient(180deg, transparent 0%, rgba(8,36,24,0.85) 50%, rgba(8,36,24,0.97) 100%)", color: "var(--paper)" }}>
+                    <div style={{ fontSize: 10, letterSpacing: 2.4, fontWeight: 700, color: "var(--accent)", marginBottom: 6 }}>HANDICAP INDEX</div>
+                    <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 600, fontSize: "clamp(72px, 10vw, 110px)", lineHeight: 0.9, letterSpacing: -4, marginBottom: 12, fontVariantNumeric: "tabular-nums" }}>
+                      {hi != null ? hi.toFixed(1) : "—"}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.18)" }}>
+                      <span style={{ color: "#aee0c4", fontWeight: 700, fontSize: 13, fontFamily: "var(--font-mono)" }}>
+                        {trend30 != null && trend30 > 0 ? `▼ ${trend30.toFixed(1)} in 20 rounds` : trend30 != null && trend30 < 0 ? `▲ ${Math.abs(trend30).toFixed(1)} in 20 rounds` : `${totalRounds} rounds played`}
+                      </span>
+                      {sparkData.length >= 4 && (
+                        <Sparkline data={sparkData.slice(-12)} w={90} h={26} stroke="#f29450" fill="rgba(242,148,80,0.18)" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: "var(--ink)", marginBottom: 0 }} />
+
+            {/* ── Pull quote ────────────────────────────────────────────────── */}
+            <div style={{ padding: "40px 0 36px", maxWidth: 1080, margin: "0 auto" }}>
+              <div style={{ fontSize: 10, color: "var(--ink-mute)", letterSpacing: 2.4, fontWeight: 600, display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+                <span style={{ background: "var(--ink)", color: "var(--paper)", padding: "4px 9px", borderRadius: 4, fontSize: 10, letterSpacing: 1.4 }}>01</span>
+                FROM THE COACH'S DESK
+              </div>
+              <blockquote style={{ fontFamily: "var(--font-display)", fontWeight: 500, fontSize: "clamp(28px, 4vw, 52px)", lineHeight: 1.08, letterSpacing: -1, color: "var(--ink)", margin: 0, maxWidth: 1020 }}>
+                {leakImpact > 0.5 ? (
+                  <>
+                    <em>"{leakTitle} is bleeding you.</em>
+                    <br />
+                    You're +{leakImpact.toFixed(2)} strokes above baseline in {leakCount} holes. Find the pattern.{" "}
+                    <em>Drill into it from the Coach page."</em>
+                  </>
+                ) : (
+                  <>
+                    <em>"Consistency is your edge.</em>
+                    <br />
+                    Track every hole, every club, every miss. The data will show you exactly where your round lives or dies.{" "}
+                    <em>Start with your next tee shot."</em>
+                  </>
+                )}
+              </blockquote>
+              <div style={{ marginTop: 20, display: "flex", alignItems: "baseline", gap: 14 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.4, fontFamily: "var(--font-mono)", color: "var(--accent-deep)" }}>— COACH VANCE</span>
+                <span style={{ fontSize: 12, color: "var(--ink-mute)" }}>PGA Tour Pro · 14 yrs teaching</span>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: "var(--ink)", marginBottom: 0 }} />
+
+            {/* ── Features grid ─────────────────────────────────────────────── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 28, marginBottom: 20 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: "var(--ink-mute)" }}>INSIDE THIS WEEK</span>
+              <div style={{ flex: 1, height: 1, background: "var(--line)" }} />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gridTemplateRows: "auto auto", gap: 16 }}>
+
+              {/* Feature 1 — Pre-round plan (tall, col 1) */}
+              <a href="/plan" style={{
+                gridColumn: "1", gridRow: "1 / span 2",
+                background: "linear-gradient(160deg, #0c4f3a 0%, #084634 60%, #0a614a 100%)",
+                color: "var(--paper)",
+                padding: "32px 32px 28px", borderRadius: 24,
+                position: "relative", overflow: "hidden",
+                display: "flex", flexDirection: "column",
+                minHeight: 500, cursor: "pointer",
+                textDecoration: "none",
+              }}>
+                <div style={{ position: "absolute", top: -80, right: -80, width: 300, height: 300, background: "radial-gradient(circle, rgba(242,148,80,0.4) 0%, transparent 65%)", pointerEvents: "none" }} />
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.4, color: "rgba(255,255,255,0.5)", marginBottom: 14 }}>FEATURE · PRE-ROUND PLAN</div>
+                <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 38, lineHeight: 1.05, letterSpacing: -0.8, color: "var(--paper)", margin: "0 0 14px" }}>
+                  {planPeek.length > 0 ? <>Your strategy<br /><em style={{ color: "var(--accent)" }}>is ready.</em></> : <>Build your plan<br /><em style={{ color: "var(--accent)" }}>for today.</em></>}
+                </h3>
+                <p style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,0.72)", margin: "0 0 4px" }}>
+                  {planPeek.length > 0
+                    ? `${planPeek.length} hole-by-hole adjustments from your strategy engine. Club, aim, and the note that matters most.`
+                    : "Answer 4 questions. Get a personalised hole-by-hole strategy with club selection, aim points, and your biggest risk areas."}
+                </p>
+
+                {planPeek.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 20 }}>
+                    {planPeek.map(h => (
+                      <div key={h.hole} style={{ background: "rgba(255,255,255,0.08)", padding: "10px 14px", borderRadius: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "rgba(255,255,255,0.88)" }}>
+                        <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontStyle: "italic", fontSize: 18, color: "var(--accent)", width: 24 }}>{h.hole}</span>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", letterSpacing: 0.4, width: 40 }}>Par {h.par}</span>
+                        <span style={{ background: "var(--paper)", color: "var(--green-deep)", padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{h.club}</span>
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 500 }}>aim {h.aim}</span>
+                        {h.note && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginLeft: "auto", fontStyle: "italic", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {h.note}</span>}
+                      </div>
+                    ))}
                   </div>
                 )}
+
+                <div style={{ marginTop: "auto", paddingTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, borderBottom: "1px solid currentColor", paddingBottom: 1 }}>
+                    {planPeek.length > 0 ? "Open the full plan →" : "Build your plan →"}
+                  </span>
+                  <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", opacity: 0.4, letterSpacing: 1.4 }}>P. 12</span>
+                </div>
+              </a>
+
+              {/* Feature 2+3 — stacked col 2 */}
+              <div style={{ gridColumn: "2", gridRow: "1 / span 2", display: "flex", flexDirection: "column", gap: 16 }}>
+
+                {/* Last tee played */}
+                <a href="/courses" style={{
+                  flex: 1, background: "var(--paper)", border: "1px solid var(--line)",
+                  borderRadius: 24, padding: "24px 26px",
+                  display: "flex", flexDirection: "column", cursor: "pointer",
+                  textDecoration: "none", color: "inherit",
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.4, color: "var(--ink-mute)", marginBottom: 14 }}>NEXT TEE</div>
+                  <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 24, lineHeight: 1.1, letterSpacing: -0.4, color: "var(--ink)", margin: 0 }}>
+                    {lastCourse || "No course yet"}
+                  </h3>
+                  <div style={{ fontSize: 12, color: "var(--ink-mute)", marginTop: 8, lineHeight: 1.45 }}>
+                    Plan a round to see your next tee time
+                  </div>
+
+                  {/* Mock weather forecast strip */}
+                  <div style={{ display: "flex", gap: 6, marginTop: 18 }}>
+                    {[
+                      { day: "MON", icon: "partly-cloudy", hi: 72, isTee: false },
+                      { day: "TUE", icon: "cloudy", hi: 68, isTee: false },
+                      { day: "WED", icon: "sunny", hi: 75, isTee: true },
+                      { day: "THU", icon: "partly-cloudy", hi: 71, isTee: false },
+                      { day: "FRI", icon: "rainy", hi: 64, isTee: false },
+                    ].map(d => (
+                      <div key={d.day} style={{
+                        flex: 1, padding: "10px 4px", borderRadius: 10,
+                        textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center",
+                        background: d.isTee ? "var(--accent)" : "var(--paper-alt)",
+                        border: d.isTee ? "1px solid var(--accent-deep)" : "1px solid var(--line)",
+                      }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: d.isTee ? "var(--ink)" : "var(--ink-mute)" }}>{d.day}</div>
+                        <div style={{ margin: "3px 0" }}><WxIcon kind={d.icon} size={16} /></div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>{d.hi}°</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: "auto", paddingTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, borderBottom: "1px solid currentColor", paddingBottom: 1, color: "var(--ink)" }}>Course detail →</span>
+                    <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-mute)", opacity: 0.5, letterSpacing: 1.4 }}>P. 04</span>
+                  </div>
+                </a>
+
+                {/* Last round recap */}
+                <a href="/clubhouse" style={{
+                  flex: 1, background: "var(--paper)", border: "1px solid var(--line)",
+                  borderRadius: 24, padding: "24px 26px",
+                  display: "flex", flexDirection: "column", cursor: "pointer",
+                  textDecoration: "none", color: "inherit",
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.4, color: "var(--ink-mute)", marginBottom: 14 }}>
+                    LAST RECAP{lastRound ? ` · ${fmtDate(lastRound.date).toUpperCase()}` : ""}
+                  </div>
+                  {lastRound ? (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 24, lineHeight: 1.1, letterSpacing: -0.4, color: "var(--ink)", margin: 0 }}>
+                            {totalScore} at {lastCourse || lastRound.course_name}
+                          </h3>
+                          <div style={{ fontSize: 12, color: "var(--ink-mute)", marginTop: 6, lineHeight: 1.45 }}>
+                            {lastScoreToPar > 0 ? `+${lastScoreToPar}` : lastScoreToPar === 0 ? "E" : lastScoreToPar} to par
+                            {fwyTotal > 0 ? ` · ${fwyHit}/${fwyTotal} fwy` : ""}
+                            {totalPutts > 0 ? ` · ${totalPutts} putts` : ""}
+                          </div>
+                        </div>
+                      </div>
+                      <p style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 500, fontSize: 14, lineHeight: 1.4, color: "var(--ink-soft)", margin: "16px 0 0", paddingLeft: 12, borderLeft: "3px solid var(--accent)" }}>
+                        "Every round is a lesson. Open your recap to find yours."
+                      </p>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: 14, color: "var(--ink-mute)", margin: 0 }}>No completed rounds yet. Play your first round to see a recap here.</p>
+                  )}
+                  <div style={{ marginTop: "auto", paddingTop: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, borderBottom: "1px solid currentColor", paddingBottom: 1, color: "var(--ink)" }}>Read recap →</span>
+                    <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-mute)", opacity: 0.5, letterSpacing: 1.4 }}>P. 23</span>
+                  </div>
+                </a>
               </div>
-            )}
-          </div>
-        );
-      })()}
-    </main>
+
+              {/* Feature 4 — Biggest leak (dark, col 3 top) */}
+              <a href="/rounds/insights" style={{
+                gridColumn: "3", gridRow: "1",
+                background: "var(--ink)", color: "var(--paper)",
+                padding: "24px 26px", borderRadius: 24,
+                display: "flex", flexDirection: "column", cursor: "pointer",
+                textDecoration: "none",
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.4, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>FROM THE COACH · BIGGEST LEAK</div>
+                <h3 style={{ margin: "0 0 4px" }}>
+                  <span style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 600, fontSize: 64, color: "var(--accent)", lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums" }}>
+                    {leakImpact > 0 ? `+${leakImpact.toFixed(2)}` : leakData.length > 0 ? "—" : "—"}
+                  </span>
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontWeight: 500, marginLeft: 8 }}>strokes/round</span>
+                </h3>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--paper)", marginTop: 4, marginBottom: 16 }}>
+                  {leakTitle}
+                </div>
+                {leakData.length > 0 && (
+                  <ImpactBars data={leakData} width={220} height={80} />
+                )}
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.55, marginTop: 12 }}>
+                  {leakCount > 0 ? `${leakCount} holes analyzed. Open the Coach page to drill in.` : "Play more rounds to unlock your biggest leak."}
+                </p>
+                <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, borderBottom: "1px solid currentColor", paddingBottom: 1 }}>Drill into it →</span>
+                  <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", opacity: 0.4, letterSpacing: 1.4 }}>P. 18</span>
+                </div>
+              </a>
+
+              {/* Feature 5 — Trend sparkline (accent, col 3 bottom) */}
+              <a href="/clubhouse" style={{
+                gridColumn: "3", gridRow: "2",
+                background: "var(--accent-soft)", border: "1px solid var(--accent)",
+                padding: "24px 26px", borderRadius: 24,
+                display: "flex", flexDirection: "column", cursor: "pointer",
+                textDecoration: "none", color: "inherit",
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2.4, color: "var(--ink-mute)", marginBottom: 14 }}>THE TREND · LAST {Math.min(20, diffs.length)} DIFFERENTIALS</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px 0 18px" }}>
+                  <div>
+                    <div style={{ fontFamily: "var(--font-display)", fontStyle: "italic", fontWeight: 600, fontSize: 52, color: "var(--green-deep)", lineHeight: 1, letterSpacing: -2, fontVariantNumeric: "tabular-nums" }}>
+                      {trend30 != null ? (trend30 > 0 ? `−${trend30.toFixed(1)}` : `+${Math.abs(trend30).toFixed(1)}`) : (hi != null ? hi.toFixed(1) : "—")}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--ink-mute)", fontWeight: 500, marginTop: 4 }}>
+                      {trend30 != null ? "vs 20 rounds ago" : "handicap index"}
+                    </div>
+                  </div>
+                </div>
+                {sparkData.length >= 4 && (
+                  <Sparkline data={sparkData} w={220} h={56} stroke="var(--green-deep)" fill="rgba(15,110,86,0.12)" />
+                )}
+                <div style={{ marginTop: "auto", paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, borderBottom: "1px solid currentColor", paddingBottom: 1, color: "var(--ink)" }}>Clubhouse →</span>
+                  <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-mute)", opacity: 0.5, letterSpacing: 1.4 }}>P. 31</span>
+                </div>
+              </a>
+
+            </div>
+
+            <div style={{ height: 1, background: "var(--line)", margin: "36px 0 24px" }} />
+
+            {/* ── Colophon ──────────────────────────────────────────────────── */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--ink-mute)", letterSpacing: 0.4 }}>
+              <span>An editorial reading of your last {totalRounds} rounds.</span>
+              <div style={{ display: "flex", gap: 24 }}>
+                {[
+                  { label: "About", href: "/clubhouse" },
+                  { label: "Add round", href: "/rounds/play" },
+                  { label: "Coach", href: "/rounds/insights" },
+                ].map(({ label, href }) => (
+                  <a key={label} href={href} style={{ color: "var(--ink-mute)", fontSize: 12, cursor: "pointer" }}>{label}</a>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
