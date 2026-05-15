@@ -17,6 +17,9 @@ type RoundHole = {
   gir: boolean; grints: boolean;
   preferred_club_override: string;
   plan_club: string;
+  scoring_opp: 0 | 0.5 | 1 | "";
+  diff_max: 2 | 3 | "";
+  opportunity: string;
 };
 
 const CLUBS = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
@@ -41,6 +44,7 @@ function blankHole(h: any): RoundHole {
     water_penalty:"", drop_or_out:"", tree_haz:"",
     fairway_bunker:"", greenside_bunker:"", gir:false, grints:false,
     preferred_club_override:"", plan_club:"",
+    scoring_opp:"", diff_max:"", opportunity:"",
   };
 }
 function pct(n: number) { return `${Math.round(n*100)}%`; }
@@ -742,7 +746,7 @@ function scoreBg(score: number|"", par: number): string {
         <div style={{ maxWidth:520, margin:"0 auto" }}>
 
         {/* Top bar */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 16px" }}>
           <a href={isEditMode ? `/rounds/${roundId}/edit` : "/"} style={{ fontSize:12, color:"var(--green)" }}>
             ← {isEditMode ? "Edit" : "Exit"}
           </a>
@@ -756,7 +760,7 @@ function scoreBg(score: number|"", par: number): string {
 
         {/* Unsaved banner */}
         {hasUnsaved && (
-          <div style={{ background:"var(--accent-soft)", borderTop:"1px solid var(--accent)", padding:"6px 12px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ background:"var(--accent-soft)", borderTop:"1px solid var(--accent)", padding:"6px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:12, color:"#7a5c00" }}>⚠ Unsaved changes</span>
             <div style={{ display:"flex", gap:8 }}>
               <button onClick={() => setHasUnsaved(false)} style={{ fontSize:12, color:"var(--green)", background:"none", border:"none", cursor:"pointer" }}>Keep editing</button>
@@ -767,7 +771,7 @@ function scoreBg(score: number|"", par: number): string {
 
         {/* Panel nav for 18-hole rounds */}
         {roundHoles.length === 18 && (
-          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, padding:"2px 12px 1px" }}>
+          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, padding:"2px 16px 1px" }}>
             <button onClick={() => setScorecardPanel(0)}
               style={{ fontSize:10, fontWeight:700, color: scorecardPanel===0 ? "var(--green)" : "var(--muted)", background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>
               Front 9
@@ -800,7 +804,7 @@ function scoreBg(score: number|"", par: number): string {
           const hi = (ai:number) => ai===currentHoleIdx;
           const cBg = (ai:number, base:string) => hi(ai) ? "var(--green-soft)" : base;
           return (
-            <div style={{ overflowX:"auto" }}
+            <div style={{ overflowX:"auto", margin:"0 16px" }}
               onTouchStart={e => setTouchStartX(e.touches[0].clientX)}
               onTouchEnd={e => {
                 if (touchStartX===null||roundHoles.length!==18) return;
@@ -832,14 +836,25 @@ function scoreBg(score: number|"", par: number): string {
                   </tr>
                   <tr>
                     <td style={{ ...lc, background:"var(--paper-alt)" }}>Idx</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=courseHandicap??0;
-                      const strokes=ch2>0?(h.stroke_index<=(ch2%18)?Math.floor(ch2/18)+1:Math.floor(ch2/18)):ch2<0?(h.stroke_index<=Math.abs(ch2)?-1:0):0;
-                      const iBg=strokes>=2?"#c0392b":strokes===1?"#f97316":strokes===-1?"#22c55e":"transparent";
-                      return (
-                        <td key={i} style={{ padding:"2px 3px", textAlign:"center", borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>
-                          <div style={{ background:iBg, color:strokes!==0?"#fff":"var(--muted)", borderRadius:3, minWidth:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:strokes!==0?700:400, fontSize:10, margin:"0 auto" }}>{h.stroke_index}</div>
-                        </td>
-                      ); })}
+                    {(()=>{
+                      const OPP_EMOJI: Record<string,string> = { birdie:"🐦", "go-for-it":"✅", caution:"⚠️", danger:"🛑" };
+                      const OPP_TINT: Record<string,string> = { birdie:"#e1eeff", "go-for-it":"#d2e8df", caution:"#fef3c7", danger:"#fde8e4" };
+                      return ph.map((h,i)=>{
+                        const ai=roundHoles.indexOf(h);
+                        const opp=h.opportunity||"";
+                        const isSelected=hi(ai);
+                        const tint=OPP_TINT[opp];
+                        const cellBg=tint ?? (isSelected?"var(--green-soft)":"var(--paper-alt)");
+                        const emoji=OPP_EMOJI[opp];
+                        return (
+                          <td key={i} style={{ padding:"2px 3px", textAlign:"center", borderLeft:"1px solid var(--line)", background:cellBg }}>
+                            <div style={{ borderRadius:3, minWidth:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", fontSize:isSelected&&emoji?14:10, color:opp?"inherit":"var(--muted)", margin:"0 auto" }}>
+                              {isSelected&&emoji ? emoji : h.stroke_index}
+                            </div>
+                          </td>
+                        );
+                      });
+                    })()}
                     <td style={sc}></td>
                   </tr>
                   <tr>
@@ -1133,6 +1148,74 @@ function scoreBg(score: number|"", par: number): string {
                 <div style={{ padding:"7px 10px", fontSize:14, fontWeight:700, color: currentHole.plan_club ? "var(--green)" : "var(--muted-2)", background:"var(--green-soft)", border:"1px solid var(--green-soft)", borderRadius:8, minHeight:36, display:"flex", alignItems:"center" }}>
                   {currentHole.plan_club || "—"}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Scoring Plan */}
+        {currentHole && (
+          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12 }}>
+            <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 10px" }}>Scoring Plan</p>
+            <div style={{ display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
+              {/* Scoring Opp */}
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:"var(--muted-2)", marginRight:2 }}>Scoring</span>
+                {([0, 0.5, 1] as const).map(v => {
+                  const active = currentHole.scoring_opp === v;
+                  return (
+                    <button key={v} onClick={() => updateHoleFieldTracked("scoring_opp", v)} style={{
+                      padding:"4px 10px", borderRadius:999, fontSize:12, fontWeight:700, cursor:"pointer",
+                      border: active ? "1.5px solid var(--ink)" : "1.5px solid var(--line)",
+                      background: active ? "var(--ink)" : "var(--paper)",
+                      color: active ? "var(--paper)" : "var(--muted)",
+                    }}>
+                      {v === 0 ? "E" : `+${v}`}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Diff Max */}
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:"var(--muted-2)", marginRight:2 }}>Max</span>
+                {([2, 3] as const).map(v => {
+                  const active = currentHole.diff_max === v;
+                  return (
+                    <button key={v} onClick={() => updateHoleFieldTracked("diff_max", v)} style={{
+                      padding:"4px 10px", borderRadius:999, fontSize:12, fontWeight:700, cursor:"pointer",
+                      border: active ? "1.5px solid var(--ink)" : "1.5px solid var(--line)",
+                      background: active ? "var(--ink)" : "var(--paper)",
+                      color: active ? "var(--paper)" : "var(--muted)",
+                    }}>
+                      +{v}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Opportunity */}
+              <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                <span style={{ fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:"var(--muted-2)", marginRight:2 }}>Opp</span>
+                {(["birdie","go-for-it","caution","danger"] as const).map(v => {
+                  const active = currentHole.opportunity === v;
+                  const colors: Record<string, { bg:string; fg:string }> = {
+                    birdie:      { bg:"#1a6fd4", fg:"#fff" },
+                    "go-for-it": { bg:"#0f6e56", fg:"#fff" },
+                    caution:     { bg:"#c8a84b", fg:"#fff" },
+                    danger:      { bg:"#c94a2a", fg:"#fff" },
+                  };
+                  const c = colors[v];
+                  const label = v === "go-for-it" ? "Go for it" : v.charAt(0).toUpperCase() + v.slice(1);
+                  return (
+                    <button key={v} onClick={() => updateHoleFieldTracked("opportunity", v)} style={{
+                      padding:"4px 10px", borderRadius:999, fontSize:12, fontWeight:700, cursor:"pointer",
+                      border: active ? `1.5px solid ${c.bg}` : "1.5px solid var(--line)",
+                      background: active ? c.bg : "var(--paper)",
+                      color: active ? c.fg : "var(--muted)",
+                    }}>
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

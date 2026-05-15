@@ -2,7 +2,7 @@
 "use client";
 import React, { useRef, useState } from "react";
 import type { HoleData } from "@/lib/types";
-import type { HoleStrategy, PlanEnrichedHole, ClubDistances } from "@/lib/planTypes";
+import type { HoleStrategy, PlanEnrichedHole, ClubDistances, ScoringOpp, OpportunityType } from "@/lib/planTypes";
 import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
 import type { HoleClubStat, HoleHistEntry } from "./page";
 
@@ -18,6 +18,12 @@ type Props = {
   clubDistances?: ClubDistances;
   onClubChange?: (club: string) => void;
   onAimChange?: (aim: HoleStrategy["aim"]) => void;
+  scoringOpp?: ScoringOpp;
+  diffMax?: 2 | 3;
+  opportunity?: OpportunityType;
+  onScoringOppChange?: (v: ScoringOpp) => void;
+  onDiffMaxChange?: (v: 2 | 3) => void;
+  onOpportunityChange?: (v: OpportunityType) => void;
 };
 
 function hazardList(h: HoleData): string[] {
@@ -742,7 +748,15 @@ function ApproachAccuracyRadial({ enriched, selectedClub }: {
 
 // ─── Main card ────────────────────────────────────────────────────────────────
 
-export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, holeHistory, enriched, clubDistances, onClubChange, onAimChange }: Props) {
+const OPP_COLORS: Record<OpportunityType, { bg: string; fg: string; label: string }> = {
+  birdie:     { bg: "#1a6fd4", fg: "#fff", label: "Birdie" },
+  "go-for-it":{ bg: "#0f6e56", fg: "#fff", label: "Go for it" },
+  caution:    { bg: "#c8a84b", fg: "#fff", label: "Caution" },
+  danger:     { bg: "#c94a2a", fg: "#fff", label: "Danger" },
+};
+const OPP_ORDER: OpportunityType[] = ["birdie", "go-for-it", "caution", "danger"];
+
+export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, holeHistory, enriched, clubDistances, onClubChange, onAimChange, scoringOpp = 0, diffMax = 2, opportunity = "birdie", onScoringOppChange, onDiffMaxChange, onOpportunityChange }: Props) {
   const parColor = hole.par === 3 ? "var(--accent)" : hole.par === 5 ? "var(--green)" : "var(--ink-soft)";
   const hazards = hazardList(hole);
   const risk = hazards.length >= 2 ? "high" : hazards.length === 1 ? "med" : "low";
@@ -824,6 +838,64 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{strategy.remaining ? `${strategy.remaining} yd` : "—"}</div>
         </div>
         <div style={{ fontSize: 14, color: "var(--muted)", width: 18, textAlign: "center" }}>{expanded ? "−" : "+"}</div>
+      </div>
+
+      {/* Scoring plan strip */}
+      <div onClick={e => e.stopPropagation()} style={{
+        borderTop: "1px solid var(--line)", background: "var(--paper-alt)",
+        padding: "8px 16px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
+      }}>
+        {/* Scoring Opp */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--muted-2)", marginRight: 2 }}>Scoring</span>
+          {([0, 0.5, 1] as ScoringOpp[]).map(v => (
+            <button key={v} onClick={() => onScoringOppChange?.(v)} style={{
+              padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              border: scoringOpp === v ? "1.5px solid var(--ink)" : "1.5px solid var(--line)",
+              background: scoringOpp === v ? "var(--ink)" : "var(--paper)",
+              color: scoringOpp === v ? "var(--paper)" : "var(--muted)",
+              transition: "all .15s",
+            }}>
+              {v === 0 ? "E" : `+${v}`}
+            </button>
+          ))}
+        </div>
+
+        {/* Diff Max */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--muted-2)", marginRight: 2 }}>Max</span>
+          {([2, 3] as (2 | 3)[]).map(v => (
+            <button key={v} onClick={() => onDiffMaxChange?.(v)} style={{
+              padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              border: diffMax === v ? "1.5px solid var(--ink)" : "1.5px solid var(--line)",
+              background: diffMax === v ? "var(--ink)" : "var(--paper)",
+              color: diffMax === v ? "var(--paper)" : "var(--muted)",
+              transition: "all .15s",
+            }}>
+              +{v}
+            </button>
+          ))}
+        </div>
+
+        {/* Opportunity */}
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--muted-2)", marginRight: 2 }}>Opp</span>
+          {OPP_ORDER.map(v => {
+            const c = OPP_COLORS[v];
+            const active = opportunity === v;
+            return (
+              <button key={v} onClick={() => onOpportunityChange?.(v)} style={{
+                padding: "3px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                border: active ? `1.5px solid ${c.bg}` : "1.5px solid var(--line)",
+                background: active ? c.bg : "var(--paper)",
+                color: active ? c.fg : "var(--muted)",
+                transition: "all .15s",
+              }}>
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Expanded detail */}

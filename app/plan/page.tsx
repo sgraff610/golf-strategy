@@ -14,6 +14,8 @@ import type {
   RoundPlan,
   ClubDistances,
   PlanEnrichedHole,
+  ScoringOpp,
+  OpportunityType,
 } from "@/lib/planTypes";
 import { supabase } from "@/lib/supabase";
 import { loadCourses, getCourse, getClubDistances, getClubForm, saveClubForm } from "@/lib/storage";
@@ -163,6 +165,73 @@ function buildHistory(
   };
 }
 
+// ─── Scoring plan algorithm ───────────────────────────────────────────────────
+
+function computeDiffMaxes(
+  planHoles: import("@/lib/types").HoleData[],
+  courseHandicap: number
+): Record<number, 2 | 3> {
+  const result: Record<number, 2 | 3> = {};
+  for (const h of planHoles) {
+    result[h.hole] = h.stroke_index <= courseHandicap ? 3 : 2;
+  }
+  return result;
+}
+
+function computeOpportunity(opp: ScoringOpp, max: 2 | 3): OpportunityType {
+  if (opp === 0 && max === 2) return "birdie";
+  if ((opp === 0.5 || opp === 1) && max === 2) return "go-for-it";
+  if ((opp === 0 || opp === 0.5) && max === 3) return "caution";
+  return "danger";
+}
+
+function computeScoringOpps(
+  planHoles: import("@/lib/types").HoleData[],
+  goalScore: number,
+  holeAvgStp: Record<number, number>
+): Record<number, ScoringOpp> {
+  const totalPar = planHoles.reduce((s, h) => s + h.par, 0);
+  const budget = goalScore - totalPar;
+
+  const opps: Record<number, ScoringOpp> = {};
+  for (const h of planHoles) {
+    const avg = holeAvgStp[h.hole];
+    if (avg !== undefined) {
+      opps[h.hole] = avg < 0.3 ? 0 : avg < 0.8 ? 0.5 : 1;
+    } else {
+      opps[h.hole] = h.stroke_index <= 6 ? 1 : h.stroke_index <= 12 ? 0.5 : 0;
+    }
+  }
+
+  // Sort holes: easiest first (lowest avg STP or highest SI as fallback)
+  const sortedByEasy = [...planHoles].sort((a, b) => {
+    const avgA = holeAvgStp[a.hole] ?? (1 - a.stroke_index / planHoles.length);
+    const avgB = holeAvgStp[b.hole] ?? (1 - b.stroke_index / planHoles.length);
+    return avgA - avgB;
+  });
+
+  let iters = 0;
+  while (iters < 200) {
+    const currentSum = planHoles.reduce((s, h) => s + (opps[h.hole] as number), 0);
+    const diff = currentSum - budget;
+    if (Math.abs(diff) < 0.5) break;
+    iters++;
+    if (diff < 0) {
+      // Too optimistic — promote hardest first
+      const candidate = [...sortedByEasy].reverse().find(h => opps[h.hole] < 1);
+      if (!candidate) break;
+      opps[candidate.hole] = opps[candidate.hole] === 0 ? 0.5 : 1;
+    } else {
+      // Too pessimistic — demote easiest first
+      const candidate = sortedByEasy.find(h => opps[h.hole] > 0);
+      if (!candidate) break;
+      opps[candidate.hole] = opps[candidate.hole] === 1 ? 0.5 : 0;
+    }
+  }
+
+  return opps;
+}
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const TOKENS = `
@@ -214,6 +283,7 @@ export default function PlanPage() {
   const [roundDate, setRoundDate] = useState<string>("");
   const [teeTime, setTeeTime] = useState<string>("08:00");
   const [openRounds, setOpenRounds] = useState<{ id: string; course_id: string; course_name: string; date: string }[]>([]);
+  const [scoringOppOverrides, setScoringOppOverrides] = useState<Record<number, { scoringOpp?: ScoringOpp; diffMax?: 2 | 3; opportunity?: OpportunityType }>>({});
 
   useEffect(() => {
     // Set date on client only — avoids SSR/UTC vs local-timezone hydration mismatch
@@ -416,6 +486,65 @@ export default function PlanPage() {
   const posture = useMemo(() => buildPosture(answers), [answers]);
   const target = useMemo(() => targetScore(answers), [answers]);
 
+  const courseHandicapVal = useMemo(() => {
+    if (handicapIndex === null || !course) return null;
+    const slope = course.slope ?? 113;
+    const par = course.holes.reduce((s, h) => s + h.par, 0);
+    const rating = course.rating ?? par;
+    return Math.round(handicapIndex * (slope / 113) + (rating - par));
+  }, [handicapIndex, course]);
+
+  const holeAvgStp = useMemo<Record<number, number>>(() => {
+    const result: Record<number, number> = {};
+    for (const [holeStr, entries] of Object.entries(holeHistEntries)) {
+      if (entries.length > 0) {
+        result[Number(holeStr)] = entries.reduce((s, e) => s + (e.score - e.par), 0) / entries.length;
+      }
+    }
+    return result;
+  }, [holeHistEntries]);
+
+  const diffMaxes = useMemo<Record<number, 2 | 3>>(() => {
+    if (courseHandicapVal === null || planHoles.length === 0) {
+      const fallback: Record<number, 2 | 3> = {};
+      for (const h of planHoles) fallback[h.hole] = 2;
+      return fallback;
+    }
+    return computeDiffMaxes(planHoles, courseHandicapVal);
+  }, [planHoles, courseHandicapVal]);
+
+  const scoringOpps = useMemo<Record<number, ScoringOpp>>(() => {
+    if (planHoles.length === 0) return {};
+    const goal = answers.goal ?? defaultGoalScore;
+    const base = computeScoringOpps(planHoles, goal, holeAvgStp);
+    const result: Record<number, ScoringOpp> = { ...base };
+    for (const [holeStr, ov] of Object.entries(scoringOppOverrides)) {
+      if (ov.scoringOpp !== undefined) result[Number(holeStr)] = ov.scoringOpp;
+    }
+    return result;
+  }, [planHoles, answers.goal, defaultGoalScore, holeAvgStp, scoringOppOverrides]);
+
+  const finalDiffMaxes = useMemo<Record<number, 2 | 3>>(() => {
+    const result: Record<number, 2 | 3> = { ...diffMaxes };
+    for (const [holeStr, ov] of Object.entries(scoringOppOverrides)) {
+      if (ov.diffMax !== undefined) result[Number(holeStr)] = ov.diffMax;
+    }
+    return result;
+  }, [diffMaxes, scoringOppOverrides]);
+
+  const opportunities = useMemo<Record<number, OpportunityType>>(() => {
+    const result: Record<number, OpportunityType> = {};
+    for (const h of planHoles) {
+      const ov = scoringOppOverrides[h.hole];
+      if (ov?.opportunity !== undefined) {
+        result[h.hole] = ov.opportunity;
+      } else {
+        result[h.hole] = computeOpportunity(scoringOpps[h.hole] ?? 0, finalDiffMaxes[h.hole] ?? 2);
+      }
+    }
+    return result;
+  }, [planHoles, scoringOpps, finalDiffMaxes, scoringOppOverrides]);
+
   const onTeeItUp = useCallback(async () => {
     if (!course) return;
     const id = `round_${Date.now()}`;
@@ -444,6 +573,9 @@ export default function PlanPage() {
         aim: strat?.aim ?? "",
         plan_club: strat?.pref ?? "",
         preferred_club_override: "",
+        scoring_opp: scoringOpps[h.hole] ?? 0,
+        diff_max: finalDiffMaxes[h.hole] ?? 2,
+        opportunity: opportunities[h.hole] ?? "birdie",
       };
     });
     const { error } = await supabase.from("rounds").insert({
@@ -462,7 +594,7 @@ export default function PlanPage() {
       return;
     }
     router.push(`/rounds/play?roundId=${id}&courseId=${course.id}`);
-  }, [course, planHoles, strategies, router, roundDate, teeTime]);
+  }, [course, planHoles, strategies, router, roundDate, teeTime, scoringOpps, finalDiffMaxes, opportunities]);
 
   function prefetchEnriched(cId: string) {
     setPlanEnrichedReady(false);
@@ -571,8 +703,14 @@ export default function PlanPage() {
                   planEnrichedReady={planEnrichedReady}
                   latestRecap={latestRecap}
                   clubDistances={clubDistances}
+                  scoringOpps={scoringOpps}
+                  diffMaxes={finalDiffMaxes}
+                  opportunities={opportunities}
                   onClubChange={(hole, club) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], pref: club } }))}
                   onAimChange={(hole, aim) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], aim } }))}
+                  onScoringOppChange={(hole, v) => setScoringOppOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], scoringOpp: v } }))}
+                  onDiffMaxChange={(hole, v) => setScoringOppOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], diffMax: v } }))}
+                  onOpportunityChange={(hole, v) => setScoringOppOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], opportunity: v } }))}
                   onTeeItUp={onTeeItUp}
                   onRestart={() => { setStage("setup"); setAnswers({}); }}
                 />
@@ -1724,7 +1862,7 @@ function RecapAdvicePanel({ recap }: { recap: Record<string, any> }) {
 
 // ─── Plan stage ───────────────────────────────────────────────────────────────
 
-function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, holeHistEntries, planEnrichedMap, planEnrichedReady, latestRecap, clubDistances, onClubChange, onAimChange, onTeeItUp, onRestart }: {
+function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, holeHistEntries, planEnrichedMap, planEnrichedReady, latestRecap, clubDistances, scoringOpps, diffMaxes, opportunities, onClubChange, onAimChange, onScoringOppChange, onDiffMaxChange, onOpportunityChange, onTeeItUp, onRestart }: {
   course: CourseRecord;
   planHoles: import("@/lib/types").HoleData[];
   strategies: Record<number, import("@/lib/planTypes").HoleStrategy>;
@@ -1735,8 +1873,14 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
   planEnrichedReady: boolean;
   latestRecap: Record<string, any> | null;
   clubDistances: ClubDistances | undefined;
+  scoringOpps: Record<number, ScoringOpp>;
+  diffMaxes: Record<number, 2 | 3>;
+  opportunities: Record<number, OpportunityType>;
   onClubChange: (hole: number, club: string) => void;
   onAimChange: (hole: number, aim: import("@/lib/planTypes").HoleStrategy["aim"]) => void;
+  onScoringOppChange: (hole: number, v: ScoringOpp) => void;
+  onDiffMaxChange: (hole: number, v: 2 | 3) => void;
+  onOpportunityChange: (hole: number, v: OpportunityType) => void;
   onTeeItUp: () => void; onRestart: () => void;
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -1770,8 +1914,14 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
             holeHistory={holeHistEntries[h.hole] ?? []}
             enriched={planEnrichedReady ? (planEnrichedMap[h.hole] ?? []) : undefined}
             clubDistances={clubDistances}
+            scoringOpp={scoringOpps[h.hole] ?? 0}
+            diffMax={diffMaxes[h.hole] ?? 2}
+            opportunity={opportunities[h.hole] ?? "birdie"}
             onClubChange={(club) => onClubChange(h.hole, club)}
             onAimChange={(aim) => onAimChange(h.hole, aim)}
+            onScoringOppChange={(v) => onScoringOppChange(h.hole, v)}
+            onDiffMaxChange={(v) => onDiffMaxChange(h.hole, v)}
+            onOpportunityChange={(v) => onOpportunityChange(h.hole, v)}
             onToggle={() => {
               const n = new Set(expanded);
               n.has(h.hole) ? n.delete(h.hole) : n.add(h.hole);

@@ -105,6 +105,10 @@ export type PlanEnrichedHole = {
   isExact: boolean;
 };
 
+export type ScoringOpp = 0 | 0.5 | 1;
+export type DiffMax = 2 | 3;
+export type OpportunityType = "birdie" | "go-for-it" | "caution" | "danger";
+
 /** Final plan saved to DB. One per (user, course, round_date). */
 export type RoundPlan = {
   id?: string;
