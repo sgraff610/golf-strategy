@@ -817,11 +817,10 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
               <Chip tone="ghost">sim holes {fmtAvg(simAvg)}</Chip>
             )}
             {holeHistory && holeHistory.length > 0 && (() => {
-              const last = holeHistory[0];
-              const tp = last.score - last.par;
-              const tpStr = tp === 0 ? "E" : tp > 0 ? `+${tp}` : String(tp);
-              const tone = tp < 0 ? "green" : tp === 0 ? "ghost" : "ghost";
-              return <Chip tone={tone}>last ({tpStr})</Chip>;
+              const avg = holeHistory.reduce((s, e) => s + (e.score - e.par), 0) / holeHistory.length;
+              const tpStr = avg === 0 ? "E" : avg > 0 ? `+${avg.toFixed(1)}` : avg.toFixed(1);
+              const tone = avg < 0 ? "green" : "ghost";
+              return <Chip tone={tone}>avg ({tpStr})</Chip>;
             })()}
           </div>
         </div>
@@ -861,40 +860,25 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
           ))}
         </div>
 
-        {/* Diff Max */}
+        {/* Diff Max — read-only */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--muted-2)", marginRight: 2 }}>Max</span>
-          {([2, 3] as (2 | 3)[]).map(v => (
-            <button key={v} onClick={() => onDiffMaxChange?.(v)} style={{
-              padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer",
-              border: diffMax === v ? "1.5px solid var(--ink)" : "1.5px solid var(--line)",
-              background: diffMax === v ? "var(--ink)" : "var(--paper)",
-              color: diffMax === v ? "var(--paper)" : "var(--muted)",
-              transition: "all .15s",
-            }}>
-              +{v}
-            </button>
-          ))}
+          <span style={{ padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, border: "1.5px solid var(--line)", background: "var(--paper-alt)", color: "var(--muted)" }}>
+            +{diffMax}
+          </span>
         </div>
 
-        {/* Opportunity */}
+        {/* Opportunity — read-only, auto-derived */}
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "var(--muted-2)", marginRight: 2 }}>Opp</span>
-          {OPP_ORDER.map(v => {
-            const c = OPP_COLORS[v];
-            const active = opportunity === v;
+          {(() => {
+            const c = OPP_COLORS[opportunity];
             return (
-              <button key={v} onClick={() => onOpportunityChange?.(v)} style={{
-                padding: "3px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: "pointer",
-                border: active ? `1.5px solid ${c.bg}` : "1.5px solid var(--line)",
-                background: active ? c.bg : "var(--paper)",
-                color: active ? c.fg : "var(--muted)",
-                transition: "all .15s",
-              }}>
+              <span style={{ padding: "3px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: c.bg, color: c.fg, border: `1.5px solid ${c.bg}` }}>
                 {c.label}
-              </button>
+              </span>
             );
-          })}
+          })()}
         </div>
       </div>
 

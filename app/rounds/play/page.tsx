@@ -596,6 +596,16 @@ function PlayCourseInner() {
       const updated = { ...h, [field]: value };
       updated.gir = calcGir(updated.score, updated.par, updated.putts);
       updated.grints = calcGrints(updated.score, updated.par);
+      if (field === "scoring_opp") {
+        const opp = value as 0 | 0.5 | 1;
+        const max = updated.diff_max;
+        if (max === 2 || max === 3) {
+          if (opp === 0 && max === 2) updated.opportunity = "birdie";
+          else if ((opp === 0.5 || opp === 1) && max === 2) updated.opportunity = "go-for-it";
+          else if ((opp === 0 || opp === 0.5) && max === 3) updated.opportunity = "caution";
+          else updated.opportunity = "danger";
+        }
+      }
       return updated;
     }));
   }
@@ -836,25 +846,14 @@ function scoreBg(score: number|"", par: number): string {
                   </tr>
                   <tr>
                     <td style={{ ...lc, background:"var(--paper-alt)" }}>Idx</td>
-                    {(()=>{
-                      const OPP_EMOJI: Record<string,string> = { birdie:"🐦", "go-for-it":"✅", caution:"⚠️", danger:"🛑" };
-                      const OPP_TINT: Record<string,string> = { birdie:"#e1eeff", "go-for-it":"#d2e8df", caution:"#fef3c7", danger:"#fde8e4" };
-                      return ph.map((h,i)=>{
-                        const ai=roundHoles.indexOf(h);
-                        const opp=h.opportunity||"";
-                        const isSelected=hi(ai);
-                        const tint=OPP_TINT[opp];
-                        const cellBg=tint ?? (isSelected?"var(--green-soft)":"var(--paper-alt)");
-                        const emoji=OPP_EMOJI[opp];
-                        return (
-                          <td key={i} style={{ padding:"2px 3px", textAlign:"center", borderLeft:"1px solid var(--line)", background:cellBg }}>
-                            <div style={{ borderRadius:3, minWidth:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", fontSize:isSelected&&emoji?14:10, color:opp?"inherit":"var(--muted)", margin:"0 auto" }}>
-                              {isSelected&&emoji ? emoji : h.stroke_index}
-                            </div>
-                          </td>
-                        );
-                      });
-                    })()}
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const isAggressive=h.diff_max===2; return (
+                      <td key={i} style={{ padding:"2px 3px", textAlign:"center", borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>
+                        {isAggressive
+                          ? <div style={{ background:"#22C55E", color:"#052e16", borderRadius:"50%", width:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:500, margin:"0 auto" }}>{h.stroke_index}</div>
+                          : <span style={{ fontSize:10, color:"var(--muted)" }}>{h.stroke_index}</span>
+                        }
+                      </td>
+                    ); })}
                     <td style={sc}></td>
                   </tr>
                   <tr>
@@ -1175,47 +1174,28 @@ function scoreBg(score: number|"", par: number): string {
                   );
                 })}
               </div>
-              {/* Diff Max */}
+              {/* Diff Max — read-only */}
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 <span style={{ fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:"var(--muted-2)", marginRight:2 }}>Max</span>
-                {([2, 3] as const).map(v => {
-                  const active = currentHole.diff_max === v;
-                  return (
-                    <button key={v} onClick={() => updateHoleFieldTracked("diff_max", v)} style={{
-                      padding:"4px 10px", borderRadius:999, fontSize:12, fontWeight:700, cursor:"pointer",
-                      border: active ? "1.5px solid var(--ink)" : "1.5px solid var(--line)",
-                      background: active ? "var(--ink)" : "var(--paper)",
-                      color: active ? "var(--paper)" : "var(--muted)",
-                    }}>
-                      +{v}
-                    </button>
-                  );
-                })}
+                <span style={{ padding:"4px 10px", borderRadius:999, fontSize:12, fontWeight:700, border:"1.5px solid var(--line)", background:"var(--paper-alt)", color:"var(--muted)" }}>
+                  {currentHole.diff_max !== "" ? `+${currentHole.diff_max}` : "—"}
+                </span>
               </div>
-              {/* Opportunity */}
+              {/* Opportunity — read-only, auto-updates with Scoring */}
               <div style={{ display:"flex", alignItems:"center", gap:5 }}>
                 <span style={{ fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:"var(--muted-2)", marginRight:2 }}>Opp</span>
-                {(["birdie","go-for-it","caution","danger"] as const).map(v => {
-                  const active = currentHole.opportunity === v;
-                  const colors: Record<string, { bg:string; fg:string }> = {
-                    birdie:      { bg:"#1a6fd4", fg:"#fff" },
-                    "go-for-it": { bg:"#0f6e56", fg:"#fff" },
-                    caution:     { bg:"#c8a84b", fg:"#fff" },
-                    danger:      { bg:"#c94a2a", fg:"#fff" },
+                {(()=>{
+                  const opp = currentHole.opportunity;
+                  const OPP_DEFS: Record<string,{bg:string;fg:string;label:string}> = {
+                    birdie:      {bg:"#1a6fd4",fg:"#fff",label:"Birdie"},
+                    "go-for-it": {bg:"#0f6e56",fg:"#fff",label:"Go for it"},
+                    caution:     {bg:"#c8a84b",fg:"#fff",label:"Caution"},
+                    danger:      {bg:"#c94a2a",fg:"#fff",label:"Danger"},
                   };
-                  const c = colors[v];
-                  const label = v === "go-for-it" ? "Go for it" : v.charAt(0).toUpperCase() + v.slice(1);
-                  return (
-                    <button key={v} onClick={() => updateHoleFieldTracked("opportunity", v)} style={{
-                      padding:"4px 10px", borderRadius:999, fontSize:12, fontWeight:700, cursor:"pointer",
-                      border: active ? `1.5px solid ${c.bg}` : "1.5px solid var(--line)",
-                      background: active ? c.bg : "var(--paper)",
-                      color: active ? c.fg : "var(--muted)",
-                    }}>
-                      {label}
-                    </button>
-                  );
-                })}
+                  const c = opp ? OPP_DEFS[opp] : null;
+                  if (!c) return <span style={{fontSize:12,color:"var(--muted-2)"}}>—</span>;
+                  return <span style={{padding:"4px 10px",borderRadius:999,fontSize:12,fontWeight:700,background:c.bg,color:c.fg,border:`1.5px solid ${c.bg}`}}>{c.label}</span>;
+                })()}
               </div>
             </div>
           </div>
