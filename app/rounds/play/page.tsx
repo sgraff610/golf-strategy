@@ -849,7 +849,7 @@ function scoreBg(score: number|"", par: number): string {
                     {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const isAggressive=h.diff_max===2; return (
                       <td key={i} style={{ padding:"2px 3px", textAlign:"center", borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>
                         {isAggressive
-                          ? <div style={{ background:"#22C55E", color:"#052e16", borderRadius:"50%", width:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:500, margin:"0 auto" }}>{h.stroke_index}</div>
+                          ? <div style={{ background:"transparent", border:"2px solid #22C55E", color:"#065f46", borderRadius:"50%", width:22, height:22, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:600, margin:"0 auto" }}>{h.stroke_index}</div>
                           : <span style={{ fontSize:10, color:"var(--muted)" }}>{h.stroke_index}</span>
                         }
                       </td>
@@ -857,25 +857,30 @@ function scoreBg(score: number|"", par: number): string {
                     <td style={sc}></td>
                   </tr>
                   <tr>
-                    <td style={{ ...lc }}>Club</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const dispClub=h.preferred_club_override||(ch2 as any)?.preferred_club||""; return <td key={i} style={{ ...tc, color:"var(--green)", fontWeight:600, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{dispClub||"—"}</td>; })}
+                    <td style={{ ...lc }}>Scoring</td>
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const OPP_BOLD: Record<string,string>={birdie:"#60a5fa","go-for-it":"#34d399",caution:"#fbbf24",danger:"#f87171"}; const oppBg=h.opportunity?OPP_BOLD[h.opportunity]:null; const scoringVal=h.scoring_opp!==""?(h.scoring_opp===0?"E":`+${h.scoring_opp}`):"—"; return <td key={i} style={{ ...tc, borderLeft:"1px solid var(--line)", background:oppBg??cBg(ai,"var(--paper)"), fontWeight:h.scoring_opp!==""?700:400, color:h.scoring_opp!==""?"#000":"var(--muted-2)" }}>{scoringVal}</td>;})}
+                    <td style={{ ...sc }}>{(()=>{ const sum=ph.reduce((s,h)=>s+(h.scoring_opp!==""?Number(h.scoring_opp):0),0); if(!ph.some(h=>h.scoring_opp!=="")) return "—"; const d=sum%1===0?String(sum):sum.toFixed(1); return sum===0?"E":sum>0?`+${d}`:d; })()}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ ...lc, background:"var(--paper-alt)" }}>Club</td>
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const dispClub=h.preferred_club_override||(ch2 as any)?.preferred_club||""; const dispClubShort=dispClub==="Driver"?"Driv":dispClub; return <td key={i} style={{ ...tc, color:"var(--green)", fontWeight:600, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{dispClubShort||"—"}</td>; })}
                     <td style={sc}></td>
                   </tr>
                   <tr>
-                    <td style={{ ...lc, background:"var(--paper-alt)" }}>Land</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{(ch2 as any)?.preferred_landing||"—"}</td>; })}
+                    <td style={{ ...lc }}>Land</td>
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{(ch2 as any)?.preferred_landing||"—"}</td>; })}
                     <td style={sc}></td>
                   </tr>
                   <tr>
-                    <td style={{ ...lc }}>Rem</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const club2=(ch2 as any)?.preferred_club??""; const rem=club2&&CLUB_DIST[club2]?h.yards-CLUB_DIST[club2]:null; return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{rem!==null?rem:"—"}</td>; })}
+                    <td style={{ ...lc, background:"var(--paper-alt)" }}>Rem</td>
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const club2=(ch2 as any)?.preferred_club??""; const rem=club2&&CLUB_DIST[club2]?h.yards-CLUB_DIST[club2]:null; return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{rem!==null?rem:"—"}</td>; })}
                     <td style={sc}></td>
                   </tr>
                   <tr>
-                    <td style={{ ...lc, background:"var(--paper-alt)" }}>Aim</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const aimDir=((ch2 as any)?.aim_dir)??""; const aimLevel=((ch2 as any)?.aim_level)??0; const noAim=!aimDir||aimLevel===0; const aimBg=noAim?"#22c55e":aimLevel===1?"#f5c842":"#e03c2d"; return (
-                      <td key={i} onClick={()=>goToHole(ai)} style={{ padding:"2px 3px", textAlign:"center", cursor:"pointer", borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>
-                        <div style={{ background:aimBg, color:(!noAim&&aimLevel===2)?"#fff":"#000", borderRadius:3, minWidth:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:10, margin:"0 auto" }}>{noAim?"🚩":aimDir}</div>
+                    <td style={{ ...lc }}>Aim</td>
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const aimDir=((ch2 as any)?.aim_dir)??""; const aimLevel=((ch2 as any)?.aim_level)??0; const noAim=!aimDir||aimLevel===0; const aimBg=noAim?"transparent":aimLevel===1?"#f5c842":"#e03c2d"; const aimColor=noAim?"var(--muted)":aimLevel===1?"#000":"#fff"; return (
+                      <td key={i} onClick={()=>goToHole(ai)} style={{ padding:"2px 3px", textAlign:"center", cursor:"pointer", borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>
+                        <div style={{ background:aimBg, color:aimColor, borderRadius:999, minWidth:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:10, margin:"0 auto" }}>{noAim?"⛳":aimDir}</div>
                       </td>
                     ); })}
                     <td style={sc}></td>
@@ -969,7 +974,7 @@ function scoreBg(score: number|"", par: number): string {
                     </div>
                     <div>
                       <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Club</label>
-                      <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box" }}
                         value={currentHole.appr_distance}
                         onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
                         <option value="">—</option>
@@ -978,7 +983,7 @@ function scoreBg(score: number|"", par: number): string {
                     </div>
                     <div>
                       <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Acc</label>
-                      <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box" }}
                         value={currentHole.appr_accuracy}
                         onChange={e => updateHoleFieldTracked("appr_accuracy", e.target.value as TeeAccuracy)}>
                         <option value="">—</option>
@@ -1009,7 +1014,7 @@ function scoreBg(score: number|"", par: number): string {
                     ))}
                     <div>
                       <label style={{ fontSize:9, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>1st Putt</label>
-                      <select style={{ width:"100%", padding:"5px 2px", fontSize:10, border:"1px solid var(--line)", borderRadius:6, background:"white", color:"var(--muted)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:"white", color:"var(--muted)", boxSizing:"border-box" }}
                         value={currentHole.first_putt_distance}
                         onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
                         <option value="">—</option>
@@ -1018,7 +1023,7 @@ function scoreBg(score: number|"", par: number): string {
                     </div>
                     <div>
                       <label style={{ fontSize:9, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>DRIV Club</label>
-                      <select style={{ width:"100%", padding:"5px 2px", fontSize:10, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box" }}
                         value={isPar3?"":currentHole.club} disabled={isPar3}
                         onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
                         <option value="">—</option>
@@ -1029,7 +1034,7 @@ function scoreBg(score: number|"", par: number): string {
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6 }}>
                     <div>
                       <label style={{ fontSize:9, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>DRIV Acc</label>
-                      <select style={{ width:"100%", padding:"5px 2px", fontSize:10, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box" }}
                         value={isPar3?"":currentHole.tee_accuracy} disabled={isPar3}
                         onChange={e => !isPar3 && updateHoleFieldTracked("tee_accuracy", e.target.value as TeeAccuracy)}>
                         <option value="">—</option>
@@ -1063,7 +1068,7 @@ function scoreBg(score: number|"", par: number): string {
                   ))}
                   <div>
                     <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
-                    <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
                       value={currentHole.first_putt_distance}
                       onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
                       <option value="">—</option>
@@ -1075,7 +1080,7 @@ function scoreBg(score: number|"", par: number): string {
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
                   <div>
                     <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>DRIV Club</label>
-                    <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)" }}
                       value={isPar3?"":currentHole.club} disabled={isPar3}
                       onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
                       <option value="">—</option>
@@ -1084,7 +1089,7 @@ function scoreBg(score: number|"", par: number): string {
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>DRIV Acc</label>
-                    <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)" }}
                       value={isPar3?"":currentHole.tee_accuracy} disabled={isPar3}
                       onChange={e => !isPar3 && updateHoleFieldTracked("tee_accuracy", e.target.value as TeeAccuracy)}>
                       <option value="">—</option>
@@ -1093,7 +1098,7 @@ function scoreBg(score: number|"", par: number): string {
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Club</label>
-                    <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
                       value={currentHole.appr_distance}
                       onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
                       <option value="">—</option>
@@ -1102,7 +1107,7 @@ function scoreBg(score: number|"", par: number): string {
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Acc</label>
-                    <select style={{ width:"100%", padding:"6px 2px", fontSize:11, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
                       value={currentHole.appr_accuracy}
                       onChange={e => updateHoleFieldTracked("appr_accuracy", e.target.value as TeeAccuracy)}>
                       <option value="">—</option>
