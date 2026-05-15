@@ -968,13 +968,13 @@ function scoreBg(score: number|"", par: number): string {
                     <div>
                       <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>Chips</label>
                       <input type="number" min={0} max={10}
-                        style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1.5px solid var(--green)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box" }}
+                        style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1.5px solid var(--green)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"34px" }}
                         value={currentHole.chips===""||currentHole.chips==null?"":Number(currentHole.chips)}
                         onChange={e => updateHoleFieldTracked("chips", e.target.value===""?"":Number(e.target.value))} />
                     </div>
                     <div>
                       <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Club</label>
-                      <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                         value={currentHole.appr_distance}
                         onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
                         <option value="">—</option>
@@ -983,7 +983,7 @@ function scoreBg(score: number|"", par: number): string {
                     </div>
                     <div>
                       <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Acc</label>
-                      <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                         value={currentHole.appr_accuracy}
                         onChange={e => updateHoleFieldTracked("appr_accuracy", e.target.value as TeeAccuracy)}>
                         <option value="">—</option>
@@ -993,7 +993,7 @@ function scoreBg(score: number|"", par: number): string {
                     <div>
                       <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>Tree/Haz</label>
                       <input type="number" min={0} max={10}
-                        style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1.5px solid var(--green)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box" }}
+                        style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1.5px solid var(--green)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"34px" }}
                         value={currentHole.tree_haz===""||currentHole.tree_haz==null?"":Number(currentHole.tree_haz)}
                         onChange={e => updateHoleFieldTracked("tree_haz", e.target.value===""?"":Number(e.target.value))} />
                     </div>
@@ -1007,14 +1007,14 @@ function scoreBg(score: number|"", par: number): string {
                       <div key={field}>
                         <label style={{ fontSize:9, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>{label}</label>
                         <input type="number" min={min} max={max}
-                          style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box" }}
+                          style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"30px" }}
                           value={(currentHole as any)[field]===""||((currentHole as any)[field]==null)?"":(Number((currentHole as any)[field]))}
                           onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
                       </div>
                     ))}
                     <div>
                       <label style={{ fontSize:9, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>1st Putt</label>
-                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:"white", color:"var(--muted)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:"white", color:"var(--muted)", boxSizing:"border-box", height:"30px" }}
                         value={currentHole.first_putt_distance}
                         onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
                         <option value="">—</option>
@@ -1023,7 +1023,7 @@ function scoreBg(score: number|"", par: number): string {
                     </div>
                     <div>
                       <label style={{ fontSize:9, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>DRIV Club</label>
-                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box", height:"30px" }}
                         value={isPar3?"":currentHole.club} disabled={isPar3}
                         onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
                         <option value="">—</option>
@@ -1034,7 +1034,7 @@ function scoreBg(score: number|"", par: number): string {
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6 }}>
                     <div>
                       <label style={{ fontSize:9, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>DRIV Acc</label>
-                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box" }}
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, background:isPar3?"var(--paper-alt)":"white", color:"var(--muted)", boxSizing:"border-box", height:"30px" }}
                         value={isPar3?"":currentHole.tee_accuracy} disabled={isPar3}
                         onChange={e => !isPar3 && updateHoleFieldTracked("tee_accuracy", e.target.value as TeeAccuracy)}>
                         <option value="">—</option>
@@ -1045,7 +1045,7 @@ function scoreBg(score: number|"", par: number): string {
                       <div key={field}>
                         <label style={{ fontSize:9, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:2 }}>{label}</label>
                         <input type="number" min={0} max={10}
-                          style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box" }}
+                          style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:6, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"30px" }}
                           value={(currentHole as any)[field]===""||((currentHole as any)[field]==null)?"":(Number((currentHole as any)[field]))}
                           onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
                       </div>
@@ -1061,14 +1061,14 @@ function scoreBg(score: number|"", par: number): string {
                     <div key={field}>
                       <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
                       <input type="number" min={min} max={max}
-                        style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)" }}
+                        style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"34px" }}
                         value={(currentHole as any)[field]===""||((currentHole as any)[field]==null)?"":(Number((currentHole as any)[field]))}
                         onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
                     </div>
                   ))}
                   <div>
                     <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                       value={currentHole.first_putt_distance}
                       onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
                       <option value="">—</option>
@@ -1080,7 +1080,7 @@ function scoreBg(score: number|"", par: number): string {
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
                   <div>
                     <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>DRIV Club</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                       value={isPar3?"":currentHole.club} disabled={isPar3}
                       onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
                       <option value="">—</option>
@@ -1089,7 +1089,7 @@ function scoreBg(score: number|"", par: number): string {
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>DRIV Acc</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                       value={isPar3?"":currentHole.tee_accuracy} disabled={isPar3}
                       onChange={e => !isPar3 && updateHoleFieldTracked("tee_accuracy", e.target.value as TeeAccuracy)}>
                       <option value="">—</option>
@@ -1098,7 +1098,7 @@ function scoreBg(score: number|"", par: number): string {
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Club</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                       value={currentHole.appr_distance}
                       onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
                       <option value="">—</option>
@@ -1107,7 +1107,7 @@ function scoreBg(score: number|"", par: number): string {
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Acc</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)" }}
+                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                       value={currentHole.appr_accuracy}
                       onChange={e => updateHoleFieldTracked("appr_accuracy", e.target.value as TeeAccuracy)}>
                       <option value="">—</option>
