@@ -4,12 +4,12 @@ import { usePathname } from "next/navigation";
 
 // ─── Icons ─────────────────────────────────────────────────────────────────────
 type IP = { active?: boolean };
-const ic = (a?: boolean) => a ? "#f29450" : "rgba(255,255,255,0.65)";
+const ic = (a?: boolean) => a ? "#f29450" : "rgba(255,255,255,0.6)";
 const sw = (a?: boolean) => a ? 2.2 : 1.8;
 
 function HomeIcon({ active }: IP) {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
@@ -17,7 +17,7 @@ function HomeIcon({ active }: IP) {
 }
 function PlanIcon({ active }: IP) {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 11l3 3L22 4"/>
       <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
     </svg>
@@ -25,7 +25,7 @@ function PlanIcon({ active }: IP) {
 }
 function CoursesIcon({ active }: IP) {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 22V4"/>
       <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
     </svg>
@@ -33,20 +33,21 @@ function CoursesIcon({ active }: IP) {
 }
 function CoachIcon({ active }: IP) {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
       <line x1="18" y1="20" x2="18" y2="10"/>
       <line x1="12" y1="20" x2="12" y2="4"/>
       <line x1="6" y1="20" x2="6" y2="14"/>
     </svg>
   );
 }
-function ClubhouseIcon({ active }: IP) {
+function TrophyIcon({ active }: IP) {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 00-3-3.87"/>
-      <path d="M16 3.13a4 4 0 010 7.75"/>
+    <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={ic(active)} strokeWidth={sw(active)} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9H4a2 2 0 01-2-2V5h4"/>
+      <path d="M18 9h2a2 2 0 002-2V5h-4"/>
+      <path d="M12 17c-3.314 0-6-2.686-6-6V3h12v8c0 3.314-2.686 6-6 6z"/>
+      <path d="M12 17v4"/>
+      <path d="M8 21h8"/>
     </svg>
   );
 }
@@ -66,7 +67,7 @@ function CloseIcon() {
 }
 function BrandIcon() {
   return (
-    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="8" r="5"/>
       <line x1="12" y1="13" x2="12" y2="20"/>
       <line x1="8" y1="20" x2="16" y2="20"/>
@@ -76,11 +77,11 @@ function BrandIcon() {
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 const LINKS = [
-  { href: "/",                label: "Home",       Icon: HomeIcon },
-  { href: "/plan",            label: "Plan",       Icon: PlanIcon },
-  { href: "/courses",         label: "Courses",    Icon: CoursesIcon },
-  { href: "/rounds/insights", label: "Coach",      Icon: CoachIcon },
-  { href: "/clubhouse",       label: "Clubhouse",  Icon: ClubhouseIcon },
+  { href: "/",                label: "Home",      Icon: HomeIcon },
+  { href: "/plan",            label: "Plan",      Icon: PlanIcon },
+  { href: "/courses",         label: "Courses",   Icon: CoursesIcon },
+  { href: "/rounds/insights", label: "Coach",     Icon: CoachIcon },
+  { href: "/clubhouse",       label: "Clubhouse", Icon: TrophyIcon },
 ];
 
 const BG = "linear-gradient(180deg, #0d5240 0%, #073528 100%)";
@@ -104,7 +105,6 @@ export default function Nav() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Close drawer on route change
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
   const isActive = (href: string) =>
@@ -119,55 +119,44 @@ function Sidebar({ isActive }: { isActive: (h: string) => boolean }) {
   return (
     <nav style={{
       position: "fixed", left: 0, top: 0,
-      width: 220, height: "100vh",
+      width: 72, height: "100vh",
       background: BG,
       display: "flex", flexDirection: "column",
+      alignItems: "center",
       zIndex: 100,
       boxShadow: "2px 0 16px rgba(0,0,0,0.18)",
     }}>
       {/* Brand */}
-      <a href="/" style={{ display:"flex", alignItems:"center", gap:12, padding:"22px 20px 18px", borderBottom:"1px solid rgba(255,255,255,0.09)", textDecoration:"none" }}>
-        <div style={BRAND_MARK}><BrandIcon/></div>
-        <div>
-          <div style={{ fontSize:11, fontWeight:700, letterSpacing:1.8, color:"white", lineHeight:1.2 }}>GOLF STRATEGY</div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", marginTop:3, letterSpacing:0.4 }}>Stephen · 2026</div>
-        </div>
+      <a href="/" style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "18px 0 14px", width: "100%",
+        borderBottom: "1px solid rgba(255,255,255,0.09)",
+        textDecoration: "none",
+      }}>
+        <div style={BRAND_MARK}><BrandIcon /></div>
       </a>
 
       {/* Nav items */}
-      <div style={{ flex:1, padding:"14px 10px", overflowY:"auto" }}>
+      <div style={{ flex: 1, paddingTop: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, width: "100%" }}>
         {LINKS.map(({ href, label, Icon }) => {
           const active = isActive(href);
           return (
             <a key={href} href={href} style={{
-              display:"flex", alignItems:"center", gap:13,
-              padding:"10px 14px", borderRadius:10, marginBottom:3,
-              textDecoration:"none",
-              color: active ? ACCENT : "rgba(255,255,255,0.78)",
-              background: active ? "rgba(242,148,80,0.13)" : "transparent",
-              fontWeight: active ? 600 : 450,
-              fontSize: 13.5,
-              letterSpacing: 0.1,
-              transition: "background 0.12s, color 0.12s",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 5, padding: "11px 0", borderRadius: 10, width: 58,
+              textDecoration: "none",
+              background: active ? "rgba(242,148,80,0.15)" : "transparent",
+              transition: "background 0.12s",
             }}>
-              <Icon active={active}/>
-              {label}
+              <Icon active={active} />
+              <span style={{
+                fontSize: 9, fontWeight: active ? 700 : 500,
+                color: active ? ACCENT : "rgba(255,255,255,0.52)",
+                letterSpacing: 0.4, lineHeight: 1, textAlign: "center",
+              }}>{label}</span>
             </a>
           );
         })}
-      </div>
-
-      {/* CTA */}
-      <div style={{ padding:"14px 14px 22px", borderTop:"1px solid rgba(255,255,255,0.09)" }}>
-        <a href="/rounds/play" style={{
-          display:"flex", alignItems:"center", justifyContent:"center", gap:7,
-          padding:"11px 16px", borderRadius:10,
-          background: ACCENT, color:"#131821",
-          fontWeight:700, fontSize:13, textDecoration:"none",
-          letterSpacing:0.2,
-        }}>
-          + New Round
-        </a>
       </div>
     </nav>
   );
@@ -182,58 +171,58 @@ function TopBar({ drawerOpen, setDrawerOpen, isActive }: {
   return (
     <>
       <nav style={{
-        position:"sticky", top:0, zIndex:100,
+        position: "sticky", top: 0, zIndex: 100,
         background: BG,
-        height:52, display:"flex", alignItems:"center",
-        justifyContent:"space-between", padding:"0 16px",
-        boxShadow:"0 1px 10px rgba(0,0,0,0.22)",
+        height: 52, display: "flex", alignItems: "center",
+        justifyContent: "space-between", padding: "0 16px",
+        boxShadow: "0 1px 10px rgba(0,0,0,0.22)",
       }}>
-        <a href="/" style={{ display:"flex", alignItems:"center", gap:10, textDecoration:"none" }}>
-          <div style={{ ...BRAND_MARK, width:30, height:30, borderRadius:8 }}><BrandIcon/></div>
-          <span style={{ fontSize:12, fontWeight:700, letterSpacing:1.6, color:"white" }}>GOLF STRATEGY</span>
+        <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+          <div style={{ ...BRAND_MARK, width: 30, height: 30, borderRadius: 8 }}><BrandIcon /></div>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.6, color: "white" }}>GOLF STRATEGY</span>
         </a>
         <button
           onClick={() => setDrawerOpen(!drawerOpen)}
-          style={{ background:"none", border:"none", cursor:"pointer", padding:6, display:"flex", alignItems:"center" }}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 6, display: "flex", alignItems: "center" }}
           aria-label="Menu"
         >
-          {drawerOpen ? <CloseIcon/> : <MenuIcon/>}
+          {drawerOpen ? <CloseIcon /> : <MenuIcon />}
         </button>
       </nav>
 
       {/* Drawer overlay */}
       {drawerOpen && (
         <div
-          style={{ position:"fixed", inset:0, top:52, zIndex:99, background:"rgba(0,0,0,0.45)" }}
+          style={{ position: "fixed", inset: 0, top: 52, zIndex: 99, background: "rgba(0,0,0,0.45)" }}
           onClick={() => setDrawerOpen(false)}
         >
           <div
-            style={{ background: BG, position:"absolute", top:0, left:0, right:0 }}
+            style={{ background: BG, position: "absolute", top: 0, left: 0, right: 0 }}
             onClick={e => e.stopPropagation()}
           >
             {LINKS.map(({ href, label, Icon }) => {
               const active = isActive(href);
               return (
                 <a key={href} href={href} onClick={() => setDrawerOpen(false)} style={{
-                  display:"flex", alignItems:"center", gap:16,
-                  padding:"15px 20px",
-                  borderBottom:"1px solid rgba(255,255,255,0.07)",
-                  textDecoration:"none",
+                  display: "flex", alignItems: "center", gap: 16,
+                  padding: "15px 20px",
+                  borderBottom: "1px solid rgba(255,255,255,0.07)",
+                  textDecoration: "none",
                   color: active ? ACCENT : "rgba(255,255,255,0.85)",
                   fontWeight: active ? 600 : 450,
-                  fontSize:15,
+                  fontSize: 15,
                 }}>
-                  <Icon active={active}/>
+                  <Icon active={active} />
                   {label}
                 </a>
               );
             })}
-            <div style={{ padding:"16px 16px 20px" }}>
+            <div style={{ padding: "16px 16px 20px" }}>
               <a href="/rounds/play" style={{
-                display:"block", textAlign:"center",
-                padding:"13px 20px", background:ACCENT,
-                color:"#131821", borderRadius:10,
-                fontWeight:700, fontSize:14, textDecoration:"none",
+                display: "block", textAlign: "center",
+                padding: "13px 20px", background: ACCENT,
+                color: "#131821", borderRadius: 10,
+                fontWeight: 700, fontSize: 14, textDecoration: "none",
               }}>
                 + New Round
               </a>

@@ -59,7 +59,7 @@ function CoachGlyph({ size }: { size: number }) {
   );
 }
 
-function ImpactBars({ data, width, height }: { data: Array<{x:string;v:number;hi?:boolean}>; width:number; height:number }) {
+function ImpactBars({ data, width, height, labelColor = "rgba(255,255,255,0.55)" }: { data: Array<{x:string;v:number;hi?:boolean}>; width:number; height:number; labelColor?: string }) {
   if (!data.length) return null;
   const maxAbs = Math.max(...data.map(d => Math.abs(d.v)), 0.01);
   const rows = data.length, barH = Math.max(14, Math.floor((height-(rows-1)*8)/rows));
@@ -71,7 +71,7 @@ function ImpactBars({ data, width, height }: { data: Array<{x:string;v:number;hi
         const col = d.hi?"#f29450":d.v>0?"#c94a2a":"#1e8449";
         return (
           <g key={d.x}>
-            <text x={labelW-6} y={y+barH/2+4} textAnchor="end" fill="rgba(255,255,255,0.55)" fontSize={10}>{d.x}</text>
+            <text x={labelW-6} y={y+barH/2+4} textAnchor="end" fill={labelColor} fontSize={10}>{d.x}</text>
             <rect x={labelW} y={y} width={bw} height={barH} fill={col} rx={3}/>
             <text x={labelW+bw+5} y={y+barH/2+4} fill={col} fontSize={10} fontWeight={700}>{(d.v>0?"+":"")+d.v.toFixed(2)}</text>
           </g>
@@ -117,6 +117,8 @@ export default function Home() {
   const [nextRound, setNextRound] = useState<any>(null);
   const [nextRoundCourse, setNextRoundCourse] = useState<any>(null);
   const [nextRoundPlan, setNextRoundPlan] = useState<any>(null);
+  const [planAdders, setPlanAdders] = useState<Array<{hole:number;par:number;avg:number;count:number}>>([]);
+  const [planSavers, setPlanSavers] = useState<Array<{hole:number;par:number;avg:number;count:number}>>([]);
   const [loading, setLoading] = useState(true);
   // Responsive
   const [windowWidth, setWindowWidth] = useState(1440);
@@ -238,6 +240,29 @@ export default function Home() {
         setNextRoundPlan(np??null);
       }
 
+      // Per-hole performance for pre-round plan card
+      const holeMap: Record<number, {stps:number[];par:number}> = {};
+      const sourceRounds = nr
+        ? completedAll.filter((r:any) => r.course_id === nr.course_id)
+        : completedAll;
+      const fallback = sourceRounds.length === 0;
+      const finalSource = fallback ? completedAll : sourceRounds;
+      for (const r of finalSource) {
+        for (const h of (r.holes ?? [])) {
+          const s = Number(h.score);
+          if (!s || !h.par) continue;
+          if (!holeMap[h.hole]) holeMap[h.hole] = {stps:[], par:h.par};
+          holeMap[h.hole].stps.push(s - h.par);
+        }
+      }
+      const holeAvg = Object.entries(holeMap).map(([hole, v]) => ({
+        hole: Number(hole), par: v.par,
+        avg: v.stps.reduce((a,b)=>a+b,0) / v.stps.length,
+        count: v.stps.length,
+      }));
+      setPlanAdders([...holeAvg].sort((a,b) => b.avg - a.avg).slice(0, 2));
+      setPlanSavers([...holeAvg].sort((a,b) => a.avg - b.avg).slice(0, 2));
+
       setLoading(false);
     }
     load();
@@ -267,12 +292,23 @@ export default function Home() {
   const nrSlope=nextRoundCourse?.slope??null;
   const nrGoal=nextRoundPlan?.target_score??null;
 
-  // 5-day forecast anchored to today; highlight if tee date falls within window
-  const forecastDays=Array.from({length:5},(_,i)=>{
-    const d=new Date(); d.setDate(d.getDate()+i);
-    const icons=["sunny","partly-cloudy","partly-cloudy","cloudy","rainy"];
-    const temps=[74,71,73,68,66];
-    return{day:d.toLocaleDateString("en-US",{weekday:"short"}).toUpperCase().slice(0,3),icon:icons[i],hi:temps[i],isTee:nextRound?.date===d.toISOString().split("T")[0]};
+  // 5-day forecast: shift window so the last day shown is the golf day if it's > 4 days out
+  const todayMs = new Date().setHours(0,0,0,0);
+  const nrDaysOut = nextRound
+    ? Math.round((new Date(nextRound.date + "T12:00:00").getTime() - todayMs) / 86400000)
+    : 0;
+  const forecastStart = nextRound && nrDaysOut > 4 ? nrDaysOut - 4 : 0;
+  const wxIcons = ["sunny","partly-cloudy","partly-cloudy","cloudy","rainy","sunny","partly-cloudy"];
+  const wxTemps = [74,71,73,68,66,72,70];
+  const forecastDays = Array.from({length:5}, (_,i) => {
+    const offset = forecastStart + i;
+    const d = new Date(); d.setDate(d.getDate() + offset);
+    return {
+      day: d.toLocaleDateString("en-US",{weekday:"short"}).toUpperCase().slice(0,3),
+      icon: wxIcons[offset % wxIcons.length],
+      hi: wxTemps[offset % wxTemps.length],
+      isTee: nextRound?.date === d.toISOString().split("T")[0],
+    };
   });
 
   const briefDate=new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}).toUpperCase();
@@ -421,33 +457,64 @@ export default function Home() {
               </a>
 
               {/* 02 PRE-ROUND PLAN */}
-              <a href="/plan" style={{...B.cardDark, textDecoration:"none", cursor:"pointer"}}>
+              <a
+                href={nextRound ? `/rounds/play?roundId=${nextRound.id}` : "/plan"}
+                style={{...B.cardDark, textDecoration:"none", cursor:"pointer"}}
+              >
                 <div style={B.cardHead}>
                   <span style={B.cardLabelDk}>02 · PRE-ROUND PLAN</span>
                   <span style={B.cardArrowDk}>↗</span>
                 </div>
-                <div style={B.cardTitleDk}>
-                  {nextRoundPlan?.posture ?? (planPeek.length>0?`${planPeek.length} holes diverge from default.`:"Build your plan for today.")}
-                </div>
-                <div style={B.cardMetaDk}>
-                  {planPeek.length>0?"Hole-by-hole strategy from your engine.":"Answer 4 questions. Get a personalised strategy."}
-                </div>
-                {planPeek.length>0&&(
-                  <div style={B.planRows}>
-                    {planPeek.slice(0, isMobile?2:4).map(h=>(
-                      <div key={h.hole} style={B.planRow}>
-                        <span style={B.planRowHole}>{h.hole}</span>
-                        <span style={B.planRowMeta}>P{h.par}</span>
-                        <span style={B.planRowClub}>{h.club}</span>
-                        <span style={B.planRowAim}>aim {h.aim}</span>
-                        {!isMobile&&h.note&&<span style={B.planRowNote}>{h.note}</span>}
+
+                {nextRound ? (
+                  <>
+                    <div style={B.cardTitleDk}>{nrCourseName}</div>
+                    <div style={B.cardMetaDk}>
+                      {nrDate}{nrTeeBox ? ` · ${nrTeeBox} tees` : ""}
+                      {nextRoundPlan?.posture ? ` · ${nextRoundPlan.posture}` : ""}
+                    </div>
+
+                    {(planAdders.length > 0 || planSavers.length > 0) && (
+                      <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:10 }}>
+                        {planAdders.length > 0 && (
+                          <div>
+                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.8, color:"rgba(255,140,100,0.85)", marginBottom:5 }}>TOUGH HOLES</div>
+                            {planAdders.map(h => (
+                              <div key={`a${h.hole}`} style={B.planRow}>
+                                <span style={B.planRowHole}>{h.hole}</span>
+                                <span style={B.planRowMeta}>P{h.par}</span>
+                                <span style={{...B.planRowAim, color:"#ffaa88"}}>+{h.avg.toFixed(2)} avg</span>
+                                <span style={{...B.planRowNote, marginLeft:"auto"}}>{h.count}r</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {planSavers.length > 0 && (
+                          <div>
+                            <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.8, color:"rgba(100,220,160,0.85)", marginBottom:5 }}>SCORING HOLES</div>
+                            {planSavers.map(h => (
+                              <div key={`s${h.hole}`} style={B.planRow}>
+                                <span style={B.planRowHole}>{h.hole}</span>
+                                <span style={B.planRowMeta}>P{h.par}</span>
+                                <span style={{...B.planRowAim, color:"#7deba5"}}>{h.avg >= 0 ? "+" : ""}{h.avg.toFixed(2)} avg</span>
+                                <span style={{...B.planRowNote, marginLeft:"auto"}}>{h.count}r</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={B.cardTitleDk}>Build Your Gameplan</div>
+                    <div style={B.cardMetaDk}>No upcoming round found. Set up a pre-round plan to get hole-by-hole strategy, target scores, and course insights.</div>
+                  </>
                 )}
+
                 <div style={B.cardFootDk}>
-                  <span>{nrCourseName.split(" ")[0]} · 18 holes</span>
-                  <span style={B.cardCTADk}>Open plan →</span>
+                  <span>{nextRound ? `${nrCourseName.split(" ")[0]} · ${nextRound.holes_played || 18} holes` : "Plan your next round"}</span>
+                  <span style={B.cardCTADk}>{nextRound ? "Start round →" : "Build plan →"}</span>
                 </div>
               </a>
 
@@ -467,7 +534,7 @@ export default function Home() {
                   {leakImpact>0&&<div style={B.leakBadge}>RANK 1</div>}
                 </div>
                 <div style={B.leakTitle}>{leakTitle}</div>
-                {leakData.length>0&&<ImpactBars data={leakData} width={isMobile?220:240} height={70}/>}
+                {leakData.length>0&&<ImpactBars data={leakData} width={isMobile?220:240} height={70} labelColor="var(--ink-soft)"/>}
                 <div style={B.leakCoach}>
                   <em style={B.leakCoachQ}>{leakImpact>0.5?`"One more club. Aim center. Stop pin-hunting at distance."`:`"Track every club, every miss. The data shows you where your round lives."`}</em>
                   <div style={B.leakCoachA}>— Coach Vance</div>
