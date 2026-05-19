@@ -53,12 +53,9 @@ function WxIcon({ kind, size }: { kind: string; size: number }) {
 
 function CoachGlyph({ size }: { size: number }) {
   return (
-    <div style={{
-      width:size, height:size, borderRadius:"50%",
-      background:"linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%)",
-      display:"flex", alignItems:"center", justifyContent:"center",
-      flexShrink:0, fontSize:Math.round(size*0.45),
-    }}>⛳</div>
+    <div style={{ width:size, height:size, borderRadius:"50%", background:"linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:Math.round(size*0.45) }}>
+      ⛳
+    </div>
   );
 }
 
@@ -71,7 +68,7 @@ function ImpactBars({ data, width, height }: { data: Array<{x:string;v:number;hi
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow:"visible" }}>
       {data.map((d,i) => {
         const y = i*(barH+8), bw = Math.abs(d.v)/maxAbs*barMaxW;
-        const col = d.hi ? "#f29450" : d.v>0 ? "#c94a2a" : "#1e8449";
+        const col = d.hi?"#f29450":d.v>0?"#c94a2a":"#1e8449";
         return (
           <g key={d.x}>
             <text x={labelW-6} y={y+barH/2+4} textAnchor="end" fill="rgba(255,255,255,0.55)" fontSize={10}>{d.x}</text>
@@ -84,17 +81,20 @@ function ImpactBars({ data, width, height }: { data: Array<{x:string;v:number;hi
   );
 }
 
-// ─── Data helpers ──────────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 function computeHI(diffs: number[]): number | null {
   const last20 = diffs.slice(-20);
   if (last20.length < 3) return null;
-  const sorted = [...last20].sort((a,b) => a-b);
+  const sorted = [...last20].sort((a,b)=>a-b);
   const count = last20.length<=6?1:last20.length<=8?2:last20.length<=11?3:last20.length<=14?4:last20.length<=16?5:last20.length<=18?6:last20.length===19?7:8;
   return Math.floor(sorted.slice(0,count).reduce((s,d)=>s+d,0)/count*10)/10;
 }
-
 function fmtDate(iso: string): string {
   try { return new Date(iso+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}); }
+  catch { return iso; }
+}
+function fmtDateShort(iso: string): string {
+  try { return new Date(iso+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}); }
   catch { return iso; }
 }
 
@@ -113,11 +113,24 @@ export default function Home() {
   const [bestScore, setBestScore] = useState<number|null>(null);
   const [bestCourse, setBestCourse] = useState("");
   const [streak, setStreak] = useState(0);
+  // Next upcoming round
+  const [nextRound, setNextRound] = useState<any>(null);
+  const [nextRoundCourse, setNextRoundCourse] = useState<any>(null);
+  const [nextRoundPlan, setNextRoundPlan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // Responsive
+  const [windowWidth, setWindowWidth] = useState(1440);
+  useEffect(() => {
+    setWindowWidth(window.innerWidth);
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     async function load() {
       const { supabase } = await import("@/lib/supabase");
+
       const { data: rounds } = await supabase
         .from("rounds")
         .select("id,course_id,course_name,date,holes_played,holes,score_differential,tee_box")
@@ -133,114 +146,154 @@ export default function Home() {
         (cs??[]).forEach((c:any) => { courseMap[c.id] = c; });
       }
 
+      // Differentials
       const allDiffs = rounds.map((r:any) => {
-        if (r.score_differential!=null) return r.holes_played<=9 ? r.score_differential*2 : r.score_differential;
+        if (r.score_differential!=null) return r.holes_played<=9?r.score_differential*2:r.score_differential;
         const ci = courseMap[r.course_id];
         if (!ci?.rating||!ci?.slope) return null;
-        const scored = (r.holes??[]).filter((h:any)=>h.score&&Number(h.score)>0);
+        const scored=(r.holes??[]).filter((h:any)=>h.score&&Number(h.score)>0);
         if (!scored.length) return null;
-        const ags = scored.reduce((s:number,h:any)=>s+Math.min(Number(h.score)||0,(h.par||4)+2),0);
-        const is9=(r.holes_played??scored.length)<=9, is9C=(ci.hole_count??18)<=9;
+        const ags=scored.reduce((s:number,h:any)=>s+Math.min(Number(h.score)||0,(h.par||4)+2),0);
+        const is9=(r.holes_played??scored.length)<=9,is9C=(ci.hole_count??18)<=9;
         let rat=ci.rating;
         if(is9&&!is9C) rat/=2; else if(!is9&&is9C) rat*=2;
         return is9?(113/ci.slope*(ags-rat))*2:(ags-rat)*113/ci.slope;
-      }).filter((d:any):d is number => d!==null);
+      }).filter((d:any):d is number=>d!==null);
       setDiffs(allDiffs);
 
-      const completedAll = [...rounds].reverse().filter((r:any)=>(r.holes??[]).some((h:any)=>Number(h.score)>0));
-
+      // Last completed round
+      const completedAll=[...rounds].reverse().filter((r:any)=>(r.holes??[]).some((h:any)=>Number(h.score)>0));
       if (completedAll.length) {
         setLastRound(completedAll[0]);
-        setLastCourse(courseMap[completedAll[0].course_id]?.name ?? completedAll[0].course_name ?? "");
+        setLastCourse(courseMap[completedAll[0].course_id]?.name??completedAll[0].course_name??"");
       }
 
-      const planRound = completedAll.find((r:any)=>(r.holes??[]).some((h:any)=>h.aim&&h.aim.length));
+      // Plan peek
+      const planRound=completedAll.find((r:any)=>(r.holes??[]).some((h:any)=>h.aim&&h.aim.length));
       if (planRound) {
         setPlanPeek((planRound.holes??[]).filter((h:any)=>h.aim).slice(0,4).map((h:any)=>({
-          hole:h.hole, par:h.par, club:h.plan_club||h.club||"—", aim:h.aim||"CF", note:h.note||"",
+          hole:h.hole,par:h.par,club:h.plan_club||h.club||"—",aim:h.aim||"CF",note:h.note||"",
         })));
       }
 
-      const allHoles:any[] = rounds.flatMap((r:any)=>(r.holes??[]).filter((h:any)=>Number(h.score)>0));
+      // Biggest leak
+      const allHoles:any[]=rounds.flatMap((r:any)=>(r.holes??[]).filter((h:any)=>Number(h.score)>0));
       if (allHoles.length>10) {
-        const baseline = allHoles.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/allHoles.length;
-        const groups:Record<string,number[]> = {};
-        const add = (k:string,h:any) => { if(!groups[k]) groups[k]=[]; groups[k].push(Number(h.score)-h.par); };
+        const baseline=allHoles.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/allHoles.length;
+        const groups:Record<string,number[]>={};
+        const add=(k:string,h:any)=>{if(!groups[k])groups[k]=[];groups[k].push(Number(h.score)-h.par);};
         allHoles.forEach((h:any)=>{
           add(`Par ${h.par}`,h);
           if(h.par>=4&&h.tee_accuracy) add(`Drive ${h.tee_accuracy}`,h);
           if(h.appr_accuracy) add(`Approach ${h.appr_accuracy}`,h);
         });
-        const leaks = Object.entries(groups)
-          .filter(([,vals])=>vals.length>=5)
+        const leaks=Object.entries(groups).filter(([,v])=>v.length>=5)
           .map(([key,vals])=>({key,avg:vals.reduce((s,v)=>s+v,0)/vals.length,count:vals.length}))
-          .map(g=>({...g,impact:g.avg-baseline}))
-          .sort((a,b)=>b.impact-a.impact);
-        if (leaks.length>=2) {
-          setLeakTitle(leaks[0].key); setLeakImpact(leaks[0].impact); setLeakCount(leaks[0].count);
+          .map(g=>({...g,impact:g.avg-baseline})).sort((a,b)=>b.impact-a.impact);
+        if(leaks.length>=2){
+          setLeakTitle(leaks[0].key);setLeakImpact(leaks[0].impact);setLeakCount(leaks[0].count);
           setLeakData(leaks.slice(0,4).map((l,i)=>({x:l.key,v:l.impact,hi:i===0})));
         }
       }
 
-      const recentArr = completedAll.slice(0,4).map((r:any)=>{
+      // Recent rounds for activity rail
+      const recentArr=completedAll.slice(0,4).map((r:any)=>{
         const holes=(r.holes??[]).filter((h:any)=>Number(h.score)>0);
         const score=holes.reduce((s:number,h:any)=>s+Number(h.score),0);
         const ci=courseMap[r.course_id];
         let diff=0;
         if(r.score_differential!=null) diff=r.holes_played<=9?r.score_differential*2:r.score_differential;
-        else if(ci?.rating&&ci?.slope){ const is9=(r.holes_played??holes.length)<=9; const rat=is9&&(ci.hole_count??18)>9?ci.rating/2:ci.rating; diff=is9?(113/ci.slope*(score-rat))*2:(score-rat)*113/ci.slope; }
+        else if(ci?.rating&&ci?.slope){const is9=(r.holes_played??holes.length)<=9;const rat=is9&&(ci.hole_count??18)>9?ci.rating/2:ci.rating;diff=is9?(113/ci.slope*(score-rat))*2:(score-rat)*113/ci.slope;}
         const d=new Date(r.date+"T12:00:00");
-        return { date:d.toLocaleDateString("en-US",{month:"short",day:"numeric"}), weekday:d.toLocaleDateString("en-US",{weekday:"short"}), course:ci?.name??r.course_name??"Unknown", score, diff, badges:[] as string[] };
+        return{date:d.toLocaleDateString("en-US",{month:"short",day:"numeric"}),weekday:d.toLocaleDateString("en-US",{weekday:"short"}),course:ci?.name??r.course_name??"Unknown",score,diff,badges:[] as string[]};
       });
       setRecentRoundsData(recentArr);
 
-      let best:number|null=null, bCourse="", s=0, streakDone=false;
-      for (const r of completedAll) {
+      // Best score + streak
+      let best:number|null=null,bCourse="",s=0,sDone=false;
+      for(const r of completedAll){
         const holes=(r.holes??[]).filter((h:any)=>Number(h.score)>0);
         const score=holes.reduce((sum:number,h:any)=>sum+Number(h.score),0);
         if(holes.length>=9){
-          if(best===null||score<best){ best=score; bCourse=courseMap[r.course_id]?.name??r.course_name??""; }
-          if(!streakDone){ if(score<90) s++; else streakDone=true; }
+          if(best===null||score<best){best=score;bCourse=courseMap[r.course_id]?.name??r.course_name??"";}
+          if(!sDone){if(score<90)s++;else sDone=true;}
         }
       }
-      setBestScore(best); setBestCourse(bCourse); setStreak(s);
+      setBestScore(best);setBestCourse(bCourse);setStreak(s);
+
+      // ── Next upcoming round (date >= today) ──────────────────────────────
+      const todayStr=new Date().toISOString().split("T")[0];
+      const{data:nr}=await supabase.from("rounds").select("id,course_id,course_name,date,tee_box,holes_played")
+        .gte("date",todayStr).order("date",{ascending:true}).limit(1).maybeSingle();
+      if(nr){
+        setNextRound(nr);
+        let nrCourse=courseMap[nr.course_id]??null;
+        if(!nrCourse&&nr.course_id){
+          const{data:nc}=await supabase.from("courses").select("id,name,rating,slope,hole_count").eq("id",nr.course_id).maybeSingle();
+          if(nc) nrCourse=nc;
+        }
+        setNextRoundCourse(nrCourse);
+        const{data:np}=await supabase.from("round_plans").select("posture,target_score,answers")
+          .eq("course_id",nr.course_id).eq("round_date",nr.date).maybeSingle();
+        setNextRoundPlan(np??null);
+      }
+
       setLoading(false);
     }
     load();
   }, []);
 
-  const hi = computeHI(diffs);
-  const last20 = diffs.slice(-20);
-  const prev20 = diffs.slice(-40,-20);
-  const trend30 = last20.length>=4&&prev20.length>=4 ? (computeHI(prev20)??0)-(hi??0) : null;
-  const sparkData = last20.map(d => -d);
+  // ── Derived values ──────────────────────────────────────────────────────────
+  const hi=computeHI(diffs);
+  const last20=diffs.slice(-20),prev20=diffs.slice(-40,-20);
+  const trend30=last20.length>=4&&prev20.length>=4?(computeHI(prev20)??0)-(hi??0):null;
+  const sparkData=last20.map(d=>-d);
 
-  const lastHoles:any[] = lastRound?.holes??[];
-  const scoredHoles = lastHoles.filter((h:any)=>Number(h.score)>0);
-  const totalScore = scoredHoles.reduce((s:number,h:any)=>s+Number(h.score),0);
-  const totalPar = scoredHoles.reduce((s:number,h:any)=>s+(h.par||4),0);
-  const fwyHit = scoredHoles.filter((h:any)=>h.par>=4&&h.tee_accuracy==="Hit").length;
-  const fwyTotal = scoredHoles.filter((h:any)=>h.par>=4&&h.tee_accuracy).length;
-  const totalPutts = scoredHoles.reduce((s:number,h:any)=>s+(Number(h.putts)||0),0);
-  const lastSTP = totalScore - totalPar;
-  const lastDiff = diffs.length>0 ? diffs[diffs.length-1] : null;
+  const lastHoles:any[]=lastRound?.holes??[];
+  const scoredHoles=lastHoles.filter((h:any)=>Number(h.score)>0);
+  const totalScore=scoredHoles.reduce((s:number,h:any)=>s+Number(h.score),0);
+  const totalPar=scoredHoles.reduce((s:number,h:any)=>s+(h.par||4),0);
+  const fwyHit=scoredHoles.filter((h:any)=>h.par>=4&&h.tee_accuracy==="Hit").length;
+  const fwyTotal=scoredHoles.filter((h:any)=>h.par>=4&&h.tee_accuracy).length;
+  const totalPutts=scoredHoles.reduce((s:number,h:any)=>s+(Number(h.putts)||0),0);
+  const lastSTP=totalScore-totalPar;
+  const lastDiff=diffs.length>0?diffs[diffs.length-1]:null;
 
-  const briefDate = new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}).toUpperCase();
+  // Next tee data
+  const nrCourseName=nextRound?(nextRoundCourse?.name??nextRound.course_name??"Unknown Course"):(lastCourse||"No course yet");
+  const nrDate=nextRound?fmtDateShort(nextRound.date):null;
+  const nrTeeBox=nextRound?.tee_box??null;
+  const nrRating=nextRoundCourse?.rating??null;
+  const nrSlope=nextRoundCourse?.slope??null;
+  const nrGoal=nextRoundPlan?.target_score??null;
 
-  const FORECAST = [
-    {day:"MON",icon:"partly-cloudy",hi:72,isTee:false},
-    {day:"TUE",icon:"cloudy",hi:68,isTee:false},
-    {day:"WED",icon:"sunny",hi:75,isTee:true},
-    {day:"THU",icon:"partly-cloudy",hi:71,isTee:false},
-    {day:"FRI",icon:"rainy",hi:64,isTee:false},
-  ];
+  // 5-day forecast anchored to today; highlight if tee date falls within window
+  const forecastDays=Array.from({length:5},(_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()+i);
+    const icons=["sunny","partly-cloudy","partly-cloudy","cloudy","rainy"];
+    const temps=[74,71,73,68,66];
+    return{day:d.toLocaleDateString("en-US",{weekday:"short"}).toUpperCase().slice(0,3),icon:icons[i],hi:temps[i],isTee:nextRound?.date===d.toISOString().split("T")[0]};
+  });
+
+  const briefDate=new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}).toUpperCase();
+
+  // ── Responsive breakpoints ──────────────────────────────────────────────────
+  const isMobile=windowWidth<768;
+  const isTablet=windowWidth>=768&&windowWidth<1100;
+
+  const containerPad=isMobile?"16px 16px 32px":isTablet?"20px 24px 40px":"20px 48px 40px";
+  const statCols=isMobile?"1fr":isTablet?"1.4fr 1fr":"1.6fr 1fr 1fr";
+  const mainCols=isMobile?"1fr":isTablet?"1fr 1fr":"1.1fr 1.1fr 1fr";
+  const actCols=isMobile?"1fr 1fr":"repeat(4, 1fr)";
+  const bigNumSize=isMobile?58:90;
+  const smallNumSize=isMobile?28:38;
 
   return (
     <div style={ROOT}>
-      <div style={{ maxWidth:1440, margin:"0 auto", padding:"20px 48px 40px" }}>
+      <div style={{ maxWidth:1440, margin:"0 auto", padding:containerPad }}>
 
         {/* ── Top bar ──────────────────────────────────────────────────────── */}
-        <div style={B.topbar}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:14, borderBottom:"1px solid var(--line)", marginBottom:20, flexWrap:"wrap", gap:10 }}>
           <div style={B.tbLeft}>
             <div style={B.brandMark}/>
             <div>
@@ -248,8 +301,8 @@ export default function Home() {
               <div style={B.brandMeta}>Stephen · season 2026</div>
             </div>
           </div>
-          <div style={B.tbNav}>
-            {[
+          <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+            {!isMobile && [
               {label:"Home",href:"/",active:true},
               {label:"Plan",href:"/plan"},
               {label:"Courses",href:"/courses"},
@@ -258,9 +311,18 @@ export default function Home() {
             ].map(({label,href,active})=>(
               <a key={label} href={href} style={{...B.tbNavLink,...(active?B.tbNavActive:{})}}>{label}</a>
             ))}
-            <a href="/rounds/play" style={B.tbCTA}>+ New round</a>
+            <a href="/rounds/play" style={{...B.tbCTA, padding:isMobile?"8px 14px":"7px 14px"}}>+ {isMobile?"Round":"New round"}</a>
           </div>
         </div>
+
+        {/* Mobile nav strip */}
+        {isMobile && (
+          <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:12, marginBottom:16, borderBottom:"1px solid var(--line)" }}>
+            {[{label:"Home",href:"/",active:true},{label:"Plan",href:"/plan"},{label:"Courses",href:"/courses"},{label:"Coach",href:"/rounds/insights"},{label:"Clubhouse",href:"/clubhouse"}].map(({label,href,active})=>(
+              <a key={label} href={href} style={{ fontSize:12, fontWeight:500, padding:"6px 12px", borderRadius:999, whiteSpace:"nowrap" as const, textDecoration:"none", background:active?"var(--ink)":"var(--paper)", color:active?"var(--paper)":"var(--ink-soft)", border:active?"none":"1px solid var(--line)", flexShrink:0 }}>{label}</a>
+            ))}
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign:"center", padding:"80px 0", color:"var(--ink-mute)", fontFamily:"var(--font-mono)", fontSize:12, letterSpacing:2 }}>
@@ -268,75 +330,91 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* ── Stat row ─────────────────────────────────────────────────── */}
-            <div style={B.statRow}>
+            {/* ── Stat row ───────────────────────────────────────────────────── */}
+            <div style={{ display:"grid", gridTemplateColumns:statCols, gap:14, marginBottom:24 }}>
+              {/* Big HI */}
               <div style={B.statBig}>
                 <div style={B.statLabel}><span style={B.statDot}/> USGA HANDICAP INDEX</div>
-                <div style={{...B.statBigNum, fontVariantNumeric:"tabular-nums"}}>
-                  {hi!=null ? hi.toFixed(1) : "—"}
+                <div style={{...B.statBigNum, fontSize:bigNumSize, fontVariantNumeric:"tabular-nums"}}>
+                  {hi!=null?hi.toFixed(1):"—"}
                 </div>
                 <div style={B.statBigFoot}>
-                  {trend30!=null&&trend30>0 && <span style={B.statDeltaGood}>▼ {trend30.toFixed(1)}</span>}
+                  {trend30!=null&&trend30>0&&<span style={B.statDeltaGood}>▼ {trend30.toFixed(1)}</span>}
                   <span style={B.statBigSub}>{trend30!=null&&trend30>0?"vs 30 days ago · ":""}best 8 of 20</span>
                 </div>
-                {sparkData.length>=4 && (
-                  <div style={B.statBigSpark}>
-                    <Sparkline data={sparkData} w={300} h={42} stroke="var(--green-deep)" fill="rgba(15,110,86,0.14)"/>
+                {sparkData.length>=4&&(
+                  <div style={{ marginTop:16 }}>
+                    <Sparkline data={sparkData} w={isMobile?260:300} h={42} stroke="var(--green-deep)" fill="rgba(15,110,86,0.14)"/>
                   </div>
                 )}
               </div>
 
-              <div style={B.statCol}>
-                <div style={B.statSmall}>
-                  <div style={B.statLabel}><span style={B.statDot}/> LAST ROUND</div>
-                  <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{totalScore||"—"}</div>
-                  <div style={B.statSmallSub}>
-                    {totalScore>0
-                      ? `${lastSTP>0?"+":""}${lastSTP===0?"E":lastSTP} at ${lastCourse}${lastRound?` · ${fmtDate(lastRound.date)}`:""}`
-                      : "No rounds yet"}
+              {/* Small stats — 2×2 grid on mobile/tablet, two separate cols on desktop */}
+              {(isMobile||isTablet) ? (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, alignContent:"start" }}>
+                  {[
+                    {label:"LAST ROUND",val:totalScore||"—",sub:totalScore>0?`${lastSTP>0?"+":""}${lastSTP===0?"E":lastSTP} at ${lastCourse}`:"No rounds yet"},
+                    {label:"STREAK",val:streak,sub:"sub-90, current",suffix:" rounds"},
+                    {label:"ROUNDS LOGGED",val:totalRounds,sub:"season 2026"},
+                    {label:"CAREER BEST",val:bestScore??("—" as any),sub:bestCourse||"No rounds yet"},
+                  ].map(({label,val,sub,suffix})=>(
+                    <div key={label} style={{...B.statSmall, padding:"14px 16px"}}>
+                      <div style={B.statLabel}><span style={B.statDot}/> {label}</div>
+                      <div style={{...B.statSmallNum, fontSize:smallNumSize, fontVariantNumeric:"tabular-nums"}}>
+                        {val}{suffix&&<span style={B.streakUnit}>{suffix}</span>}
+                      </div>
+                      <div style={B.statSmallSub}>{sub}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div style={B.statCol}>
+                    <div style={B.statSmall}>
+                      <div style={B.statLabel}><span style={B.statDot}/> LAST ROUND</div>
+                      <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{totalScore||"—"}</div>
+                      <div style={B.statSmallSub}>{totalScore>0?`${lastSTP>0?"+":""}${lastSTP===0?"E":lastSTP} at ${lastCourse}`:"No rounds yet"}</div>
+                    </div>
+                    <div style={B.statSmall}>
+                      <div style={B.statLabel}><span style={B.statDot}/> STREAK</div>
+                      <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{streak}<span style={B.streakUnit}> rounds</span></div>
+                      <div style={B.statSmallSub}>sub-90, current</div>
+                    </div>
                   </div>
-                </div>
-                <div style={B.statSmall}>
-                  <div style={B.statLabel}><span style={B.statDot}/> STREAK</div>
-                  <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>
-                    {streak}<span style={B.streakUnit}> rounds</span>
+                  <div style={B.statCol}>
+                    <div style={B.statSmall}>
+                      <div style={B.statLabel}><span style={B.statDot}/> ROUNDS LOGGED</div>
+                      <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{totalRounds}</div>
+                      <div style={B.statSmallSub}>season 2026</div>
+                    </div>
+                    <div style={B.statSmall}>
+                      <div style={B.statLabel}><span style={B.statDot}/> CAREER BEST</div>
+                      <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{bestScore??("—" as any)}</div>
+                      <div style={B.statSmallSub}>{bestCourse||"No rounds yet"}</div>
+                    </div>
                   </div>
-                  <div style={B.statSmallSub}>sub-90, current</div>
-                </div>
-              </div>
-
-              <div style={B.statCol}>
-                <div style={B.statSmall}>
-                  <div style={B.statLabel}><span style={B.statDot}/> ROUNDS LOGGED</div>
-                  <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{totalRounds}</div>
-                  <div style={B.statSmallSub}>season 2026</div>
-                </div>
-                <div style={B.statSmall}>
-                  <div style={B.statLabel}><span style={B.statDot}/> CAREER BEST</div>
-                  <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{bestScore??("—" as any)}</div>
-                  <div style={B.statSmallSub}>{bestCourse||"No rounds yet"}</div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
             {/* ── Briefing banner ───────────────────────────────────────────── */}
-            <div style={B.briefHeader}>
-              <CoachGlyph size={42}/>
-              <div>
-                <div style={B.briefKicker}>TODAY'S BRIEFING · {briefDate}</div>
-                <div style={B.briefHeadline}>
-                  {totalRounds} rounds in the books.{" "}
-                  <em style={B.briefEm}>
-                    {leakImpact>0.3&&leakTitle!=="—" ? `${leakTitle} is the leak.` : "Find your pattern."}
-                  </em>
+            <div style={{...B.briefHeader, flexDirection:isMobile?"column":"row", alignItems:isMobile?"flex-start":"center", gap:isMobile?10:16}}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <CoachGlyph size={isMobile?32:42}/>
+                <div>
+                  <div style={B.briefKicker}>TODAY'S BRIEFING · {briefDate}</div>
+                  <div style={{...B.briefHeadline, fontSize:isMobile?17:22}}>
+                    {totalRounds} rounds in the books.{" "}
+                    <em style={B.briefEm}>{leakImpact>0.3&&leakTitle!=="—"?`${leakTitle} is the leak.`:"Find your pattern."}</em>
+                  </div>
                 </div>
               </div>
-              <div style={B.briefSpacer}/>
-              <a href="/rounds/insights" style={B.briefCTA}>Drill into leaks →</a>
+              {!isMobile&&<div style={B.briefSpacer}/>}
+              <a href="/rounds/insights" style={{...B.briefCTA, marginTop:isMobile?4:0}}>Drill into leaks →</a>
             </div>
 
             {/* ── Main grid ─────────────────────────────────────────────────── */}
-            <div style={B.mainGrid}>
+            <div style={{ display:"grid", gridTemplateColumns:mainCols, gap:14, marginBottom:26 }}>
 
               {/* 01 NEXT TEE */}
               <a href="/courses" style={{...B.card, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
@@ -344,22 +422,33 @@ export default function Home() {
                   <span style={B.cardLabel}>01 · NEXT TEE</span>
                   <span style={B.cardArrow}>↗</span>
                 </div>
-                <div style={B.cardTitle}>{lastCourse||"No course yet"}</div>
+                <div style={B.cardTitle}>{nrCourseName}</div>
                 <div style={B.cardMetaRow}>
-                  <span style={B.cardMetaStrong}>Plan a round to set your tee time</span>
+                  {nextRound ? (
+                    <>
+                      <span style={B.cardMetaStrong}>{nrDate}</span>
+                      {nrTeeBox&&<><span style={B.cardMetaDot}>·</span><span>{nrTeeBox} tees</span></>}
+                    </>
+                  ) : (
+                    <span style={B.cardMetaStrong}>No upcoming round planned</span>
+                  )}
                 </div>
-                <div style={B.wxStrip}>
-                  {FORECAST.map(d=>(
+                <div style={{ display:"flex", gap:6, marginTop:16 }}>
+                  {forecastDays.map(d=>(
                     <div key={d.day} style={{...B.wxCell, background:d.isTee?"var(--accent)":"var(--bg)", borderColor:d.isTee?"var(--accent-deep)":"var(--line)"}}>
                       <div style={B.wxDay}>{d.day}</div>
-                      <div style={B.wxIcon}><WxIcon kind={d.icon} size={20}/></div>
+                      <div style={B.wxIcon}><WxIcon kind={d.icon} size={isMobile?16:20}/></div>
                       <div style={{...B.wxTemp, fontVariantNumeric:"tabular-nums"}}>{d.hi}°</div>
                     </div>
                   ))}
                 </div>
                 <div style={B.cardFoot}>
-                  <span style={B.cardFootK}>View courses</span>
-                  <span style={B.cardFootK}>Start plan →</span>
+                  {nrGoal&&<span style={B.cardFootK}>Goal · <strong style={{color:"var(--ink)"}}>{nrGoal}</strong></span>}
+                  {nrRating&&nrSlope ? (
+                    <span style={B.cardFootK}>Rating <strong style={{color:"var(--ink)"}}>{nrRating}</strong> / Slope <strong style={{color:"var(--ink)"}}>{nrSlope}</strong></span>
+                  ) : (
+                    <span style={B.cardFootK}>{nextRound?"Open plan →":"Start a plan →"}</span>
+                  )}
                 </div>
               </a>
 
@@ -370,26 +459,26 @@ export default function Home() {
                   <span style={B.cardArrowDk}>↗</span>
                 </div>
                 <div style={B.cardTitleDk}>
-                  {planPeek.length>0 ? `${planPeek.length} holes diverge from default.` : "Build your plan for today."}
+                  {nextRoundPlan?.posture ?? (planPeek.length>0?`${planPeek.length} holes diverge from default.`:"Build your plan for today.")}
                 </div>
                 <div style={B.cardMetaDk}>
-                  {planPeek.length>0 ? "Hole-by-hole strategy from your engine." : "Answer 4 questions. Get a personalised strategy."}
+                  {planPeek.length>0?"Hole-by-hole strategy from your engine.":"Answer 4 questions. Get a personalised strategy."}
                 </div>
-                {planPeek.length>0 && (
+                {planPeek.length>0&&(
                   <div style={B.planRows}>
-                    {planPeek.map(h=>(
+                    {planPeek.slice(0, isMobile?2:4).map(h=>(
                       <div key={h.hole} style={B.planRow}>
                         <span style={B.planRowHole}>{h.hole}</span>
                         <span style={B.planRowMeta}>P{h.par}</span>
                         <span style={B.planRowClub}>{h.club}</span>
                         <span style={B.planRowAim}>aim {h.aim}</span>
-                        {h.note&&<span style={B.planRowNote}>{h.note}</span>}
+                        {!isMobile&&h.note&&<span style={B.planRowNote}>{h.note}</span>}
                       </div>
                     ))}
                   </div>
                 )}
                 <div style={B.cardFootDk}>
-                  <span>{lastCourse?`${lastCourse.split(" ")[0]} · 18 holes`:"18 holes"}</span>
+                  <span>{nrCourseName.split(" ")[0]} · 18 holes</span>
                   <span style={B.cardCTADk}>Open plan →</span>
                 </div>
               </a>
@@ -402,21 +491,17 @@ export default function Home() {
                 </div>
                 <div style={B.leakHead}>
                   <div>
-                    <div style={{...B.leakBigNum, fontVariantNumeric:"tabular-nums"}}>
-                      {leakImpact>0 ? `+${leakImpact.toFixed(2)}` : "—"}
+                    <div style={{...B.leakBigNum, fontSize:isMobile?40:56, fontVariantNumeric:"tabular-nums"}}>
+                      {leakImpact>0?`+${leakImpact.toFixed(2)}`:"—"}
                     </div>
                     <div style={B.leakBigSub}>strokes/round · {leakCount} holes</div>
                   </div>
-                  {leakImpact>0 && <div style={B.leakBadge}>RANK 1</div>}
+                  {leakImpact>0&&<div style={B.leakBadge}>RANK 1</div>}
                 </div>
                 <div style={B.leakTitle}>{leakTitle}</div>
-                {leakData.length>0 && <ImpactBars data={leakData} width={240} height={70}/>}
+                {leakData.length>0&&<ImpactBars data={leakData} width={isMobile?220:240} height={70}/>}
                 <div style={B.leakCoach}>
-                  <em style={B.leakCoachQ}>
-                    {leakImpact>0.5
-                      ? `"One more club. Aim center. Stop pin-hunting at distance."`
-                      : `"Track every club, every miss. The data shows you where your round lives."`}
-                  </em>
+                  <em style={B.leakCoachQ}>{leakImpact>0.5?`"One more club. Aim center. Stop pin-hunting at distance."`:`"Track every club, every miss. The data shows you where your round lives."`}</em>
                   <div style={B.leakCoachA}>— Coach Vance</div>
                 </div>
               </a>
@@ -431,7 +516,7 @@ export default function Home() {
                   <div>
                     <div style={B.cardTitle}>{totalScore?`${totalScore} at ${lastCourse}`:"No rounds yet"}</div>
                     <div style={B.cardMetaRow}>
-                      {totalScore>0 && <>
+                      {totalScore>0&&<>
                         <span>{lastSTP>0?`+${lastSTP}`:lastSTP===0?"E":lastSTP}</span>
                         {fwyTotal>0&&<><span style={B.cardMetaDot}>·</span><span>{fwyHit}/{fwyTotal} fwy</span></>}
                         {totalPutts>0&&<><span style={B.cardMetaDot}>·</span><span>{totalPutts} putts</span></>}
@@ -450,18 +535,18 @@ export default function Home() {
               <div style={B.activityLabel}>05 · RECENT ROUNDS</div>
               <a href="/clubhouse" style={B.activityAll}>All {totalRounds} rounds →</a>
             </div>
-            <div style={B.activity}>
-              {recentRoundsData.length>0 ? recentRoundsData.map((r,i)=>(
+            <div style={{ display:"grid", gridTemplateColumns:actCols, gap:12, marginBottom:24 }}>
+              {recentRoundsData.length>0?recentRoundsData.map((r,i)=>(
                 <div key={i} style={B.actCard}>
                   <div style={B.actDate}>{r.date} · {r.weekday}</div>
                   <div style={B.actWhere}>{r.course}</div>
                   <div style={B.actScoreRow}>
-                    <div style={{...B.actScore, fontVariantNumeric:"tabular-nums"}}>{r.score}</div>
+                    <div style={{...B.actScore, fontSize:isMobile?24:30, fontVariantNumeric:"tabular-nums"}}>{r.score}</div>
                     {r.badges.includes("pr")&&<div style={B.actPR}>PR</div>}
                   </div>
                   <div style={B.actDiff}>diff {r.diff.toFixed(1)}</div>
                 </div>
-              )) : (
+              )):(
                 <div style={{...B.actCard, color:"var(--ink-mute)", fontSize:13, gridColumn:"1/-1"}}>
                   No completed rounds yet. Start your first round to see activity here.
                 </div>
@@ -469,9 +554,9 @@ export default function Home() {
             </div>
 
             {/* ── Footer ────────────────────────────────────────────────────── */}
-            <div style={B.footer}>
+            <div style={{...B.footer, flexDirection:isMobile?"column":"row", gap:isMobile?12:0}}>
               <span>Press box · {totalRounds} rounds logged</span>
-              <span style={{display:"flex", gap:24}}>
+              <span style={{ display:"flex", gap:24 }}>
                 <a href="/rounds/play" style={B.footLink}>Add round</a>
                 <a href="/add-course" style={B.footLink}>Add course</a>
                 <a href="/clubhouse" style={B.footLink}>Settings</a>
@@ -486,17 +571,14 @@ export default function Home() {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const B: Record<string, React.CSSProperties> = {
-  topbar: { display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:16, borderBottom:"1px solid var(--line)", marginBottom:24 },
   tbLeft: { display:"flex", alignItems:"center", gap:14 },
   brandMark: { width:36, height:36, borderRadius:10, background:"linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%)" },
   brandName: { fontSize:12, fontWeight:700, letterSpacing:1.6, color:"var(--ink)" },
   brandMeta: { fontSize:11, color:"var(--ink-mute)", marginTop:2 },
-  tbNav: { display:"flex", gap:4, alignItems:"center" },
   tbNavLink: { fontSize:13, color:"var(--ink-soft)", fontWeight:500, padding:"7px 13px", borderRadius:999, textDecoration:"none" },
   tbNavActive: { background:"var(--ink)", color:"var(--paper)" },
-  tbCTA: { fontSize:13, fontWeight:600, padding:"7px 14px", borderRadius:999, background:"var(--accent)", color:"var(--ink)", marginLeft:8, textDecoration:"none" },
+  tbCTA: { fontSize:13, fontWeight:600, padding:"7px 14px", borderRadius:999, background:"var(--accent)", color:"var(--ink)", marginLeft:4, textDecoration:"none" },
 
-  statRow: { display:"grid", gridTemplateColumns:"1.6fr 1fr 1fr", gap:14, marginBottom:26 },
   statBig: { background:"var(--paper)", border:"1px solid var(--line)", borderRadius:16, padding:22, display:"flex", flexDirection:"column" },
   statCol: { display:"flex", flexDirection:"column", gap:14 },
   statSmall: { background:"var(--paper)", border:"1px solid var(--line)", borderRadius:16, padding:"18px 20px", flex:1, display:"flex", flexDirection:"column", justifyContent:"center" },
@@ -506,7 +588,6 @@ const B: Record<string, React.CSSProperties> = {
   statBigFoot: { display:"flex", alignItems:"center", gap:10, marginTop:8 },
   statDeltaGood: { fontFamily:"var(--font-mono)", fontSize:13, fontWeight:700, color:"var(--green)" },
   statBigSub: { fontSize:12, color:"var(--ink-mute)" },
-  statBigSpark: { marginTop:16 },
   statSmallNum: { fontFamily:"var(--font-display)", fontStyle:"italic", fontWeight:600, fontSize:38, lineHeight:1, color:"var(--ink)", letterSpacing:-1, marginTop:8 },
   streakUnit: { fontSize:14, color:"var(--ink-mute)", marginLeft:6, fontStyle:"normal", fontFamily:"var(--font-ui)", fontWeight:500 },
   statSmallSub: { fontSize:11, color:"var(--ink-mute)", marginTop:4 },
@@ -518,7 +599,6 @@ const B: Record<string, React.CSSProperties> = {
   briefSpacer: { flex:1 },
   briefCTA: { fontSize:13, fontWeight:600, color:"var(--accent)", borderBottom:"1px solid var(--accent)", paddingBottom:1, textDecoration:"none" },
 
-  mainGrid: { display:"grid", gridTemplateColumns:"1.1fr 1.1fr 1fr", gap:14, marginBottom:26 },
   card: { background:"var(--paper)", border:"1px solid var(--line)", borderRadius:16, padding:"20px 22px", display:"flex", flexDirection:"column", minHeight:280 },
   cardDark: { background:"linear-gradient(160deg, #0c4f3a 0%, #084634 100%)", color:"var(--paper)", borderRadius:16, padding:"20px 22px", display:"flex", flexDirection:"column", minHeight:280, position:"relative", overflow:"hidden" },
   cardAccent: { background:"var(--accent-soft)", border:"1px solid var(--accent)", borderRadius:16, padding:"20px 22px", display:"flex", flexDirection:"column", minHeight:280 },
@@ -539,7 +619,6 @@ const B: Record<string, React.CSSProperties> = {
   cardCTADk: { color:"var(--accent)", fontWeight:600 },
   cardFootK: { fontSize:11, color:"var(--ink-mute)" },
 
-  wxStrip: { display:"flex", gap:6, marginTop:16 },
   wxCell: { flex:1, padding:"8px 4px", borderRadius:8, textAlign:"center", border:"1px solid", display:"flex", flexDirection:"column", alignItems:"center", gap:2 },
   wxDay: { fontSize:9, fontWeight:700, letterSpacing:1.2 },
   wxIcon: { margin:"2px 0" },
@@ -569,7 +648,6 @@ const B: Record<string, React.CSSProperties> = {
   activityHead: { display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12 },
   activityLabel: { fontSize:10, fontWeight:700, letterSpacing:1.8, color:"var(--ink-mute)" },
   activityAll: { fontSize:12, fontWeight:600, color:"var(--green-deep)", borderBottom:"1px solid var(--green)", paddingBottom:1, textDecoration:"none" },
-  activity: { display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:12, marginBottom:24 },
   actCard: { background:"var(--paper)", border:"1px solid var(--line)", borderRadius:14, padding:"16px 18px", display:"flex", flexDirection:"column", gap:4 },
   actDate: { fontSize:10, color:"var(--ink-mute)", fontFamily:"var(--font-mono)", fontWeight:600, letterSpacing:1 },
   actWhere: { fontSize:13, fontWeight:600, color:"var(--ink)", marginTop:2 },
