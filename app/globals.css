@@ -47,3 +47,9 @@ a {
     color-scheme: dark;
   }
 }
+
+@media (min-width: 900px) {
+  .page-content {
+    margin-left: 220px;
+  }
+}

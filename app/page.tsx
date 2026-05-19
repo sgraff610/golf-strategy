@@ -292,38 +292,6 @@ export default function Home() {
     <div style={ROOT}>
       <div style={{ maxWidth:1440, margin:"0 auto", padding:containerPad }}>
 
-        {/* ── Top bar ──────────────────────────────────────────────────────── */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingBottom:14, borderBottom:"1px solid var(--line)", marginBottom:20, flexWrap:"wrap", gap:10 }}>
-          <div style={B.tbLeft}>
-            <div style={B.brandMark}/>
-            <div>
-              <div style={B.brandName}>GOLF STRATEGY</div>
-              <div style={B.brandMeta}>Stephen · season 2026</div>
-            </div>
-          </div>
-          <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
-            {!isMobile && [
-              {label:"Home",href:"/",active:true},
-              {label:"Plan",href:"/plan"},
-              {label:"Courses",href:"/courses"},
-              {label:"Coach",href:"/rounds/insights"},
-              {label:"Clubhouse",href:"/clubhouse"},
-            ].map(({label,href,active})=>(
-              <a key={label} href={href} style={{...B.tbNavLink,...(active?B.tbNavActive:{})}}>{label}</a>
-            ))}
-            <a href="/rounds/play" style={{...B.tbCTA, padding:isMobile?"8px 14px":"7px 14px"}}>+ {isMobile?"Round":"New round"}</a>
-          </div>
-        </div>
-
-        {/* Mobile nav strip */}
-        {isMobile && (
-          <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:12, marginBottom:16, borderBottom:"1px solid var(--line)" }}>
-            {[{label:"Home",href:"/",active:true},{label:"Plan",href:"/plan"},{label:"Courses",href:"/courses"},{label:"Coach",href:"/rounds/insights"},{label:"Clubhouse",href:"/clubhouse"}].map(({label,href,active})=>(
-              <a key={label} href={href} style={{ fontSize:12, fontWeight:500, padding:"6px 12px", borderRadius:999, whiteSpace:"nowrap" as const, textDecoration:"none", background:active?"var(--ink)":"var(--paper)", color:active?"var(--paper)":"var(--ink-soft)", border:active?"none":"1px solid var(--line)", flexShrink:0 }}>{label}</a>
-            ))}
-          </div>
-        )}
-
         {loading ? (
           <div style={{ textAlign:"center", padding:"80px 0", color:"var(--ink-mute)", fontFamily:"var(--font-mono)", fontSize:12, letterSpacing:2 }}>
             LOADING YOUR SCORECARD…
@@ -571,14 +539,6 @@ export default function Home() {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const B: Record<string, React.CSSProperties> = {
-  tbLeft: { display:"flex", alignItems:"center", gap:14 },
-  brandMark: { width:36, height:36, borderRadius:10, background:"linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%)" },
-  brandName: { fontSize:12, fontWeight:700, letterSpacing:1.6, color:"var(--ink)" },
-  brandMeta: { fontSize:11, color:"var(--ink-mute)", marginTop:2 },
-  tbNavLink: { fontSize:13, color:"var(--ink-soft)", fontWeight:500, padding:"7px 13px", borderRadius:999, textDecoration:"none" },
-  tbNavActive: { background:"var(--ink)", color:"var(--paper)" },
-  tbCTA: { fontSize:13, fontWeight:600, padding:"7px 14px", borderRadius:999, background:"var(--accent)", color:"var(--ink)", marginLeft:4, textDecoration:"none" },
-
   statBig: { background:"var(--paper)", border:"1px solid var(--line)", borderRadius:16, padding:22, display:"flex", flexDirection:"column" },
   statCol: { display:"flex", flexDirection:"column", gap:14 },
   statSmall: { background:"var(--paper)", border:"1px solid var(--line)", borderRadius:16, padding:"18px 20px", flex:1, display:"flex", flexDirection:"column", justifyContent:"center" },

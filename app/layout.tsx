@@ -32,7 +32,9 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body style={{ margin: 0, fontFamily: "sans-serif" }}>
         <Nav />
-        {children}
+        <div className="page-content">
+          {children}
+        </div>
       </body>
     </html>
   );
