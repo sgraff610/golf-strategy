@@ -623,7 +623,12 @@ export default function Home() {
                   const txt=[rc?.overall,rc?.favs,rc?.wish].filter(Boolean).join(". ").trim();
                   if(!txt) return <div style={B.recapQuote}>"Every round is a lesson. Open your recap to find yours."</div>;
                   const words=txt.split(/\s+/);
-                  const summary=words.length<=30?txt:words.slice(0,30).join(" ")+"…";
+                  let summary=txt;
+                  if(words.length>50){
+                    const chunk=words.slice(0,50).join(" ");
+                    const lastPunct=Math.max(chunk.lastIndexOf("."),chunk.lastIndexOf("!"),chunk.lastIndexOf("?"));
+                    summary=lastPunct>0?chunk.slice(0,lastPunct+1):chunk+"…";
+                  }
                   return <div style={B.recapQuote}>"{summary}"</div>;
                 })()}
               </a>
