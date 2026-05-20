@@ -66,29 +66,31 @@ function CloseIcon() {
   );
 }
 function BrandIcon() {
-  // Golf ball (top, with dimples) emitting rays + tee shaft + threaded lightbulb base
+  // Golf ball emitting 5 rays + tee shaft + threaded base tapering to a point
   return (
     <svg width={18} height={18} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
-      {/* Light rays */}
-      <line x1="12" y1="0.5" x2="12" y2="2.2" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
-      <line x1="18" y1="3" x2="16.5" y2="4.3" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
-      <line x1="6" y1="3" x2="7.5" y2="4.3" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
-      {/* Golf ball */}
-      <circle cx="12" cy="7.5" r="4.2" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      {/* 5 light rays */}
+      <line x1="12" y1="0.3" x2="12" y2="1.9" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      <line x1="17.2" y1="2.2" x2="15.9" y2="3.4" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      <line x1="6.8" y1="2.2" x2="8.1" y2="3.4" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      <line x1="20.5" y1="6.5" x2="18.9" y2="7.1" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      <line x1="3.5" y1="6.5" x2="5.1" y2="7.1" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      {/* Golf ball — bigger */}
+      <circle cx="12" cy="8.2" r="5.2" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.95)" strokeWidth={1.6}/>
       {/* Dimples */}
-      <circle cx="10.8" cy="7" r="0.65" fill="rgba(255,255,255,0.9)"/>
-      <circle cx="12" cy="6" r="0.65" fill="rgba(255,255,255,0.9)"/>
-      <circle cx="13.2" cy="7" r="0.65" fill="rgba(255,255,255,0.9)"/>
-      <circle cx="11.4" cy="8.6" r="0.55" fill="rgba(255,255,255,0.9)"/>
-      <circle cx="12.6" cy="8.6" r="0.55" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="10.6" cy="7.5" r="0.62" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="12" cy="6.4" r="0.62" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="13.4" cy="7.5" r="0.62" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="11.3" cy="9.2" r="0.52" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="12.7" cy="9.2" r="0.52" fill="rgba(255,255,255,0.9)"/>
       {/* Tee shaft */}
-      <line x1="12" y1="11.7" x2="12" y2="14.2" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
-      {/* Threaded lightbulb base — 3 undulating lines, widening downward */}
-      <path d="M9.5 14.8 Q10.5 14.2 12 14.8 Q13.5 15.4 14.5 14.8" stroke="rgba(255,255,255,0.9)" strokeWidth={1.55} fill="none"/>
-      <path d="M9 16.5 Q10.5 15.9 12 16.5 Q13.5 17.1 15 16.5" stroke="rgba(255,255,255,0.9)" strokeWidth={1.55} fill="none"/>
-      <path d="M8.5 18.2 Q10.25 17.6 12 18.2 Q13.75 18.8 15.5 18.2" stroke="rgba(255,255,255,0.9)" strokeWidth={1.55} fill="none"/>
-      {/* Base */}
-      <line x1="9" y1="19.8" x2="15" y2="19.8" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
+      <line x1="12" y1="13.4" x2="12" y2="15.6" stroke="rgba(255,255,255,0.95)" strokeWidth={1.5}/>
+      {/* Threaded base — NARROWING as it goes down (tee shape) */}
+      <path d="M10.2 15.9 Q10.9 15.4 12 15.9 Q13.1 16.4 13.8 15.9" stroke="rgba(255,255,255,0.9)" strokeWidth={1.4} fill="none"/>
+      <path d="M10.6 17.4 Q11.1 16.9 12 17.4 Q12.9 17.9 13.4 17.4" stroke="rgba(255,255,255,0.9)" strokeWidth={1.4} fill="none"/>
+      <path d="M11.0 18.9 Q11.4 18.4 12 18.9 Q12.6 19.4 13.0 18.9" stroke="rgba(255,255,255,0.9)" strokeWidth={1.4} fill="none"/>
+      {/* Tee tip — narrow point */}
+      <line x1="11.4" y1="20.3" x2="12.6" y2="20.3" stroke="rgba(255,255,255,0.95)" strokeWidth={1.6}/>
     </svg>
   );
 }

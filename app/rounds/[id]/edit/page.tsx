@@ -154,7 +154,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   cols.push({ type:"spacer", label:"Total", parSum:roundHoles.reduce((s,h)=>s+h.par,0), scoreSum:roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0), yardsMap:makeSpacerYards(roundHoles) });
 
   const c: React.CSSProperties  = { padding:"5px 3px", textAlign:"center", fontSize:11, borderRight:"1px solid var(--line)", whiteSpace:"nowrap" };
-  const hdr: React.CSSProperties = { ...c, background:"var(--green-deep)", color:"white", fontWeight:600 };
+  const hdr: React.CSSProperties = { ...c, background:"var(--green)", color:"white", fontWeight:600 };
   const lbl: React.CSSProperties = { ...c, background:"var(--paper-alt)", fontWeight:600, color:"var(--ink-soft)", textAlign:"left", paddingLeft:8, minWidth:72, fontSize:10 };
   const sp: React.CSSProperties  = { ...c, background:"var(--green-soft)", fontWeight:700, color:"var(--green-deep)" };
 
@@ -511,13 +511,16 @@ export default function EditRound() {
   const grints = roundHoles.filter(h => h.grints).length;
 
   if (loading) return (
-    <main style={{ ...EDIT_ROOT, maxWidth: 700, margin: "0 auto", padding: "60px 24px" }}>
-      <p style={{ color: "var(--ink-mute)", fontFamily: "var(--font-ui)" }}>Loading round…</p>
-    </main>
+    <div style={EDIT_ROOT}>
+      <main style={{ maxWidth: 700, margin: "0 auto", padding: "60px 24px" }}>
+        <p style={{ color: "var(--ink-mute)", fontFamily: "var(--font-ui)" }}>Loading round…</p>
+      </main>
+    </div>
   );
 
   return (
-    <main style={{ ...EDIT_ROOT, maxWidth: 960, margin: "0 auto", padding: "28px 24px 56px" }}>
+    <div style={EDIT_ROOT}>
+    <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 24px 56px" }}>
       <div style={{ marginBottom: 20 }}>
         <a href="/rounds" style={{ fontSize: 13, color: "var(--green)", fontWeight: 500 }}>← All rounds</a>
       </div>
@@ -695,5 +698,6 @@ export default function EditRound() {
         )}
       </div>
     </main>
+    </div>
   );
 }
