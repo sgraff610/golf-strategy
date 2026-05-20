@@ -85,13 +85,7 @@ export function Wordmark({
         ...style,
       }}
     >
-      {/* Oversized cursive g as display initial */}
-      <span style={{
-        fontSize: size * 1.65,
-        lineHeight: 0,
-        verticalAlign: "-0.18em",
-        marginRight: "0.02em",
-      }}>g</span>reenlight
+      greenlight
     </span>
   );
 }
