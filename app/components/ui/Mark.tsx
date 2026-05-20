@@ -14,7 +14,7 @@ export function Mark({
 }) {
   if (size < 24 && tone === "default") {
     return (
-      <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="Green Light" role="img">
+      <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="greenlight" role="img">
         <rect width="48" height="48" rx="11" fill="#f7f9fb"/>
         <circle cx="24" cy="19" r="11" fill="#16a34a"/>
         <circle cx="24" cy="38" r="3"  fill="#084634"/>
@@ -24,7 +24,7 @@ export function Mark({
 
   if (tone === "mono") {
     return (
-      <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="Green Light" role="img">
+      <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="greenlight" role="img">
         <g fill="currentColor">
           <circle cx="24" cy="20"   r="9"/>
           <circle cx="24" cy="32"   r="2.2"/>
@@ -37,7 +37,7 @@ export function Mark({
 
   if (tone === "light") {
     return (
-      <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="Green Light" role="img">
+      <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="greenlight" role="img">
         <circle cx="24" cy="20" r="18" fill="#34d399" opacity="0.22"/>
         <circle cx="24" cy="20" r="13" fill="#34d399" opacity="0.38"/>
         <circle cx="24" cy="20" r="9"  fill="#4ade80"/>
@@ -50,7 +50,7 @@ export function Mark({
   }
 
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="Green Light" role="img">
+    <svg width={size} height={size} viewBox="0 0 48 48" style={style} aria-label="greenlight" role="img">
       <rect width="48" height="48" rx="13" fill="#f7f9fb"/>
       <circle cx="24" cy="20" r="18" fill="#34d399" opacity="0.18"/>
       <circle cx="24" cy="20" r="13" fill="#34d399" opacity="0.32"/>
@@ -85,7 +85,13 @@ export function Wordmark({
         ...style,
       }}
     >
-      Green Light
+      {/* Oversized cursive g as display initial */}
+      <span style={{
+        fontSize: size * 1.65,
+        lineHeight: 0,
+        verticalAlign: "-0.18em",
+        marginRight: "0.02em",
+      }}>g</span>reenlight
     </span>
   );
 }
