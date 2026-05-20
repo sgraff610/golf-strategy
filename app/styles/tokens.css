@@ -1,0 +1,69 @@
+/* app/styles/tokens.css — Green Light design tokens. Source of truth. */
+:root {
+  /* Surfaces */
+  --bg:         #eef1f4;
+  --paper:      #f7f9fb;
+  --paper-alt:  #e6ebf0;
+
+  /* Ink */
+  --ink:        #131821;
+  --ink-soft:   #253041;
+  --ink-mute:   #6b7785;
+
+  /* Lines */
+  --line:       #d8dee5;
+  --line-soft:  #e3e8ee;
+
+  /* Brand greens */
+  --green:      #0f6e56;
+  --green-deep: #084634;
+  --green-soft: #d2e8df;
+
+  /* Accent (tangerine) */
+  --accent:      #f29450;
+  --accent-deep: #b45f22;
+  --accent-soft: #fde0c8;
+
+  /* Signal */
+  --good: #1e8449;
+  --bad:  #c94a2a;
+  --sand: #c8a84b;
+
+  /* Type families (set in layout.tsx via next/font) */
+  --font-display: var(--font-fraunces, Georgia, serif);
+  --font-ui:      var(--font-inter,    system-ui, sans-serif);
+  --font-mono:    var(--font-jetbrains, ui-monospace, monospace);
+
+  /* Type scale */
+  --t-display:  96px;
+  --t-title-1:  64px;
+  --t-title-2:  40px;
+  --t-title-3:  28px;
+  --t-lede:     22px;
+  --t-body:     16px;
+  --t-ui:       14px;
+  --t-meta:     12px;
+  --t-label:    10px;
+
+  /* Radii & space */
+  --r-card:   16px;
+  --r-tile:   22px;
+  --r-pill:   999px;
+  --r-input:  10px;
+
+  --pad-card: 20px;
+
+  /* Card shadow — hero tiles only */
+  --shadow-hero: 0 24px 48px -24px rgba(8,70,52,0.45);
+}
+
+/* Tabular numerals */
+.tnum { font-feature-settings: "tnum" 1, "ss01" 1; }
+
+/* Body baseline */
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
