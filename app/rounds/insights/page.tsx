@@ -803,7 +803,7 @@ function CoachBriefing({
           <path d="M 22 35 Q 30 42 38 35" stroke="var(--ink)" strokeWidth="0.6" fill="none" opacity="0.4"/>
         </svg>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--green-deep)" }}>Coach Vance</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--green-deep)" }}>Coach</div>
           <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6 }}>Your personal caddie, no guessing</div>
           <div style={{ fontFamily: "Georgia,serif", fontSize: 14, lineHeight: 1.4, color: "var(--ink-soft)", fontStyle: "italic" }}>
             "The data doesn't lie — here's where you're bleeding strokes."

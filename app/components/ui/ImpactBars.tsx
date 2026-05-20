@@ -30,6 +30,8 @@ export function ImpactBars({
             <div style={{
               fontSize: 10, fontWeight: 500, color: "var(--ink-mute)",
               fontFamily: "var(--font-ui)",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              maxWidth: "100%",
             }}>{d.x}</div>
           </div>
         );

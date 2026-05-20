@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
+import { Fraunces, Inter, JetBrains_Mono, Lobster_Two } from "next/font/google";
 import "./globals.css";
 import "./styles/tokens.css";
 import Nav from "./components/Nav";
@@ -23,6 +23,13 @@ const mono = JetBrains_Mono({
   variable: "--font-jetbrains",
   display: "swap",
 });
+const lobsterTwo = Lobster_Two({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  style: ["italic"],
+  variable: "--font-lobster-two",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "greenlight",
@@ -40,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${mono.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${mono.variable} ${lobsterTwo.variable}`}>
       <body>
         <Nav />
         <div className="page-content">

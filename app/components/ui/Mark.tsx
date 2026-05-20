@@ -73,19 +73,22 @@ export function Wordmark({
   style?: CSSProperties;
 }) {
   return (
-    <span
-      style={{
+    <span style={{ lineHeight: 1, color, ...style }}>
+      <span style={{
+        fontFamily: "var(--font-lobster-two, 'Lobster Two', Georgia, serif)",
+        fontWeight: 700,
+        fontStyle: "italic",
+        fontSize: size * 1.2,
+        letterSpacing: 0,
+        verticalAlign: "-0.12em",
+      }}>G</span>
+      <span style={{
         fontFamily: "var(--font-fraunces, Georgia, serif)",
         fontWeight: 600,
         fontStyle: "italic",
         fontSize: size,
         letterSpacing: -0.4,
-        lineHeight: 1,
-        color,
-        ...style,
-      }}
-    >
-      greenlight
+      }}>reenlight</span>
     </span>
   );
 }

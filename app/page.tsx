@@ -91,7 +91,7 @@ export default function Home() {
   const [leakImpact, setLeakImpact] = useState(0);
   const [leakCount, setLeakCount] = useState(0);
   const [totalRounds, setTotalRounds] = useState(0);
-  const [recentRoundsData, setRecentRoundsData] = useState<Array<{date:string;weekday:string;course:string;score:number;diff:number;badges:string[]}>>([]);
+  const [recentRoundsData, setRecentRoundsData] = useState<Array<{date:string;weekday:string;course:string;score:number;diff:number;badges:string[];stp?:number;gir?:number;putts?:number;fwyHit?:number;fwyTotal?:number}>>([]);
   const [bestScore, setBestScore] = useState<number|null>(null);
   const [bestCourse, setBestCourse] = useState("");
   const [streak, setStreak] = useState(0);
@@ -149,7 +149,7 @@ export default function Home() {
 
       const { data: rounds } = await supabase
         .from("rounds")
-        .select("id,course_id,course_name,date,holes_played,holes,score_differential,tee_box")
+        .select("id,course_id,course_name,date,holes_played,holes,score_differential,tee_box,recap")
         .order("date", { ascending: true });
 
       if (!rounds?.length) { setLoading(false); return; }
@@ -226,12 +226,19 @@ export default function Home() {
       const recentArr=completedAll.slice(0,4).map((r:any)=>{
         const holes=(r.holes??[]).filter((h:any)=>Number(h.score)>0);
         const score=holes.reduce((s:number,h:any)=>s+Number(h.score),0);
+        const par=holes.reduce((s:number,h:any)=>s+(h.par||4),0);
+        const stp=score-par;
+        const gir=holes.filter((h:any)=>h.gir).length;
+        const putts=holes.reduce((s:number,h:any)=>s+(Number(h.putts)||0),0);
+        const fwyHoles=holes.filter((h:any)=>(h.par||4)>=4);
+        const fwyHit=fwyHoles.filter((h:any)=>h.tee_accuracy==="Hit").length;
+        const fwyTotal=fwyHoles.length;
         const ci=courseMap[r.course_id];
         let diff=0;
         if(r.score_differential!=null) diff=r.holes_played<=9?r.score_differential*2:r.score_differential;
         else if(ci?.rating&&ci?.slope){const is9=(r.holes_played??holes.length)<=9;const rat=is9&&(ci.hole_count??18)>9?ci.rating/2:ci.rating;diff=is9?(113/ci.slope*(score-rat))*2:(score-rat)*113/ci.slope;}
         const d=new Date(r.date+"T12:00:00");
-        return{date:d.toLocaleDateString("en-US",{month:"short",day:"numeric"}),weekday:d.toLocaleDateString("en-US",{weekday:"short"}),course:ci?.name??r.course_name??"Unknown",score,diff,badges:[] as string[]};
+        return{date:d.toLocaleDateString("en-US",{month:"short",day:"numeric"}),weekday:d.toLocaleDateString("en-US",{weekday:"short"}),course:ci?.name??r.course_name??"Unknown",score,diff,badges:[] as string[],stp,gir,putts,fwyHit,fwyTotal};
       });
       setRecentRoundsData(recentArr);
 
@@ -587,7 +594,7 @@ export default function Home() {
                 {leakData.length>0&&<ImpactBars data={leakData} width={isMobile?220:240} height={70}/>}
                 <div style={B.leakCoach}>
                   <em style={B.leakCoachQ}>{leakImpact>0.5?`"One more club. Aim center. Stop pin-hunting at distance."`:`"Track every club, every miss. The data shows you where your round lives."`}</em>
-                  <div style={B.leakCoachA}>— Coach Vance</div>
+                  <div style={B.leakCoachA}>— Coach</div>
                 </div>
               </a>
 
@@ -611,7 +618,14 @@ export default function Home() {
                   </div>
                   {bestScore!==null&&totalScore===bestScore&&<div style={B.prBadge}>PR</div>}
                 </div>
-                <div style={B.recapQuote}>"Every round is a lesson. Open your recap to find yours."</div>
+                {(()=>{
+                  const rc=lastRound?.recap;
+                  const txt=[rc?.overall,rc?.favs,rc?.wish].filter(Boolean).join(". ").trim();
+                  if(!txt) return <div style={B.recapQuote}>"Every round is a lesson. Open your recap to find yours."</div>;
+                  const words=txt.split(/\s+/);
+                  const summary=words.length<=30?txt:words.slice(0,30).join(" ")+"…";
+                  return <div style={B.recapQuote}>"{summary}"</div>;
+                })()}
               </a>
             </div>
 
@@ -627,9 +641,15 @@ export default function Home() {
                   <div style={B.actWhere}>{r.course}</div>
                   <div style={B.actScoreRow}>
                     <div style={{...B.actScore, fontSize:isMobile?24:30, fontVariantNumeric:"tabular-nums"}}>{r.score}</div>
+                    {r.stp!=null&&<div style={{fontFamily:"var(--font-mono)",fontSize:13,fontWeight:700,color:r.stp<0?"var(--good)":r.stp===0?"var(--ink-mute)":"var(--bad)",marginLeft:4}}>{r.stp>0?`+${r.stp}`:r.stp===0?"E":r.stp}</div>}
                     {r.badges.includes("pr")&&<div style={B.actPR}>PR</div>}
                   </div>
                   <div style={B.actDiff}>diff {r.diff.toFixed(1)}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"2px 8px",marginTop:4}}>
+                    {r.putts!=null&&r.putts>0&&<span style={B.actStat}>{r.putts} putts</span>}
+                    {r.gir!=null&&r.gir>0&&<span style={B.actStat}>{r.gir} GIR</span>}
+                    {r.fwyTotal!=null&&r.fwyTotal>0&&<span style={B.actStat}>{r.fwyHit}/{r.fwyTotal} fwy</span>}
+                  </div>
                 </div>
               )):(
                 <div style={{...B.actCard, color:"var(--ink-mute)", fontSize:13, gridColumn:"1/-1"}}>
@@ -732,6 +752,7 @@ const B: Record<string, React.CSSProperties> = {
   actScore: { fontFamily:"var(--font-display)", fontStyle:"italic", fontWeight:600, fontSize:30, color:"var(--green-deep)", lineHeight:1, letterSpacing:-1 },
   actPR: { background:"linear-gradient(135deg, var(--sand), var(--accent-deep))", color:"var(--paper)", padding:"2px 7px", borderRadius:4, fontSize:9, fontWeight:700, letterSpacing:1 },
   actDiff: { fontSize:11, color:"var(--ink-mute)" },
+  actStat: { fontSize:10, color:"var(--ink-mute)", fontFamily:"var(--font-mono)", whiteSpace:"nowrap" as const },
 
   footer: { paddingTop:20, borderTop:"1px solid var(--line)", display:"flex", justifyContent:"space-between", fontSize:12, color:"var(--ink-mute)" },
   footLink: { color:"var(--ink-mute)", textDecoration:"none" },
