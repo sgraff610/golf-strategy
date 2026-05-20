@@ -27,6 +27,12 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Green Light",
   description: "Golf strategy and round tracking",
+  icons: {
+    icon: [
+      { url: "/brand/green-light-mark-mini.svg", type: "image/svg+xml" },
+    ],
+    apple: "/brand/green-light-mark.svg",
+  },
 };
 
 export const viewport: Viewport = {

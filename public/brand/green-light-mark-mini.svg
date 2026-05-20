@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Green Light">
+  <rect width="48" height="48" rx="11" fill="#f7f9fb"/>
+  <circle cx="24" cy="19" r="11" fill="#16a34a"/>
+  <circle cx="24" cy="38" r="3"  fill="#084634"/>
+</svg>

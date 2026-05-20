@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Green Light">
+  <rect width="48" height="48" rx="13" fill="#f7f9fb"/>
+  <circle cx="24" cy="20" r="18" fill="#34d399" opacity="0.18"/>
+  <circle cx="24" cy="20" r="13" fill="#34d399" opacity="0.32"/>
+  <circle cx="24" cy="20" r="9"  fill="#16a34a"/>
+  <ellipse cx="21" cy="17" rx="2.8" ry="2" fill="#bbf7d0" opacity="0.85"/>
+  <circle cx="24" cy="32"   r="2.2" fill="#084634"/>
+  <circle cx="24" cy="37.5" r="1.4" fill="#084634"/>
+  <circle cx="24" cy="42.5" r="0.8" fill="#084634"/>
+</svg>

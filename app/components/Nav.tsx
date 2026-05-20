@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { GreenLightMark } from "./ui/GreenLightMark";
+import { Mark, Wordmark } from "./ui/Mark";
 
 const LINKS = [
   { href: "/",                label: "Home" },
@@ -42,13 +42,9 @@ export default function Nav() {
         gap: 16,
       }}>
         {/* Brand */}
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "var(--ink)", flexShrink: 0 }}>
-          <GreenLightMark size={34} />
-          <span style={{
-            fontFamily: "var(--font-display)",
-            fontWeight: 600, fontStyle: "italic",
-            fontSize: 20, letterSpacing: -0.4,
-          }}>Green Light</span>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", flexShrink: 0 }}>
+          <Mark size={34} />
+          <Wordmark size={20} />
         </Link>
 
         {/* Desktop links */}
