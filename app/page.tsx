@@ -130,6 +130,38 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const CACHE_KEY = "gl-home-v1";
+    const CACHE_TTL = 10 * 60 * 1000; // 10 min
+
+    // ── Render from cache immediately ───────────────────────────────────────
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { d, ts } = JSON.parse(raw) as { d: any; ts: number };
+        if (Date.now() - ts < CACHE_TTL) {
+          setDiffs(d.diffs ?? []);
+          setLastRound(d.lastRound ?? null);
+          setLastCourse(d.lastCourse ?? "");
+          setPlanPeek(d.planPeek ?? []);
+          setLeakData(d.leakData ?? []);
+          setLeakTitle(d.leakTitle ?? "—");
+          setLeakImpact(d.leakImpact ?? 0);
+          setLeakCount(d.leakCount ?? 0);
+          setTotalRounds(d.totalRounds ?? 0);
+          setRecentRoundsData(d.recentRoundsData ?? []);
+          setBestScore(d.bestScore ?? null);
+          setBestCourse(d.bestCourse ?? "");
+          setStreak(d.streak ?? 0);
+          setNextRound(d.nextRound ?? null);
+          setNextRoundCourse(d.nextRoundCourse ?? null);
+          setNextRoundPlan(d.nextRoundPlan ?? null);
+          setPlanAdders(d.planAdders ?? []);
+          setPlanSavers(d.planSavers ?? []);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
     async function load() {
       const { supabase } = await import("@/lib/supabase");
 
@@ -139,7 +171,8 @@ export default function Home() {
         .order("date", { ascending: true });
 
       if (!rounds?.length) { setLoading(false); return; }
-      setTotalRounds(rounds.length);
+      const totalRoundsVal = rounds.length;
+      setTotalRounds(totalRoundsVal);
 
       const courseIds = [...new Set(rounds.map((r:any)=>r.course_id).filter(Boolean))];
       let courseMap: Record<string,any> = {};
@@ -165,36 +198,45 @@ export default function Home() {
 
       // Last completed round
       const completedAll=[...rounds].reverse().filter((r:any)=>(r.holes??[]).some((h:any)=>Number(h.score)>0));
+      let lastRoundVal: any = null, lastCourseVal = "";
       if (completedAll.length) {
-        setLastRound(completedAll[0]);
-        setLastCourse(courseMap[completedAll[0].course_id]?.name??completedAll[0].course_name??"");
+        lastRoundVal = completedAll[0];
+        lastCourseVal = courseMap[completedAll[0].course_id]?.name??completedAll[0].course_name??"";
+        setLastRound(lastRoundVal);
+        setLastCourse(lastCourseVal);
       }
 
       // Plan peek
       const planRound=completedAll.find((r:any)=>(r.holes??[]).some((h:any)=>h.aim&&h.aim.length));
+      let planPeekVal: Array<{hole:number;par:number;club:string;aim:string;note:string}> = [];
       if (planRound) {
-        setPlanPeek((planRound.holes??[]).filter((h:any)=>h.aim).slice(0,4).map((h:any)=>({
+        planPeekVal=(planRound.holes??[]).filter((h:any)=>h.aim).slice(0,4).map((h:any)=>({
           hole:h.hole,par:h.par,club:h.plan_club||h.club||"—",aim:h.aim||"CF",note:h.note||"",
-        })));
+        }));
+        setPlanPeek(planPeekVal);
       }
 
       // Biggest leak
+      let leakTitleVal="—", leakImpactVal=0, leakCountVal=0;
+      let leakDataVal: Array<{x:string;v:number;hi?:boolean}> = [];
       const allHoles:any[]=rounds.flatMap((r:any)=>(r.holes??[]).filter((h:any)=>Number(h.score)>0));
       if (allHoles.length>10) {
         const baseline=allHoles.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/allHoles.length;
         const groups:Record<string,number[]>={};
-        const add=(k:string,h:any)=>{if(!groups[k])groups[k]=[];groups[k].push(Number(h.score)-h.par);};
+        const addG=(k:string,h:any)=>{if(!groups[k])groups[k]=[];groups[k].push(Number(h.score)-h.par);};
         allHoles.forEach((h:any)=>{
-          add(`Par ${h.par}`,h);
-          if(h.par>=4&&h.tee_accuracy) add(`Drive ${h.tee_accuracy}`,h);
-          if(h.appr_accuracy) add(`Approach ${h.appr_accuracy}`,h);
+          addG(`Par ${h.par}`,h);
+          if(h.par>=4&&h.tee_accuracy) addG(`Drive ${h.tee_accuracy}`,h);
+          if(h.appr_accuracy) addG(`Approach ${h.appr_accuracy}`,h);
         });
         const leaks=Object.entries(groups).filter(([,v])=>v.length>=5)
           .map(([key,vals])=>({key,avg:vals.reduce((s,v)=>s+v,0)/vals.length,count:vals.length}))
           .map(g=>({...g,impact:g.avg-baseline})).sort((a,b)=>b.impact-a.impact);
         if(leaks.length>=2){
-          setLeakTitle(leaks[0].key);setLeakImpact(leaks[0].impact);setLeakCount(leaks[0].count);
-          setLeakData(leaks.slice(0,4).map((l,i)=>({x:l.key,v:l.impact,hi:i===0})));
+          leakTitleVal=leaks[0].key; leakImpactVal=leaks[0].impact; leakCountVal=leaks[0].count;
+          leakDataVal=leaks.slice(0,4).map((l,i)=>({x:l.key,v:l.impact,hi:i===0}));
+          setLeakTitle(leakTitleVal); setLeakImpact(leakImpactVal);
+          setLeakCount(leakCountVal); setLeakData(leakDataVal);
         }
       }
 
@@ -212,56 +254,71 @@ export default function Home() {
       setRecentRoundsData(recentArr);
 
       // Best score + streak
-      let best:number|null=null,bCourse="",s=0,sDone=false;
+      let best:number|null=null,bCourse="",streakCount=0,sDone=false;
       for(const r of completedAll){
         const holes=(r.holes??[]).filter((h:any)=>Number(h.score)>0);
         const score=holes.reduce((sum:number,h:any)=>sum+Number(h.score),0);
         if(holes.length>=9){
           if(best===null||score<best){best=score;bCourse=courseMap[r.course_id]?.name??r.course_name??"";}
-          if(!sDone){if(score<90)s++;else sDone=true;}
+          if(!sDone){if(score<90)streakCount++;else sDone=true;}
         }
       }
-      setBestScore(best);setBestCourse(bCourse);setStreak(s);
+      setBestScore(best); setBestCourse(bCourse); setStreak(streakCount);
 
       // ── Next upcoming round (date >= today) ──────────────────────────────
       const todayStr=new Date().toISOString().split("T")[0];
-      const{data:nr}=await supabase.from("rounds").select("id,course_id,course_name,date,tee_box,holes_played")
+      let nr: any = null, nrCourse: any = null, np: any = null;
+      const{data:nrData}=await supabase.from("rounds").select("id,course_id,course_name,date,tee_box,holes_played")
         .gte("date",todayStr).order("date",{ascending:true}).limit(1).maybeSingle();
-      if(nr){
-        setNextRound(nr);
-        let nrCourse=courseMap[nr.course_id]??null;
+      if(nrData){
+        nr=nrData; setNextRound(nr);
+        nrCourse=courseMap[nr.course_id]??null;
         if(!nrCourse&&nr.course_id){
           const{data:nc}=await supabase.from("courses").select("id,name,rating,slope,hole_count").eq("id",nr.course_id).maybeSingle();
           if(nc) nrCourse=nc;
         }
         setNextRoundCourse(nrCourse);
-        const{data:np}=await supabase.from("round_plans").select("posture,target_score,answers")
+        const{data:npData}=await supabase.from("round_plans").select("posture,target_score,answers")
           .eq("course_id",nr.course_id).eq("round_date",nr.date).maybeSingle();
-        setNextRoundPlan(np??null);
+        np=npData??null; setNextRoundPlan(np);
       }
 
       // Per-hole performance for pre-round plan card
       const holeMap: Record<number, {stps:number[];par:number}> = {};
-      const sourceRounds = nr
-        ? completedAll.filter((r:any) => r.course_id === nr.course_id)
-        : completedAll;
-      const fallback = sourceRounds.length === 0;
-      const finalSource = fallback ? completedAll : sourceRounds;
+      const srcRounds = nr ? completedAll.filter((r:any)=>r.course_id===nr.course_id) : completedAll;
+      const finalSource = srcRounds.length===0 ? completedAll : srcRounds;
       for (const r of finalSource) {
         for (const h of (r.holes ?? [])) {
-          const s = Number(h.score);
-          if (!s || !h.par) continue;
-          if (!holeMap[h.hole]) holeMap[h.hole] = {stps:[], par:h.par};
-          holeMap[h.hole].stps.push(s - h.par);
+          const hs=Number(h.score);
+          if (!hs||!h.par) continue;
+          if (!holeMap[h.hole]) holeMap[h.hole]={stps:[],par:h.par};
+          holeMap[h.hole].stps.push(hs-h.par);
         }
       }
-      const holeAvg = Object.entries(holeMap).map(([hole, v]) => ({
-        hole: Number(hole), par: v.par,
-        avg: v.stps.reduce((a,b)=>a+b,0) / v.stps.length,
-        count: v.stps.length,
+      const holeAvg=Object.entries(holeMap).map(([hole,v])=>({
+        hole:Number(hole),par:v.par,
+        avg:v.stps.reduce((a,b)=>a+b,0)/v.stps.length,
+        count:v.stps.length,
       }));
-      setPlanAdders([...holeAvg].sort((a,b) => b.avg - a.avg).slice(0, 2));
-      setPlanSavers([...holeAvg].sort((a,b) => a.avg - b.avg).slice(0, 2));
+      const addersArr=[...holeAvg].sort((a,b)=>b.avg-a.avg).slice(0,2);
+      const saversArr=[...holeAvg].sort((a,b)=>a.avg-b.avg).slice(0,2);
+      setPlanAdders(addersArr); setPlanSavers(saversArr);
+
+      // ── Save to localStorage cache ────────────────────────────────────────
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+          d: {
+            diffs:allDiffs, lastRound:lastRoundVal, lastCourse:lastCourseVal,
+            planPeek:planPeekVal,
+            leakData:leakDataVal, leakTitle:leakTitleVal, leakImpact:leakImpactVal, leakCount:leakCountVal,
+            totalRounds:totalRoundsVal, recentRoundsData:recentArr,
+            bestScore:best, bestCourse:bCourse, streak:streakCount,
+            nextRound:nr, nextRoundCourse:nrCourse, nextRoundPlan:np,
+            planAdders:addersArr, planSavers:saversArr,
+          },
+          ts: Date.now(),
+        }));
+      } catch {}
 
       setLoading(false);
     }

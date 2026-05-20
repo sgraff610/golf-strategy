@@ -288,18 +288,18 @@ function analyze(
 
 const TOKENS = `
   .recap-root {
-    --bg:#f4efe6; --paper:#fbf7ef; --paper-alt:#f0eadc;
-    --ink:#1d2a24; --ink-soft:#2e3d35; --muted:#6a6356; --muted-2:#8e8778;
-    --line:#d9d1bf; --line-soft:#e6ddca;
-    --green:#0f6e56; --green-deep:#0a4d3c; --green-soft:#d8e7df;
-    --accent:#b5733a; --accent-soft:#f0dcc5; --sand:#c8a84b; --flag:#a63a2a;
-    --good:#2f7a52; --bad:#a63a2a;
+    --bg:#eef1f4; --paper:#f7f9fb; --paper-alt:#e6ebf0;
+    --ink:#131821; --ink-soft:#253041; --muted:#5d6b7a; --muted-2:#8995a3;
+    --line:#d7dde3; --line-soft:#e2e8ee;
+    --green:#0f6e56; --green-deep:#084634; --green-soft:#d2e8df;
+    --accent:#f29450; --accent-soft:#fde0c8; --sand:#c8a84b; --flag:#c94a2a;
+    --good:#1e8449; --bad:#c94a2a;
     --cold:#3a6ea8; --cold-bg:#dde7f2;
     --font-display: Georgia, 'Times New Roman', serif;
     --font-ui: var(--font-geist-sans, system-ui), sans-serif;
     --font-mono: var(--font-geist-mono, ui-monospace), monospace;
     background: var(--bg); color: var(--ink); font-family: var(--font-ui);
-    min-height: calc(100vh - 36px);
+    min-height: 100vh;
   }
 `;
 
@@ -556,7 +556,7 @@ function StageInput({
                   flex: "1 1 60px",
                 }}>
                   <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "var(--muted-2)", marginBottom: 2 }}>{label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)", fontFamily: "var(--font-mono)" }}>{value}</div>
+                  <div style={{ fontSize: 20, fontWeight: 600, color: "var(--ink)", fontFamily: "var(--font-display)", fontStyle: "italic" }}>{value}</div>
                 </div>
               ))}
             </div>
@@ -692,7 +692,7 @@ function StageAnalysis({ analysis, onBack, onSave, saving, saved, saveError }: {
             borderRight: i < arr.length - 1 ? "1px solid var(--line)" : "none",
           }}>
             <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "var(--muted-2)", marginBottom: 3 }}>{label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", fontFamily: "var(--font-mono)" }}>{value}</div>
+            <div style={{ fontSize: 22, fontWeight: 600, color: "var(--ink)", fontFamily: "var(--font-display)", fontStyle: "italic" }}>{value}</div>
           </div>
         ))}
       </div>

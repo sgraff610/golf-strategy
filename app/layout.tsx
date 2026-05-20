@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Golf Strategy",
+  title: "Green Light",
   description: "Golf strategy and round tracking app",
 };
 

@@ -67,10 +67,10 @@ function CloseIcon() {
 }
 function BrandIcon() {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="8" r="5"/>
-      <line x1="12" y1="13" x2="12" y2="20"/>
-      <line x1="8" y1="20" x2="16" y2="20"/>
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18h6"/>
+      <path d="M10 22h4"/>
+      <path d="M12 2a7 7 0 0 1 5.196 11.803L16 16H8l-1.196-2.197A7 7 0 0 1 12 2z"/>
     </svg>
   );
 }
@@ -179,7 +179,7 @@ function TopBar({ drawerOpen, setDrawerOpen, isActive }: {
       }}>
         <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
           <div style={{ ...BRAND_MARK, width: 30, height: 30, borderRadius: 8 }}><BrandIcon /></div>
-          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.6, color: "white" }}>GOLF STRATEGY</span>
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.6, color: "white" }}>GREEN LIGHT</span>
         </a>
         <button
           onClick={() => setDrawerOpen(!drawerOpen)}
