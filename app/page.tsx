@@ -1,5 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
+import { Skeleton, SkeletonStyles } from "./components/ui/Skeleton";
+import { HandicapHero } from "./components/ui/HandicapHero";
+import { ImpactBars } from "./components/ui/ImpactBars";
 
 // ─── Design tokens ─────────────────────────────────────────────────────────────
 const ROOT = {
@@ -21,9 +24,9 @@ const ROOT = {
   "--sand": "#c8a84b",
   "--flag": "#c94a2a",
   "--good": "#1e8449",
-  "--font-display": "Georgia, 'Times New Roman', serif",
-  "--font-ui": "system-ui, -apple-system, sans-serif",
-  "--font-mono": "'Courier New', Courier, monospace",
+  "--font-display": "var(--font-fraunces, Georgia, serif)",
+  "--font-ui": "var(--font-inter, system-ui, sans-serif)",
+  "--font-mono": "var(--font-jetbrains, ui-monospace, monospace)",
   background: "var(--bg)",
   color: "var(--ink)",
   fontFamily: "var(--font-ui)",
@@ -59,27 +62,6 @@ function CoachGlyph({ size }: { size: number }) {
   );
 }
 
-function ImpactBars({ data, width, height, labelColor = "rgba(255,255,255,0.55)" }: { data: Array<{x:string;v:number;hi?:boolean}>; width:number; height:number; labelColor?: string }) {
-  if (!data.length) return null;
-  const maxAbs = Math.max(...data.map(d => Math.abs(d.v)), 0.01);
-  const rows = data.length, barH = Math.max(14, Math.floor((height-(rows-1)*8)/rows));
-  const labelW = 70, barMaxW = width - labelW - 40;
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow:"visible" }}>
-      {data.map((d,i) => {
-        const y = i*(barH+8), bw = Math.abs(d.v)/maxAbs*barMaxW;
-        const col = d.hi?"#f29450":d.v>0?"#c94a2a":"#1e8449";
-        return (
-          <g key={d.x}>
-            <text x={labelW-6} y={y+barH/2+4} textAnchor="end" fill={labelColor} fontSize={10}>{d.x}</text>
-            <rect x={labelW} y={y} width={bw} height={barH} fill={col} rx={3}/>
-            <text x={labelW+bw+5} y={y+barH/2+4} fill={col} fontSize={10} fontWeight={700}>{(d.v>0?"+":"")+d.v.toFixed(2)}</text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function computeHI(diffs: number[]): number | null {
@@ -386,29 +368,40 @@ export default function Home() {
       <div style={{ maxWidth:1440, margin:"0 auto", padding:containerPad }}>
 
         {loading ? (
-          <div style={{ textAlign:"center", padding:"80px 0", color:"var(--ink-mute)", fontFamily:"var(--font-mono)", fontSize:12, letterSpacing:2 }}>
-            LOADING YOUR SCORECARD…
-          </div>
+          <>
+            <SkeletonStyles />
+            <div style={{ display:"grid", gridTemplateColumns:"1.6fr 1fr 1fr", gap:14, marginTop:24 }}>
+              <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:"var(--r-card)", padding:24, minHeight:200, display:"flex", flexDirection:"column", gap:12 }}>
+                <Skeleton w={120} h={10} />
+                <Skeleton w={200} h={72} radius={10} style={{ marginTop:"auto" }} />
+                <Skeleton w={140} h={10} />
+              </div>
+              <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:"var(--r-card)", padding:24, minHeight:200, display:"flex", flexDirection:"column", gap:10 }}>
+                <Skeleton w={90} h={10} />
+                <Skeleton w="80%" h={22} />
+                <Skeleton w="60%" h={10} />
+                <Skeleton w="100%" h={48} radius={8} style={{ marginTop:"auto" }} />
+              </div>
+              <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:"var(--r-card)", padding:24, minHeight:200, display:"flex", flexDirection:"column", gap:10 }}>
+                <Skeleton w={100} h={10} />
+                <Skeleton w={80} h={40} radius={8} />
+                <Skeleton w="70%" h={10} />
+                <Skeleton w="40%" h={10} />
+              </div>
+            </div>
+          </>
         ) : (
           <>
             {/* ── Stat row ───────────────────────────────────────────────────── */}
             <div style={{ display:"grid", gridTemplateColumns:statCols, gap:14, marginBottom:24 }}>
               {/* Big HI */}
-              <div style={B.statBig}>
-                <div style={B.statLabel}><span style={B.statDot}/> USGA HANDICAP INDEX</div>
-                <div style={{...B.statBigNum, fontSize:bigNumSize, fontVariantNumeric:"tabular-nums"}}>
-                  {hi!=null?hi.toFixed(1):"—"}
-                </div>
-                <div style={B.statBigFoot}>
-                  {trend30!=null&&trend30>0&&<span style={B.statDeltaGood}>▼ {trend30.toFixed(1)}</span>}
-                  <span style={B.statBigSub}>{trend30!=null&&trend30>0?"vs 30 days ago · ":""}best 8 of 20</span>
-                </div>
-                {sparkData.length>=4&&(
-                  <div style={{ marginTop:16 }}>
-                    <Sparkline data={sparkData} w={isMobile?260:300} h={42} stroke="var(--green-deep)" fill="rgba(15,110,86,0.14)"/>
-                  </div>
-                )}
-              </div>
+              <HandicapHero
+                handicap={hi ?? 0}
+                delta30d={trend30!=null ? -trend30 : 0}
+                spark={sparkData.length >= 4 ? (
+                  <Sparkline data={sparkData} w={isMobile ? 260 : 300} h={42} stroke="rgba(255,255,255,0.7)" fill="rgba(255,255,255,0.12)" />
+                ) : undefined}
+              />
 
               {/* Small stats — 2×2 grid on mobile/tablet, two separate cols on desktop */}
               {(isMobile||isTablet) ? (
@@ -591,7 +584,7 @@ export default function Home() {
                   {leakImpact>0&&<div style={B.leakBadge}>RANK 1</div>}
                 </div>
                 <div style={B.leakTitle}>{leakTitle}</div>
-                {leakData.length>0&&<ImpactBars data={leakData} width={isMobile?220:240} height={70} labelColor="var(--ink-soft)"/>}
+                {leakData.length>0&&<ImpactBars data={leakData} width={isMobile?220:240} height={70}/>}
                 <div style={B.leakCoach}>
                   <em style={B.leakCoachQ}>{leakImpact>0.5?`"One more club. Aim center. Stop pin-hunting at distance."`:`"Track every club, every miss. The data shows you where your round lives."`}</em>
                   <div style={B.leakCoachA}>— Coach Vance</div>
