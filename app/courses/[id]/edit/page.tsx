@@ -1086,9 +1086,9 @@ function EditCourseInner() {
               '--green':'#0f6e56', '--green-deep':'#0a4d3c', '--green-soft':'#d8e7df',
               '--accent':'#b5733a', '--accent-soft':'#f0dcc5', '--sand':'#c8a84b', '--flag':'#a63a2a',
               '--good':'#2f7a52', '--bad':'#a63a2a',
-              '--font-display':"Georgia, 'Times New Roman', serif",
-              '--font-ui':'system-ui, sans-serif',
-              '--font-mono':'ui-monospace, monospace',
+              '--font-display':"var(--font-fraunces, Georgia, serif)",
+              '--font-ui':'var(--font-inter, system-ui, sans-serif)',
+              '--font-mono':'var(--font-jetbrains, ui-monospace, monospace)',
             } as React.CSSProperties}>
               <div style={{ fontSize:11, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>
                 Tee Strategy

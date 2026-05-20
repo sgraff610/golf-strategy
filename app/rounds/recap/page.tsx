@@ -295,9 +295,9 @@ const TOKENS = `
     --accent:#f29450; --accent-soft:#fde0c8; --sand:#c8a84b; --flag:#c94a2a;
     --good:#1e8449; --bad:#c94a2a;
     --cold:#3a6ea8; --cold-bg:#dde7f2;
-    --font-display: Georgia, 'Times New Roman', serif;
-    --font-ui: var(--font-geist-sans, system-ui), sans-serif;
-    --font-mono: var(--font-geist-mono, ui-monospace), monospace;
+    --font-display: var(--font-fraunces, Georgia, serif);
+    --font-ui: var(--font-inter, system-ui, sans-serif);
+    --font-mono: var(--font-jetbrains, ui-monospace, monospace);
     background: var(--bg); color: var(--ink); font-family: var(--font-ui);
     min-height: 100vh;
   }

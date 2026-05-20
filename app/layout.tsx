@@ -1,21 +1,32 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import "./styles/tokens.css";
 import Nav from "./components/Nav";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fraunces = Fraunces({
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-fraunces",
+  display: "swap",
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
+  display: "swap",
+});
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  variable: "--font-jetbrains",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Green Light",
-  description: "Golf strategy and round tracking app",
+  description: "Golf strategy and round tracking",
 };
 
 export const viewport: Viewport = {
@@ -29,8 +40,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body style={{ margin: 0, fontFamily: "sans-serif" }}>
+    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${mono.variable}`}>
+      <body>
         <Nav />
         <div className="page-content">
           {children}

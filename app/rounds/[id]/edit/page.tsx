@@ -114,8 +114,8 @@ const EDIT_ROOT: React.CSSProperties = {
   "--green":"#0f6e56","--green-deep":"#084634","--green-soft":"#d2e8df",
   "--accent":"#f29450","--accent-soft":"#fde0c8",
   "--good":"#1e8449","--bad":"#c94a2a",
-  "--font-display":"Georgia, 'Times New Roman', serif",
-  "--font-ui":"system-ui, -apple-system, sans-serif",
+  "--font-display":"var(--font-fraunces, Georgia, serif)",
+  "--font-ui":"var(--font-inter, system-ui, sans-serif)",
   background:"var(--bg)",color:"var(--ink)",fontFamily:"var(--font-ui)",minHeight:"100vh",
 } as React.CSSProperties;
 

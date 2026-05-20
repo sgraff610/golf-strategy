@@ -3,6 +3,7 @@
 // Pre-Round Planner — 4-stage flow (Setup → Questions → Review → Plan).
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { Stepper } from "../components/ui/Stepper";
 import { useRouter } from "next/navigation";
 import type { CourseRecord } from "@/lib/types";
 import type {
@@ -243,9 +244,9 @@ const TOKENS = `
     --accent:#f29450; --accent-soft:#fde0c8;
     --sand:#c8a84b; --sand-soft:#f5ecd0; --sand-deep:#8c6a26;
     --flag:#c94a2a; --good:#1e8449; --bad:#c94a2a;
-    --font-display: Georgia, 'Times New Roman', serif;
-    --font-ui: var(--font-geist-sans, system-ui), sans-serif;
-    --font-mono: var(--font-geist-mono, ui-monospace), monospace;
+    --font-display: var(--font-fraunces, Georgia, serif);
+    --font-ui: var(--font-inter, system-ui, sans-serif);
+    --font-mono: var(--font-jetbrains, ui-monospace, monospace);
     background: var(--bg); color: var(--ink); font-family: var(--font-ui);
     min-height: calc(100vh - 36px);
   }
@@ -621,7 +622,16 @@ export default function PlanPage() {
       <div className="plan-root">
         <div style={{ padding: isMobile ? "0 16px" : "0 40px" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-            <StageNav stage={stage} setStage={setStage} answered={answered} courseReady={courseReady} />
+            <Stepper
+            steps={[
+              { id: "setup",     label: "Setup" },
+              { id: "questions", label: "Questions" },
+              { id: "review",    label: "Review" },
+              { id: "plan",      label: "Plan" },
+            ]}
+            current={STAGES.indexOf(stage)}
+            onJump={(i) => setStage(STAGES[i])}
+          />
             {openRounds.length > 0 && (
               <div style={{ margin: "16px 0 0" }}>
                 {openRounds.map(r => (
@@ -725,48 +735,6 @@ export default function PlanPage() {
 
 // ─── Stage nav ────────────────────────────────────────────────────────────────
 
-function StageNav({ stage, setStage, answered, courseReady }: {
-  stage: Stage; setStage: (s: Stage) => void; answered: boolean; courseReady: boolean;
-}) {
-  const labels: { k: Stage; n: string; t: string }[] = [
-    { k: "setup", n: "01", t: "Setup" },
-    { k: "questions", n: "02", t: "Questions" },
-    { k: "review", n: "03", t: "Review" },
-    { k: "plan", n: "04", t: "Plan" },
-  ];
-  const idx = STAGES.indexOf(stage);
-  return (
-    <div style={{ display: "flex", borderBottom: "1px solid var(--line)" }}>
-      {labels.map((l, i) => {
-        const active = l.k === stage;
-        const done = i < idx;
-        const reachable =
-          i === 0 ||
-          (i <= idx) ||
-          (i === 1 && courseReady) ||
-          (i === 2 && courseReady && answered) ||
-          (i === 3 && courseReady && answered);
-        return (
-          <button key={l.k} onClick={() => reachable && setStage(l.k)} disabled={!reachable}
-            style={{
-              background: "transparent", border: "none",
-              borderBottom: active ? "2px solid var(--ink)" : "2px solid transparent",
-              padding: "14px 22px 14px 0", marginRight: 28,
-              cursor: reachable ? "pointer" : "default",
-              opacity: reachable ? 1 : 0.35, textAlign: "left",
-            }}>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.5, color: done ? "var(--green)" : "var(--muted-2)", fontWeight: 600 }}>
-              {done ? "✓" : l.n}
-            </div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 500, fontStyle: "italic", color: active ? "var(--ink)" : "var(--muted)" }}>
-              {l.t}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // ─── Weather grid widget ──────────────────────────────────────────────────────
 

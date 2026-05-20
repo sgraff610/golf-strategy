@@ -357,8 +357,8 @@ const PLAY_TOKENS = `
     --accent:#f29450; --accent-soft:#fde0c8;
     --sand:#c8a84b; --sand-soft:#f5ecd0;
     --flag:#c94a2a; --good:#1e8449;
-    --font-display: Georgia, 'Times New Roman', serif;
-    --font-ui: system-ui, sans-serif;
+    --font-display: var(--font-fraunces, Georgia, serif);
+    --font-ui: var(--font-inter, system-ui, sans-serif);
     background: var(--bg); color: var(--ink); font-family: var(--font-ui);
     min-height: 100vh;
   }
