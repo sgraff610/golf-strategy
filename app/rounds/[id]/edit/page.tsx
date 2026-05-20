@@ -100,18 +100,33 @@ function computeScoreDifferential(ags: number, rating: number, slope: number): n
 }
 function scoreColor(score:number, par:number):string {
   const d=score-par;
-  if(d<=-2)return"#1a6fd4"; if(d===-1)return"#27ae60"; if(d===0)return"#333"; if(d===1)return"#e67e22"; return"#c0392b";
+  if(d<=-2)return"#1a6fd4";
+  if(d===-1)return"var(--good)";
+  if(d===0)return"var(--ink)";
+  if(d===1)return"var(--accent)";
+  return"var(--bad)";
 }
 
+const EDIT_ROOT: React.CSSProperties = {
+  "--bg":"#eef1f4","--paper":"#f7f9fb","--paper-alt":"#e6ebf0",
+  "--ink":"#131821","--ink-soft":"#253041","--ink-mute":"#5d6b7a",
+  "--muted-2":"#8995a3","--line":"#d7dde3",
+  "--green":"#0f6e56","--green-deep":"#084634","--green-soft":"#d2e8df",
+  "--accent":"#f29450","--accent-soft":"#fde0c8",
+  "--good":"#1e8449","--bad":"#c94a2a",
+  "--font-display":"Georgia, 'Times New Roman', serif",
+  "--font-ui":"system-ui, -apple-system, sans-serif",
+  background:"var(--bg)",color:"var(--ink)",fontFamily:"var(--font-ui)",minHeight:"100vh",
+} as React.CSSProperties;
+
 // ── Scorecard component ───────────────────────────────────────────────────────
-function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, roundId, onBack }: {
+function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, roundId }: {
   roundHoles: RoundHole[];
   courseName: string;
   teeBox: string;
   date: string;
   allVersions: CourseRecord[];
   roundId: string;
-  onBack: () => void;
 }) {
   const is18 = roundHoles.length === 18;
   const sortedTees = [...allVersions].sort((a, b) =>
@@ -138,10 +153,10 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   }
   cols.push({ type:"spacer", label:"Total", parSum:roundHoles.reduce((s,h)=>s+h.par,0), scoreSum:roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0), yardsMap:makeSpacerYards(roundHoles) });
 
-  const c: React.CSSProperties  = { padding:"5px 3px", textAlign:"center", fontSize:11, borderRight:"1px solid #e0e0e0", whiteSpace:"nowrap", };
-  const hdr: React.CSSProperties = { ...c, background:"#1a3a2a", color:"white", fontWeight:600 };
-  const lbl: React.CSSProperties = { ...c, background:"#f0f0f0", fontWeight:600, color:"#333", textAlign:"left", paddingLeft:8, minWidth:72, fontSize:10 };
-  const sp: React.CSSProperties  = { ...c, background:"#e8f5f0", fontWeight:700, color:"#0f6e56" };
+  const c: React.CSSProperties  = { padding:"5px 3px", textAlign:"center", fontSize:11, borderRight:"1px solid var(--line)", whiteSpace:"nowrap" };
+  const hdr: React.CSSProperties = { ...c, background:"var(--green-deep)", color:"white", fontWeight:600 };
+  const lbl: React.CSSProperties = { ...c, background:"var(--paper-alt)", fontWeight:600, color:"var(--ink-soft)", textAlign:"left", paddingLeft:8, minWidth:72, fontSize:10 };
+  const sp: React.CSSProperties  = { ...c, background:"var(--green-soft)", fontWeight:700, color:"var(--green-deep)" };
 
   const totalScore = roundHoles.reduce((s,h)=>s+(Number(h.score)||0),0);
   const totalPar = roundHoles.reduce((s,h)=>s+h.par,0);
@@ -178,16 +193,17 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
   }
 
   return (
-    <div style={{ marginTop:32 }}>
-      <div style={{ marginBottom:16 }}>
-        <h2 style={{ fontSize:20, fontWeight:700, color:"#d0d0d0", margin:"0 0 2px" }}>{courseName}</h2>
-        <p style={{ fontSize:13, color:"white", margin:0 }}>{teeBox} tees · {date}</p>
-        <p style={{ fontSize:18, fontWeight:700, color:toPar>0?"#c0392b":toPar<0?"#27ae60":"#333", margin:"6px 0 0" }}>
-          {totalScore} ({toPar===0?"E":toPar>0?`+${toPar}`:toPar})
+    <div style={{ marginBottom:28 }}>
+      <div style={{ marginBottom:14 }}>
+        <h2 style={{ fontSize:20, fontWeight:600, fontFamily:"var(--font-display)", fontStyle:"italic", color:"var(--ink)", margin:"0 0 2px" }}>{courseName}</h2>
+        <p style={{ fontSize:13, color:"var(--ink-mute)", margin:0 }}>{teeBox} tees · {date}</p>
+        <p style={{ fontSize:22, fontWeight:600, fontFamily:"var(--font-display)", fontStyle:"italic",
+            color:toPar>0?"var(--bad)":toPar<0?"var(--good)":"var(--ink)", margin:"6px 0 0" }}>
+          {totalScore} <span style={{ fontSize:15, fontStyle:"normal", fontFamily:"var(--font-ui)", color:"var(--ink-mute)" }}>({toPar===0?"E":toPar>0?`+${toPar}`:toPar})</span>
         </p>
       </div>
 
-      <div style={{ overflowX:"auto", borderRadius:10, border:"1px solid #ddd", boxShadow:"0 2px 8px #0001", marginBottom:12 }}>
+      <div style={{ overflowX:"auto", borderRadius:10, border:"1px solid var(--line)", boxShadow:"0 2px 8px rgba(0,0,0,0.06)", marginBottom:12 }}>
         <table style={{ borderCollapse:"collapse", width:"100%", tableLayout:"auto" }}>
           <tbody>
             <tr>
@@ -223,8 +239,8 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
               </tr>
             ))}
             {/* Score */}
-            <tr style={{ borderTop:"2px solid #0f6e56" }}>
-              <td style={{ ...lbl, background:"#f0f9f6" }}>Score</td>
+            <tr style={{ borderTop:"2px solid var(--green)" }}>
+              <td style={{ ...lbl, background:"var(--green-soft)" }}>Score</td>
               {cols.map((col,ci) => col.type==="hole"
                 ? <td key={ci} style={{ ...c, fontWeight:700, color: col.rh.score!==""?scoreColor(Number(col.rh.score),col.rh.par):"#aaa" }}>
                     {col.rh.score!==""?col.rh.score:"—"}
@@ -284,7 +300,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
             </tr>
             {showCalc && <>
               <tr>
-                <td colSpan={cols.length+1} style={{padding:"4px 8px",background:"#e8f5f0",fontSize:9,fontWeight:700,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1,borderTop:"2px solid #0f6e56"}}>Calculations</td>
+                <td colSpan={cols.length+1} style={{padding:"4px 8px",background:"var(--green-soft)",fontSize:9,fontWeight:700,color:"var(--green-deep)",textTransform:"uppercase",letterSpacing:1,borderTop:"2px solid var(--green)"}}>Calculations</td>
               </tr>
               <tr>
                 <td style={lbl}>Est Rem</td>
@@ -326,10 +342,10 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
         </table>
       </div>
       <div style={{ marginBottom: 16 }}>
-        <button onClick={() => setShowCalc(v => !v)} style={{ padding:"8px 18px", fontSize:13, fontWeight:600, borderRadius:8, border:"1.5px solid #0f6e56", background:showCalc?"#0f6e56":"transparent", color:showCalc?"white":"#0f6e56", cursor:"pointer" }}>
+        <button onClick={() => setShowCalc(v => !v)} style={{ padding:"8px 18px", fontSize:13, fontWeight:600, borderRadius:8, border:"1.5px solid var(--green)", background:showCalc?"var(--green)":"transparent", color:showCalc?"white":"var(--green)", cursor:"pointer" }}>
           {showCalc ? "Hide Calculations" : "Include Calculations"}
         </button>
-        {showCalc && <p style={{ fontSize:11, color:"#0f6e56", margin:"6px 0 0", fontStyle:"italic" }}>Est Rem = estimated approach yardage · Water/Trees/Bkr = % confidence hazard was implicated</p>}
+        {showCalc && <p style={{ fontSize:11, color:"var(--ink-mute)", margin:"6px 0 0", fontStyle:"italic" }}>Est Rem = estimated approach yardage · Water/Trees/Bkr = % confidence hazard was implicated</p>}
       </div>
     </div>
   );
@@ -351,7 +367,6 @@ export default function EditRound() {
   const [saved, setSaved] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [courseId, setCourseId] = useState("");
-  const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
   const [courseHandicap, setCourseHandicap] = useState<number | null>(null);
@@ -471,18 +486,19 @@ export default function EditRound() {
     setSaving(false);
     if (!error) {
       setSaved(true);
-      setShowScorecard(true);
     }
   }
 
-  const inputStyle = { width: "100%", padding: "6px 8px", fontSize: 14, border: "1px solid #ddd", borderRadius: 6, boxSizing: "border-box" as const };
-  const selectStyle = { ...inputStyle, background: "white", color: "#0f6e56" };
-  const labelStyle = { fontSize: 12, color: "white", display: "block" as const, marginBottom: 3 };
-  const sectionLabel = { fontSize: 11, fontWeight: 600 as const, color: "#0f6e56", textTransform: "uppercase" as const, letterSpacing: 1, margin: "0 0 6px" };
+  const inputStyle = { width: "100%", padding: "6px 8px", fontSize: 14, border: "1px solid var(--line)", borderRadius: 6, boxSizing: "border-box" as const, background: "var(--paper)", color: "var(--ink)" };
+  const selectStyle = { ...inputStyle, color: "var(--green)" };
+  const labelStyle = { fontSize: 11, fontWeight: 600 as const, color: "var(--ink-mute)", display: "block" as const, marginBottom: 3, letterSpacing: 0.3 };
+  const sectionLabel = { fontSize: 10, fontWeight: 700 as const, color: "var(--green)", textTransform: "uppercase" as const, letterSpacing: 1.4, margin: "0 0 8px" };
   const btnStyle = (primary: boolean) => ({
-    padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,
-    background: primary ? "#1a1a1a" : "white", color: primary ? "white" : "#1a1a1a",
-    border: "1px solid #1a1a1a", borderRadius: 8, cursor: "pointer" as const,
+    padding: "11px 20px", fontSize: 14, fontWeight: 600 as const,
+    background: primary ? "var(--ink)" : "var(--paper)",
+    color: primary ? "white" : "var(--ink)",
+    border: `1px solid ${primary ? "var(--ink)" : "var(--line)"}`,
+    borderRadius: 8, cursor: "pointer" as const,
     textDecoration: "none" as const, display: "block" as const, textAlign: "center" as const,
   });
 
@@ -495,21 +511,33 @@ export default function EditRound() {
   const grints = roundHoles.filter(h => h.grints).length;
 
   if (loading) return (
-    <main style={{ maxWidth: 700, margin: "60px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
-      <p style={{ color: "white" }}>Loading round...</p>
+    <main style={{ ...EDIT_ROOT, maxWidth: 700, margin: "0 auto", padding: "60px 24px" }}>
+      <p style={{ color: "var(--ink-mute)", fontFamily: "var(--font-ui)" }}>Loading round…</p>
     </main>
   );
 
   return (
-    <main style={{ maxWidth: 960, margin: "40px auto", fontFamily: "sans-serif", padding: "0 24px" }}>
-      <div style={{ marginBottom: 24 }}>
-        <a href="/rounds" style={{ fontSize: 13, color: "white" }}>← Back to rounds</a>
+    <main style={{ ...EDIT_ROOT, maxWidth: 960, margin: "0 auto", padding: "28px 24px 56px" }}>
+      <div style={{ marginBottom: 20 }}>
+        <a href="/rounds" style={{ fontSize: 13, color: "var(--green)", fontWeight: 500 }}>← All rounds</a>
       </div>
 
-      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4, color: "#d0d0d0" }}>Edit round</h1>
-      <p style={{ color: "white", marginBottom: 24, fontSize: 14 }}>
-        {courseName}{teeBox ? ` — ${teeBox} tees` : ""}
+      <h1 style={{ fontSize: 24, fontWeight: 600, fontFamily: "var(--font-display)", fontStyle: "italic", marginBottom: 4, color: "var(--ink)" }}>Edit Round</h1>
+      <p style={{ color: "var(--ink-mute)", marginBottom: 20, fontSize: 14 }}>
+        {courseName}{teeBox ? ` · ${teeBox} tees` : ""}
       </p>
+
+      {/* ── Scorecard at top ────────────────────────────────────────────── */}
+      {roundHoles.length > 0 && (
+        <RoundScorecard
+          roundHoles={roundHoles}
+          courseName={courseName}
+          teeBox={teeBox}
+          date={date}
+          allVersions={allTeeVersions.length > 0 ? allTeeVersions : []}
+          roundId={id}
+        />
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
         <div>
@@ -526,7 +554,7 @@ export default function EditRound() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 20 }}>
         {[
           { label: "Score", value: totalScore || "—" },
           { label: "Putts", value: totalPutts || "—" },
@@ -534,9 +562,9 @@ export default function EditRound() {
           { label: "GIR", value: `${girs}/${roundHoles.length}` },
           { label: "GRINTS", value: `${grints}/${roundHoles.length}` },
         ].map(({ label, value }) => (
-          <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: 8, textAlign: "center" }}>
-            <p style={{ fontSize: 11, color: "#0f6e56", margin: "0 0 2px" }}>{label}</p>
-            <p style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "#0f6e56" }}>{value}</p>
+          <div key={label} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 6px", textAlign: "center" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.6, color: "var(--ink-mute)", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, fontFamily: "var(--font-display)", fontStyle: "italic", color: "var(--ink)" }}>{value}</div>
           </div>
         ))}
       </div>
@@ -555,23 +583,23 @@ export default function EditRound() {
 
       {/* Handicap calculations */}
       {(courseHandicap != null || handicapIndex != null) && (
-        <div style={{ background:"#f0faf6", border:"1px solid #c8e6c9", borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
-          <p style={{ fontSize:11, fontWeight:600, color:"#0f6e56", textTransform:"uppercase", letterSpacing:1, margin:"0 0 10px" }}>Round Handicap</p>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+        <div style={{ background:"var(--green-soft)", border:"1px solid var(--green)", borderRadius:12, padding:"14px 18px", marginBottom:20 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", textTransform:"uppercase", letterSpacing:1.6, marginBottom:12 }}>Round Handicap</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
             {[
               { label:"HI at round", value: handicapIndex != null ? handicapIndex.toFixed(1) : "—" },
               { label:"Course HCP", value: courseHandicap != null ? courseHandicap : "—" },
               { label:"Adj Gross", value: adjustedGrossScore != null && adjustedGrossScore > 0 ? adjustedGrossScore : "—" },
               { label:"Differential", value: scoreDifferential != null ? (holesPlayed <= 9 ? (scoreDifferential * 2).toFixed(1) : scoreDifferential.toFixed(1)) : "—" },
             ].map(({ label, value }) => (
-              <div key={label} style={{ textAlign:"center", background:"white", borderRadius:8, padding:"8px 4px", border:"1px solid #e0f0ea" }}>
-                <div style={{ fontSize:18, fontWeight:700, color:"#0f6e56" }}>{value}</div>
-                <div style={{ fontSize:10, color:"#0f6e56", marginTop:2 }}>{label}</div>
+              <div key={label} style={{ textAlign:"center", background:"var(--paper)", borderRadius:8, padding:"10px 4px", border:"1px solid var(--line)" }}>
+                <div style={{ fontSize:18, fontWeight:600, fontFamily:"var(--font-display)", fontStyle:"italic", color:"var(--green-deep)" }}>{value}</div>
+                <div style={{ fontSize:9, color:"var(--ink-mute)", marginTop:3, letterSpacing:0.3 }}>{label}</div>
               </div>
             ))}
           </div>
           {courseHandicap != null && (
-            <p style={{ fontSize:11, color:"#0f6e56", margin:"8px 0 0", fontStyle:"italic" }}>
+            <p style={{ fontSize:11, color:"var(--green-deep)", margin:"10px 0 0", fontStyle:"italic" }}>
               Course HCP {courseHandicap}: you receive 1 stroke on holes ranked 1–{Math.min(courseHandicap, 18)}
               {courseHandicap > 18 ? ` plus 2 strokes on holes ranked 1–${courseHandicap - 18}` : ""}
             </p>
@@ -579,17 +607,17 @@ export default function EditRound() {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {roundHoles.map((hole, i) => (
-          <div key={i} style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div key={i} style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#0f6e56" }}>Hole {hole.hole}</span>
-                <span style={{ fontSize: 13, color: "#0f6e56", marginLeft: 8 }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "var(--font-display)", fontStyle: "italic", color: "var(--green-deep)" }}>Hole {hole.hole}</span>
+                <span style={{ fontSize: 12, color: "var(--ink-mute)", marginLeft: 8 }}>Par {hole.par} · {hole.yards} yds · SI {hole.stroke_index}</span>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                {hole.gir && <span style={{ fontSize: 11, background: "#e8f5e9", color: "#2e7d32", padding: "2px 8px", borderRadius: 20 }}>GIR</span>}
-                {hole.grints && <span style={{ fontSize: 11, background: "#e3f2fd", color: "#1565c0", padding: "2px 8px", borderRadius: 20 }}>GRINTS</span>}
+              <div style={{ display: "flex", gap: 6 }}>
+                {hole.gir && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--green-soft)", color: "var(--green-deep)", padding: "2px 8px", borderRadius: 20, letterSpacing: 0.3 }}>GIR</span>}
+                {hole.grints && <span style={{ fontSize: 10, fontWeight: 700, background: "var(--accent-soft)", color: "var(--accent)", padding: "2px 8px", borderRadius: 20, letterSpacing: 0.3 }}>GRINTS</span>}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -652,32 +680,20 @@ export default function EditRound() {
         ))}
       </div>
 
-      <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #eee", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
         <button style={{ ...btnStyle(false), opacity: syncing ? 0.6 : 1 }} onClick={handleSync} disabled={syncing}>
-          {syncing ? "Syncing..." : "Sync with course"}
+          {syncing ? "Syncing…" : "Sync with course"}
         </button>
         <button style={{ ...btnStyle(true), opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : "Save changes"}
+          {saving ? "Saving…" : "Save changes"}
         </button>
+        {saved && <div style={{ fontSize:12, color:"var(--good)", textAlign:"center", fontWeight:600 }}>Saved ✓</div>}
         {id && (
-          <a href={`/rounds/play?roundId=${id}`} style={{ ...btnStyle(false), color: "#0f6e56", borderColor: "#0f6e56" }}>
+          <a href={`/rounds/play?roundId=${id}`} style={{ ...btnStyle(false), color: "var(--green)", borderColor: "var(--green)" }}>
             ⛳ Play this round
           </a>
         )}
       </div>
-
-      {/* Scorecard shown after saving */}
-      {showScorecard && (
-        <RoundScorecard
-          roundHoles={roundHoles}
-          courseName={courseName}
-          teeBox={teeBox}
-          date={date}
-          allVersions={allTeeVersions.length > 0 ? allTeeVersions : []}
-          roundId={id}
-          onBack={() => setShowScorecard(false)}
-        />
-      )}
     </main>
   );
 }

@@ -286,7 +286,7 @@ export default function ClubhousePage() {
 
   const sorted20 = [...last20Diffs].sort((a, b) => a - b);
   const threshold = sorted20[Math.min(7, sorted20.length - 1)] ?? Infinity;
-  const sparklineData = diffsOnly.slice(-12);
+  const sparklineData = diffsOnly.slice(-20);
 
   // 30-day trend
   const thirtyAgo = new Date(); thirtyAgo.setDate(thirtyAgo.getDate() - 30);

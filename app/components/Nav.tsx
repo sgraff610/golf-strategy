@@ -66,11 +66,29 @@ function CloseIcon() {
   );
 }
 function BrandIcon() {
+  // Golf ball (top, with dimples) emitting rays + tee shaft + threaded lightbulb base
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18h6"/>
-      <path d="M10 22h4"/>
-      <path d="M12 2a7 7 0 0 1 5.196 11.803L16 16H8l-1.196-2.197A7 7 0 0 1 12 2z"/>
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" strokeLinecap="round" strokeLinejoin="round">
+      {/* Light rays */}
+      <line x1="12" y1="0.5" x2="12" y2="2.2" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
+      <line x1="18" y1="3" x2="16.5" y2="4.3" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
+      <line x1="6" y1="3" x2="7.5" y2="4.3" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
+      {/* Golf ball */}
+      <circle cx="12" cy="7.5" r="4.2" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      {/* Dimples */}
+      <circle cx="10.8" cy="7" r="0.65" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="12" cy="6" r="0.65" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="13.2" cy="7" r="0.65" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="11.4" cy="8.6" r="0.55" fill="rgba(255,255,255,0.9)"/>
+      <circle cx="12.6" cy="8.6" r="0.55" fill="rgba(255,255,255,0.9)"/>
+      {/* Tee shaft */}
+      <line x1="12" y1="11.7" x2="12" y2="14.2" stroke="rgba(255,255,255,0.95)" strokeWidth={1.7}/>
+      {/* Threaded lightbulb base — 3 undulating lines, widening downward */}
+      <path d="M9.5 14.8 Q10.5 14.2 12 14.8 Q13.5 15.4 14.5 14.8" stroke="rgba(255,255,255,0.9)" strokeWidth={1.55} fill="none"/>
+      <path d="M9 16.5 Q10.5 15.9 12 16.5 Q13.5 17.1 15 16.5" stroke="rgba(255,255,255,0.9)" strokeWidth={1.55} fill="none"/>
+      <path d="M8.5 18.2 Q10.25 17.6 12 18.2 Q13.75 18.8 15.5 18.2" stroke="rgba(255,255,255,0.9)" strokeWidth={1.55} fill="none"/>
+      {/* Base */}
+      <line x1="9" y1="19.8" x2="15" y2="19.8" stroke="rgba(255,255,255,0.95)" strokeWidth={1.8}/>
     </svg>
   );
 }
