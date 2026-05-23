@@ -83,6 +83,9 @@ function fmtDateShort(iso: string): string {
 // ─── Main ──────────────────────────────────────────────────────────────────────
 export default function Home() {
   const [diffs, setDiffs] = useState<number[]>([]);
+  const [diffDates, setDiffDates] = useState<string[]>([]);
+  const [wxForecast, setWxForecast] = useState<Array<{day:string;icon:string;hi:number;isTee:boolean}>>([]);
+  const [wxCity, setWxCity] = useState("");
   const [lastRound, setLastRound] = useState<any>(null);
   const [lastCourse, setLastCourse] = useState("");
   const [planPeek, setPlanPeek] = useState<Array<{hole:number;par:number;club:string;aim:string;note:string}>>([]);
@@ -112,7 +115,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const CACHE_KEY = "gl-home-v1";
+    const CACHE_KEY = "gl-home-v3";
     const CACHE_TTL = 10 * 60 * 1000; // 10 min
 
     // ── Render from cache immediately ───────────────────────────────────────
@@ -122,6 +125,7 @@ export default function Home() {
         const { d, ts } = JSON.parse(raw) as { d: any; ts: number };
         if (Date.now() - ts < CACHE_TTL) {
           setDiffs(d.diffs ?? []);
+          setDiffDates(d.diffDates ?? []);
           setLastRound(d.lastRound ?? null);
           setLastCourse(d.lastCourse ?? "");
           setPlanPeek(d.planPeek ?? []);
@@ -159,24 +163,33 @@ export default function Home() {
       const courseIds = [...new Set(rounds.map((r:any)=>r.course_id).filter(Boolean))];
       let courseMap: Record<string,any> = {};
       if (courseIds.length) {
-        const { data: cs } = await supabase.from("courses").select("id,rating,slope,hole_count,name").in("id", courseIds);
+        const { data: cs } = await supabase.from("courses").select("id,rating,slope,hole_count,name,city,state").in("id", courseIds);
         (cs??[]).forEach((c:any) => { courseMap[c.id] = c; });
       }
 
-      // Differentials
-      const allDiffs = rounds.map((r:any) => {
-        if (r.score_differential!=null) return r.holes_played<=9?r.score_differential*2:r.score_differential;
-        const ci = courseMap[r.course_id];
-        if (!ci?.rating||!ci?.slope) return null;
-        const scored=(r.holes??[]).filter((h:any)=>h.score&&Number(h.score)>0);
-        if (!scored.length) return null;
-        const ags=scored.reduce((s:number,h:any)=>s+Math.min(Number(h.score)||0,(h.par||4)+2),0);
-        const is9=(r.holes_played??scored.length)<=9,is9C=(ci.hole_count??18)<=9;
-        let rat=ci.rating;
-        if(is9&&!is9C) rat/=2; else if(!is9&&is9C) rat*=2;
-        return is9?(113/ci.slope*(ags-rat))*2:(ags-rat)*113/ci.slope;
-      }).filter((d:any):d is number=>d!==null);
+      // Differentials (with dates for 30-day trend)
+      const allDiffsRaw: {diff:number;date:string}[] = rounds.map((r:any) => {
+        let diff: number|null = null;
+        if (r.score_differential!=null) diff = r.holes_played<=9?r.score_differential*2:r.score_differential;
+        else {
+          const ci = courseMap[r.course_id];
+          if (ci?.rating&&ci?.slope) {
+            const scored=(r.holes??[]).filter((h:any)=>h.score&&Number(h.score)>0);
+            if (scored.length) {
+              const ags=scored.reduce((s:number,h:any)=>s+Math.min(Number(h.score)||0,(h.par||4)+2),0);
+              const is9=(r.holes_played??scored.length)<=9,is9C=(ci.hole_count??18)<=9;
+              let rat=ci.rating;
+              if(is9&&!is9C) rat/=2; else if(!is9&&is9C) rat*=2;
+              diff = is9?(113/ci.slope*(ags-rat))*2:(ags-rat)*113/ci.slope;
+            }
+          }
+        }
+        return diff!==null ? {diff,date:r.date??""} : null;
+      }).filter((d:any):d is {diff:number;date:string} => d!==null);
+      const allDiffs = allDiffsRaw.map(d=>d.diff);
+      const allDiffDates = allDiffsRaw.map(d=>d.date);
       setDiffs(allDiffs);
+      setDiffDates(allDiffDates);
 
       // Last completed round
       const completedAll=[...rounds].reverse().filter((r:any)=>(r.holes??[]).some((h:any)=>Number(h.score)>0));
@@ -198,25 +211,39 @@ export default function Home() {
         setPlanPeek(planPeekVal);
       }
 
-      // Biggest leak
+      // Biggest leak — same categories as insights/coach page
       let leakTitleVal="—", leakImpactVal=0, leakCountVal=0;
       let leakDataVal: Array<{x:string;v:number;hi?:boolean}> = [];
       const allHoles:any[]=rounds.flatMap((r:any)=>(r.holes??[]).filter((h:any)=>Number(h.score)>0));
       if (allHoles.length>10) {
         const baseline=allHoles.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/allHoles.length;
-        const groups:Record<string,number[]>={};
-        const addG=(k:string,h:any)=>{if(!groups[k])groups[k]=[];groups[k].push(Number(h.score)-h.par);};
-        allHoles.forEach((h:any)=>{
-          addG(`Par ${h.par}`,h);
-          if(h.par>=4&&h.tee_accuracy) addG(`Drive ${h.tee_accuracy}`,h);
-          if(h.appr_accuracy) addG(`Approach ${h.appr_accuracy}`,h);
-        });
-        const leaks=Object.entries(groups).filter(([,v])=>v.length>=5)
-          .map(([key,vals])=>({key,avg:vals.reduce((s,v)=>s+v,0)/vals.length,count:vals.length}))
-          .map(g=>({...g,impact:g.avg-baseline})).sort((a,b)=>b.impact-a.impact);
-        if(leaks.length>=2){
-          leakTitleVal=leaks[0].key; leakImpactVal=leaks[0].impact; leakCountVal=leaks[0].count;
-          leakDataVal=leaks.slice(0,4).map((l,i)=>({x:l.key,v:l.impact,hi:i===0}));
+        const ci=(label:string,holes:any[])=>{
+          if(holes.length<5) return null;
+          const avg=holes.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/holes.length;
+          return {label,impact:avg-baseline,count:holes.length};
+        };
+        const candidates=[
+          ci("Drive hit",       allHoles.filter((h:any)=>h.tee_accuracy==="Hit")),
+          ci("Drive left",      allHoles.filter((h:any)=>h.tee_accuracy==="Left")),
+          ci("Drive right",     allHoles.filter((h:any)=>h.tee_accuracy==="Right")),
+          ci("Drive short",     allHoles.filter((h:any)=>h.tee_accuracy==="Short")),
+          ci("Approach hit",    allHoles.filter((h:any)=>h.appr_accuracy==="Hit")),
+          ci("Approach short",  allHoles.filter((h:any)=>h.appr_accuracy==="Short")),
+          ci("Approach long",   allHoles.filter((h:any)=>h.appr_accuracy==="Long")),
+          ci("Approach left",   allHoles.filter((h:any)=>h.appr_accuracy==="Left")),
+          ci("Approach right",  allHoles.filter((h:any)=>h.appr_accuracy==="Right")),
+          ci("GIR",             allHoles.filter((h:any)=>h.gir)),
+          ci("Miss green",      allHoles.filter((h:any)=>!h.gir)),
+          ci("1-putt",          allHoles.filter((h:any)=>Number(h.putts)===1)),
+          ci("3+ putt",         allHoles.filter((h:any)=>Number(h.putts)>=3)),
+          ci("Par 3",           allHoles.filter((h:any)=>h.par===3)),
+          ci("Par 5",           allHoles.filter((h:any)=>h.par===5)),
+          ci("GS bunker",       allHoles.filter((h:any)=>Number(h.greenside_bunker)>0)),
+        ].filter((c):c is {label:string;impact:number;count:number}=>c!==null);
+        const leaks=candidates.filter(c=>c.impact>0).sort((a,b)=>b.impact-a.impact);
+        if(leaks.length>=1){
+          leakTitleVal=leaks[0].label; leakImpactVal=leaks[0].impact; leakCountVal=leaks[0].count;
+          leakDataVal=leaks.slice(0,4).map((l,i)=>({x:l.label,v:l.impact,hi:i===0}));
           setLeakTitle(leakTitleVal); setLeakImpact(leakImpactVal);
           setLeakCount(leakCountVal); setLeakData(leakDataVal);
         }
@@ -243,12 +270,17 @@ export default function Home() {
       setRecentRoundsData(recentArr);
 
       // Best score + streak
-      let best:number|null=null,bCourse="",streakCount=0,sDone=false;
+      let bestSTP:number|null=null,best:number|null=null,bCourse="",streakCount=0,sDone=false;
       for(const r of completedAll){
         const holes=(r.holes??[]).filter((h:any)=>Number(h.score)>0);
         const score=holes.reduce((sum:number,h:any)=>sum+Number(h.score),0);
+        const holesPlayed=r.holes_played??holes.length;
+        if(holesPlayed>=18&&score>0){
+          const par=holes.reduce((sum:number,h:any)=>sum+(h.par||0),0);
+          const stp=score-par;
+          if(bestSTP===null||stp<bestSTP){bestSTP=stp;best=score;bCourse=courseMap[r.course_id]?.name??r.course_name??"";}
+        }
         if(holes.length>=9){
-          if(best===null||score<best){best=score;bCourse=courseMap[r.course_id]?.name??r.course_name??"";}
           if(!sDone){if(score<90)streakCount++;else sDone=true;}
         }
       }
@@ -263,7 +295,7 @@ export default function Home() {
         nr=nrData; setNextRound(nr);
         nrCourse=courseMap[nr.course_id]??null;
         if(!nrCourse&&nr.course_id){
-          const{data:nc}=await supabase.from("courses").select("id,name,rating,slope,hole_count").eq("id",nr.course_id).maybeSingle();
+          const{data:nc}=await supabase.from("courses").select("id,name,rating,slope,hole_count,city,state").eq("id",nr.course_id).maybeSingle();
           if(nc) nrCourse=nc;
         }
         setNextRoundCourse(nrCourse);
@@ -297,7 +329,7 @@ export default function Home() {
       try {
         localStorage.setItem(CACHE_KEY, JSON.stringify({
           d: {
-            diffs:allDiffs, lastRound:lastRoundVal, lastCourse:lastCourseVal,
+            diffs:allDiffs, diffDates:allDiffDates, lastRound:lastRoundVal, lastCourse:lastCourseVal,
             planPeek:planPeekVal,
             leakData:leakDataVal, leakTitle:leakTitleVal, leakImpact:leakImpactVal, leakCount:leakCountVal,
             totalRounds:totalRoundsVal, recentRoundsData:recentArr,
@@ -316,9 +348,19 @@ export default function Home() {
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const hi=computeHI(diffs);
-  const last20=diffs.slice(-20),prev20=diffs.slice(-40,-20);
-  const trend30=last20.length>=4&&prev20.length>=4?(computeHI(prev20)??0)-(hi??0):null;
-  const sparkData=last20.map(d=>-d);
+
+  // 30-day trend: same logic as clubhouse — compare current HI to HI computed from
+  // rounds played more than 30 days ago (not prev-20-rounds window)
+  const thirtyAgoCutoff = (() => {
+    const d = new Date(); d.setDate(d.getDate()-30);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  })();
+  const diffsFor30 = diffs.filter((_,i) => diffDates[i] && diffDates[i] < thirtyAgoCutoff);
+  const hcp30 = computeHI(diffsFor30);
+  const trend30 = hi !== null && hcp30 !== null ? hi - hcp30 : null;
+
+  // Sparkline: last 20 round differentials (not negated, lower = better)
+  const sparkData = diffs.slice(-20);
 
   const lastHoles:any[]=lastRound?.holes??[];
   const scoredHoles=lastHoles.filter((h:any)=>Number(h.score)>0);
@@ -338,26 +380,61 @@ export default function Home() {
   const nrSlope=nextRoundCourse?.slope??null;
   const nrGoal=nextRoundPlan?.target_score??null;
 
-  // 5-day forecast: shift window so the last day shown is the golf day if it's > 4 days out
-  const todayMs = new Date().setHours(0,0,0,0);
-  const nrDaysOut = nextRound
-    ? Math.round((new Date(nextRound.date + "T12:00:00").getTime() - todayMs) / 86400000)
-    : 0;
-  const forecastStart = nextRound && nrDaysOut > 4 ? nrDaysOut - 4 : 0;
-  const wxIcons = ["sunny","partly-cloudy","partly-cloudy","cloudy","rainy","sunny","partly-cloudy"];
-  const wxTemps = [74,71,73,68,66,72,70];
-  const forecastDays = Array.from({length:5}, (_,i) => {
-    const offset = forecastStart + i;
-    const d = new Date(); d.setDate(d.getDate() + offset);
-    return {
-      day: d.toLocaleDateString("en-US",{weekday:"short"}).toUpperCase().slice(0,3),
-      icon: wxIcons[offset % wxIcons.length],
-      hi: wxTemps[offset % wxTemps.length],
-      isTee: nextRound?.date === d.toISOString().split("T")[0],
-    };
-  });
-
   const briefDate=new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}).toUpperCase();
+
+  // ── Weather fetch for next round's course city ─────────────────────────────
+  useEffect(() => {
+    const city = nextRoundCourse?.city;
+    if (!city) return;
+    const nrDateStr = nextRound?.date ?? "";
+    function wcToIcon(code: number): string {
+      if (code===0||code===1) return "sunny";
+      if (code===2) return "partly-cloudy";
+      if (code===3||code===45||code===48) return "cloudy";
+      if (code>=95) return "stormy";
+      if (code>=51) return "rainy";
+      return "partly-cloudy";
+    }
+    fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`)
+      .then(r=>r.json())
+      .then(geo=>{
+        const loc=geo?.results?.[0];
+        if(!loc) return null;
+        return fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}` +
+          `&daily=temperature_2m_max,weathercode` +
+          `&temperature_unit=fahrenheit&timezone=auto&forecast_days=10`
+        ).then(r=>r.json());
+      })
+      .then(data=>{
+        if(!data?.daily) return;
+        const {time,temperature_2m_max,weathercode}=data.daily as {time:string[];temperature_2m_max:number[];weathercode:number[]};
+        // Find start: today's local date
+        const now=new Date();
+        const todayLocal=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+        let start=time.findIndex((t:string)=>t>=todayLocal);
+        if(start<0) start=0;
+        // If tee day is > 4 days out, shift window so it ends on tee day
+        if(nrDateStr) {
+          const teeIdx=time.findIndex((t:string)=>t===nrDateStr);
+          if(teeIdx>start+4) start=Math.max(0,teeIdx-4);
+        }
+        const forecast=[];
+        for(let i=start;i<Math.min(start+5,time.length);i++){
+          const d=new Date(time[i]+"T12:00:00");
+          forecast.push({
+            day:d.toLocaleDateString("en-US",{weekday:"short"}).toUpperCase().slice(0,3),
+            icon:wcToIcon(weathercode[i]??0),
+            hi:Math.round(temperature_2m_max[i]??70),
+            isTee:time[i]===nrDateStr,
+          });
+        }
+        setWxForecast(forecast);
+        const state=nextRoundCourse?.state;
+        setWxCity(state?`${city}, ${state}`:city);
+      })
+      .catch(()=>{});
+  }, [nextRoundCourse?.city, nextRound?.date]);
 
   // ── Responsive breakpoints ──────────────────────────────────────────────────
   const isMobile=windowWidth<768;
@@ -404,7 +481,7 @@ export default function Home() {
               {/* Big HI */}
               <HandicapHero
                 handicap={hi ?? 0}
-                delta30d={trend30!=null ? -trend30 : 0}
+                delta30d={trend30 ?? 0}
                 spark={sparkData.length >= 4 ? (
                   <Sparkline data={sparkData} w={isMobile ? 260 : 300} h={42} stroke="rgba(255,255,255,0.7)" fill="rgba(255,255,255,0.12)" />
                 ) : undefined}
@@ -489,19 +566,24 @@ export default function Home() {
                     <>
                       <span style={B.cardMetaStrong}>{nrDate}</span>
                       {nrTeeBox&&<><span style={B.cardMetaDot}>·</span><span>{nrTeeBox} tees</span></>}
+                      {wxCity&&<><span style={B.cardMetaDot}>·</span><span style={{color:"var(--muted)"}}>{wxCity}</span></>}
                     </>
                   ) : (
                     <span style={B.cardMetaStrong}>No upcoming round planned</span>
                   )}
                 </div>
                 <div style={{ display:"flex", gap:6, marginTop:16 }}>
-                  {forecastDays.map(d=>(
+                  {wxForecast.length>0 ? wxForecast.map(d=>(
                     <div key={d.day} style={{...B.wxCell, background:d.isTee?"var(--accent)":"var(--bg)", borderColor:d.isTee?"var(--accent-deep)":"var(--line)"}}>
                       <div style={B.wxDay}>{d.day}</div>
                       <div style={B.wxIcon}><WxIcon kind={d.icon} size={isMobile?16:20}/></div>
                       <div style={{...B.wxTemp, fontVariantNumeric:"tabular-nums"}}>{d.hi}°</div>
                     </div>
-                  ))}
+                  )) : (
+                    <div style={{color:"var(--muted)",fontSize:11,fontStyle:"italic",paddingTop:4}}>
+                      {nextRoundCourse?.city ? "Loading forecast…" : "Add city to course for weather"}
+                    </div>
+                  )}
                 </div>
                 <div style={B.cardFoot}>
                   {nrGoal&&<span style={B.cardFootK}>Goal · <strong style={{color:"var(--ink)"}}>{nrGoal}</strong></span>}

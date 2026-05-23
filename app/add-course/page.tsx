@@ -200,6 +200,8 @@ function AddCourseInner() {
   const [midSaved, setMidSaved] = useState(false);
   const [holeNotesOpen, setHoleNotesOpen] = useState(false);
   const [greenside, setGreenside] = useState<GreensideState>(defaultGreensideState());
+  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
+  const [heroImagePosition, setHeroImagePosition] = useState<string | null>(null);
 
   useEffect(() => {
     if (!copyFromId) return;
@@ -211,6 +213,8 @@ function AddCourseInner() {
         setHoleCount(course.holes.length as 9|18);
         setHoles(course.holes.map(h => ({ ...h })));
         if (course.holes.length > 0) setGreenside(flatToGreenside(course.holes[0] as Record<string, any>));
+        setHeroImageUrl(course.hero_image_url ?? null);
+        setHeroImagePosition(course.hero_image_position ?? null);
       }
     });
   }, [copyFromId]);
@@ -345,6 +349,8 @@ const isScan = searchParams.get("scan") === "1";
       rating: rating !== "" ? parseFloat(rating) : null,
       slope: slope !== "" ? parseInt(slope) : null,
       holes,
+      hero_image_url: heroImageUrl ?? undefined,
+      hero_image_position: heroImagePosition ?? undefined,
     };
     await saveCourse(course);
     const allCourses = await loadCourses();

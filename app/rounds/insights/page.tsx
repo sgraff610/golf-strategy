@@ -748,16 +748,55 @@ function CoachBriefing({
   insights,
   totalRounds,
   heavyReady,
+  allHoles,
   onNavigate,
 }: {
   insights: CoachingInsights | null;
   totalRounds: number;
   heavyReady: boolean;
+  allHoles: EnrichedHole[];
   onNavigate: (tab: "trends" | "factors") => void;
 }) {
   const [expandedLeak, setExpandedLeak] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const topLeak = insights?.leaks[0] ?? null;
+
+  // ── Frequency trends: last 5 rounds vs all-time ────────────────────────────
+  const freqTrends = React.useMemo(() => {
+    if (allHoles.length < 20) return [];
+    const maxIdx = Math.max(...allHoles.map(h => h.roundIndex));
+    const last5 = allHoles.filter(h => h.roundIndex >= maxIdx - 4);
+    if (last5.length < 9) return [];
+
+    type Pat = { id: string; label: string; goodWhenHigh: boolean; pool: (hs: EnrichedHole[]) => EnrichedHole[]; match: (h: EnrichedHole) => boolean };
+    const patterns: Pat[] = [
+      { id: "drv-hit",  label: "Driving fairway",     goodWhenHigh: true,  pool: hs => hs.filter(h => h.par >= 4 && h.tee_accuracy !== ""), match: h => h.tee_accuracy === "Hit" },
+      { id: "drv-lft",  label: "Drive left",           goodWhenHigh: false, pool: hs => hs.filter(h => h.par >= 4 && h.tee_accuracy !== ""), match: h => h.tee_accuracy === "Left" },
+      { id: "drv-rgt",  label: "Drive right",          goodWhenHigh: false, pool: hs => hs.filter(h => h.par >= 4 && h.tee_accuracy !== ""), match: h => h.tee_accuracy === "Right" },
+      { id: "drv-sht",  label: "Drive short",          goodWhenHigh: false, pool: hs => hs.filter(h => h.par >= 4 && h.tee_accuracy !== ""), match: h => h.tee_accuracy === "Short" },
+      { id: "apr-hit",  label: "Approach on target",   goodWhenHigh: true,  pool: hs => hs.filter(h => h.appr_accuracy !== ""),             match: h => h.appr_accuracy === "Hit" },
+      { id: "apr-sht",  label: "Approach short",       goodWhenHigh: false, pool: hs => hs.filter(h => h.appr_accuracy !== ""),             match: h => h.appr_accuracy === "Short" },
+      { id: "apr-lng",  label: "Approach long",        goodWhenHigh: false, pool: hs => hs.filter(h => h.appr_accuracy !== ""),             match: h => h.appr_accuracy === "Long" },
+      { id: "gir",      label: "GIR",                  goodWhenHigh: true,  pool: hs => hs,                                                  match: h => h.gir },
+      { id: "3putt",    label: "3+ putt",              goodWhenHigh: false, pool: hs => hs,                                                  match: h => h.putts >= 3 },
+      { id: "1putt",    label: "1-putt",               goodWhenHigh: true,  pool: hs => hs,                                                  match: h => h.putts === 1 },
+      { id: "gs-bunk",  label: "GS bunker",            goodWhenHigh: false, pool: hs => hs,                                                  match: h => h.greenside_bunker > 0 },
+    ];
+
+    return patterns.map(p => {
+      const allPool = p.pool(allHoles);
+      const l5Pool  = p.pool(last5);
+      if (allPool.length < 10 || l5Pool.length < 3) return null;
+      const allRate  = allPool.filter(p.match).length / allPool.length;
+      const last5Rate = l5Pool.filter(p.match).length / l5Pool.length;
+      const delta = last5Rate - allRate;
+      if (Math.abs(delta) < 0.05) return null;
+      return { id: p.id, label: p.label, goodWhenHigh: p.goodWhenHigh, allRate, last5Rate, delta };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 6);
+  }, [allHoles]);
 
   return (
     <div style={{ maxWidth: 600 }}>
@@ -908,6 +947,55 @@ function CoachBriefing({
                 <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 3, lineHeight: 1.3 }}>{s.count} holes tracked</div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Frequency trends — last 5 rounds vs all-time */}
+      {freqTrends.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", fontWeight: 500, fontSize: 20, color: "var(--ink)", marginBottom: 4 }}>
+            Last 5 rounds — what's shifting
+          </div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 12 }}>Frequency vs. your all-time baseline</div>
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: 6 }}>
+            {freqTrends.map(t => {
+              const up = t.delta > 0;
+              const isGood = up === t.goodWhenHigh;
+              const accentColor = isGood ? "var(--good)" : "var(--accent)";
+              const bgColor = isGood ? "var(--green-soft)" : "var(--accent-soft)";
+              const borderColor = isGood ? "var(--green)" : "var(--accent)";
+              return (
+                <div key={t.id} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  background: bgColor, border: `1px solid ${borderColor}`,
+                  borderRadius: 12, padding: "10px 14px",
+                }}>
+                  <span style={{ fontSize: 16, lineHeight: 1, color: accentColor, fontWeight: 700, width: 16, textAlign: "center" as const }}>
+                    {up ? "↑" : "↓"}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{t.label}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: "var(--muted)", fontFeatureSettings: '"tnum" 1' }}>
+                      {Math.round(t.allRate * 100)}%
+                    </span>
+                    <span style={{ fontSize: 10, color: "var(--muted-2)" }}>→</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: accentColor, fontFeatureSettings: '"tnum" 1' }}>
+                      {Math.round(t.last5Rate * 100)}%
+                    </span>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: accentColor,
+                      background: `${accentColor}1a`, borderRadius: 6, padding: "2px 6px",
+                      fontFeatureSettings: '"tnum" 1',
+                    }}>
+                      {up ? "+" : ""}{Math.round(t.delta * 100)}pp
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1353,7 +1441,7 @@ export default function RoundsInsights() {
       </div>
 
       <div style={{ display: tab === "briefing" ? "block" : "none" }}>
-        <CoachBriefing insights={coachingInsights} totalRounds={totalRounds} heavyReady={heavyReady} onNavigate={setTab} />
+        <CoachBriefing insights={coachingInsights} totalRounds={totalRounds} heavyReady={heavyReady} allHoles={allHoles} onNavigate={setTab} />
       </div>
 
       <div style={{ display: tab === "trends" ? "block" : "none" }}>

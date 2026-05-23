@@ -81,6 +81,8 @@ export function Wordmark({
         fontSize: size * 1.2,
         letterSpacing: 0,
         verticalAlign: "-0.12em",
+        display: "inline-block",
+        transform: "skewX(-7deg)",
       }}>G</span>
       <span style={{
         fontFamily: "var(--font-fraunces, Georgia, serif)",

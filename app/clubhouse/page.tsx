@@ -98,7 +98,7 @@ const fmtPct = (n?: number | null) => n == null ? "—" : `${Math.round(n * 100)
 const fmtPuts = (n?: number | null) => n == null ? "—" : n.toFixed(1);
 const fmtFt = (n?: number | null) => n == null ? "—" : `${n.toFixed(1)}ft`;
 const fmtDateShort = (iso: string) =>
-  new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
 function totalScore(holes: any[]) { return holes.reduce((s, h) => s + (Number(h.score) || 0), 0); }
 function totalPar(holes: any[]) { return holes.reduce((s, h) => s + (h.par || 0), 0); }
@@ -106,6 +106,9 @@ function totalPutts(holes: any[]) { return holes.reduce((s, h) => s + (Number(h.
 function fairwaysHit(holes: any[]) { return holes.filter(h => (h.par === 4 || h.par === 5) && h.tee_accuracy === "Hit").length; }
 function drivingTotal(holes: any[]) { return holes.filter(h => h.par === 4 || h.par === 5).length; }
 function girsHit(holes: any[]) { return holes.filter(h => h.gir).length; }
+function threePuttCount(holes: any[]) { return holes.filter(h => Number(h.putts) >= 3).length; }
+function twoChipCount(holes: any[]) { return holes.filter(h => Number(h.chips) >= 2).length; }
+function gsBunkerChipCount(holes: any[]) { return holes.filter(h => Number(h.greenside_bunker) > 0 && Number(h.chips) > 0).length; }
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
@@ -143,7 +146,7 @@ function MilestoneBadge({ kind = "pr", size = 20 }: { kind?: string; size?: numb
     <span title={title} style={{
       display: "inline-flex", alignItems: "center", justifyContent: "center",
       width: size, height: size, borderRadius: 99, flexShrink: 0,
-      background: "linear-gradient(135deg,#d9b466 0%,#b08a3e 60%,#8c6a26 100%)",
+      background: "linear-gradient(135deg,#f29450 0%,#d4763a 60%,#b85320 100%)",
       color: "#fff8e3", fontSize: size * 0.46, fontWeight: 700, letterSpacing: kind === "pr" ? 0.3 : 0,
       boxShadow: "0 1px 2px rgba(80,55,15,.3),inset 0 .5px 0 rgba(255,255,255,.4)",
     }}>{ch}</span>
@@ -383,7 +386,7 @@ export default function ClubhousePage() {
           boxShadow: "0 4px 24px rgba(8,70,52,.25)",
         }}>
           {/* Subtle radial glow top-right */}
-          <div style={{ position: "absolute", top: 0, right: 0, width: 160, height: 160, background: "radial-gradient(circle,rgba(200,168,75,.12) 0%,transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: 0, right: 0, width: 160, height: 160, background: "radial-gradient(circle,rgba(242,148,80,.15) 0%,transparent 70%)", pointerEvents: "none" }} />
 
           {/* 2-row × 2-col grid: stacks to single column on mobile */}
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gridTemplateRows: "auto auto", columnGap: 16, rowGap: 10 }}>
@@ -436,7 +439,7 @@ export default function ClubhousePage() {
                           display: "block", fontSize: 9, fontWeight: 700, padding: "3px 5px", borderRadius: 99,
                           cursor: "pointer", fontFeatureSettings: '"tnum" 1', textAlign: "center",
                           textDecoration: "none",
-                          background: used ? "linear-gradient(135deg,#d9b466,#8c6a26)" : "rgba(255,255,255,.1)",
+                          background: used ? "linear-gradient(135deg,#f29450,#b85320)" : "rgba(255,255,255,.1)",
                           color: used ? "#fff8e3" : "rgba(255,255,255,.4)",
                           boxShadow: used ? "0 1px 2px rgba(80,55,15,.3)" : "none",
                           border: used ? "none" : "1px solid rgba(255,255,255,.07)",
@@ -622,9 +625,9 @@ export default function ClubhousePage() {
                   const isBestRound = bestRound?.id === round.id;
                   return (
                     <div key={round.id} style={{
-                      background: "var(--paper)", border: `1px solid ${isBestRound ? "var(--sand)" : "var(--line)"}`,
+                      background: "var(--paper)", border: `1px solid ${isBestRound ? "var(--accent)" : "var(--line)"}`,
                       borderRadius: 14, padding: "14px 16px",
-                      boxShadow: isBestRound ? "0 0 0 1px var(--sand)22" : "none",
+                      boxShadow: isBestRound ? "0 0 0 1px rgba(242,148,80,.13)" : "none",
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                         <div style={{ minWidth: 0, flex: 1 }}>
@@ -663,18 +666,32 @@ export default function ClubhousePage() {
                       </div>
 
                       {/* Stat strip */}
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
-                        {[
-                          { label: "Putts",   val: totalPutts(round.holes) || "—" },
-                          { label: "Driving", val: `${fairwaysHit(round.holes)}/${drivingTotal(round.holes)}` },
-                          { label: "GIR",     val: `${girsHit(round.holes)}/${round.holes.length}` },
-                          { label: "+/−",     val: (() => { const p = round.holes.reduce((s, h) => s + (h.par || 0), 0); const d = sc - p; return d > 0 ? `+${d}` : d === 0 ? "E" : String(d); })() },
-                        ].map(({ label, val }) => (
-                          <div key={label} style={{ background: "var(--paper-alt)", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
-                            <div style={{ fontSize: 8.5, color: "var(--muted-2)", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--green-deep)", fontFeatureSettings: '"tnum" 1' }}>{val}</div>
-                          </div>
-                        ))}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 4 }}>
+                          {[
+                            { label: "Putts",   val: totalPutts(round.holes) || "—" },
+                            { label: "Driving", val: `${fairwaysHit(round.holes)}/${drivingTotal(round.holes)}` },
+                            { label: "GIR",     val: `${girsHit(round.holes)}/${round.holes.length}` },
+                            { label: "+/−",     val: (() => { const p = round.holes.reduce((s, h) => s + (h.par || 0), 0); const d = sc - p; return d > 0 ? `+${d}` : d === 0 ? "E" : String(d); })() },
+                          ].map(({ label, val }) => (
+                            <div key={label} style={{ background: "var(--paper-alt)", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                              <div style={{ fontSize: 8.5, color: "var(--muted-2)", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--green-deep)", fontFeatureSettings: '"tnum" 1' }}>{val}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
+                          {[
+                            { label: "3-Putt", val: threePuttCount(round.holes) || "—" },
+                            { label: "2-Chip", val: twoChipCount(round.holes) || "—" },
+                            { label: "GS Bkr", val: gsBunkerChipCount(round.holes) || "—" },
+                          ].map(({ label, val }) => (
+                            <div key={label} style={{ background: "var(--paper-alt)", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
+                              <div style={{ fontSize: 8.5, color: "var(--muted-2)", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)", fontFeatureSettings: '"tnum" 1' }}>{val}</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
 
                       {/* Action chips */}
@@ -914,7 +931,7 @@ export default function ClubhousePage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {changeLog.map((item, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0", borderTop: i ? "1px solid var(--line-soft)" : "none" }}>
-                      <span style={{ width: 5, height: 5, borderRadius: 99, background: "var(--sand)", flexShrink: 0, marginTop: 5 }} />
+                      <span style={{ width: 5, height: 5, borderRadius: 99, background: "var(--accent)", flexShrink: 0, marginTop: 5 }} />
                       <span style={{ flex: 1, fontSize: 13, color: "var(--ink)", lineHeight: 1.5 }}>{item}</span>
                       <button onClick={() => saveChangeLog(changeLog.filter((_, idx) => idx !== i))}
                         style={{ fontSize: 11, color: "var(--bad)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px", flexShrink: 0 }}>✕</button>

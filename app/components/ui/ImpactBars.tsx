@@ -25,7 +25,7 @@ export function ImpactBars({
               borderRadius: 4,
               background: d.hi
                 ? "linear-gradient(180deg,var(--accent) 0%,var(--accent-deep) 100%)"
-                : "var(--line)",
+                : "linear-gradient(180deg,#cdd4da 0%,#9eaab5 100%)",
             }} />
             <div style={{
               fontSize: 10, fontWeight: 500, color: "var(--ink-mute)",
