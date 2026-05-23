@@ -102,15 +102,6 @@ export async function POST(req: NextRequest) {
       // All input is done via page.evaluate + keyboard.type — zero fill() calls.
       // This bypasses Playwright's visibility checks entirely.
 
-      const jsClick = async (selectors: string[]) => {
-        await page.evaluate((sels: string[]) => {
-          for (const sel of sels) {
-            const el = document.querySelector(sel) as HTMLElement | null;
-            if (el) { el.click(); return; }
-          }
-        }, selectors);
-      };
-
       const jsFocus = async (selectors: string[]) => {
         return page.evaluate((sels: string[]) => {
           for (const sel of sels) {
@@ -121,47 +112,45 @@ export async function POST(req: NextRequest) {
         }, selectors);
       };
 
-      // ── Step A: type email ─────────────────────────────────────────────────────
+      // ── Step A: type email then press Enter ────────────────────────────────────
       const emailFocused = await jsFocus(EMAIL_SELS);
       if (!emailFocused) {
         await browser.close();
         return NextResponse.json({
           ok: false,
-          error: `v5 — login form not found at: ${landedUrl} (${await page.title()})`,
+          error: `v6 — login form not found at: ${landedUrl} (${await page.title()})`,
         }, { status: 422 });
       }
       await page.keyboard.type(email, { delay: 40 });
       await page.waitForTimeout(300);
-
-      // Submit email step
-      await jsClick(['input[type="submit"]', 'button[type="submit"]', 'button']);
+      await page.keyboard.press("Enter");
       await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(2500); // wait for /passthru to load
+      await page.waitForTimeout(2500);
 
-      // ── Step B: type password on /passthru ────────────────────────────────────
+      // ── Step B: type password then press Enter ─────────────────────────────────
+      const urlAfterEmail = page.url();
       const passFocused = await jsFocus(PASS_SELS);
       if (!passFocused) {
         await browser.close();
         return NextResponse.json({
           ok: false,
-          error: `v5 — password field not found at: ${page.url()} (${await page.title()})`,
+          error: `v6 — password field not found at: ${urlAfterEmail} (${await page.title()})`,
         }, { status: 422 });
       }
       await page.keyboard.type(password, { delay: 40 });
       await page.waitForTimeout(300);
-
-      // Submit password step
-      await jsClick(['input[type="submit"]', 'button[type="submit"]', 'button']);
+      await page.keyboard.press("Enter");
       await page.waitForLoadState("domcontentloaded").catch(() => {});
       await page.waitForTimeout(2500);
 
       // Check login succeeded
       const afterUrl = page.url();
       if (afterUrl.includes("sign_in") || afterUrl.includes("login") || afterUrl.includes("passthru")) {
+        const pageTitle = await page.title();
         await browser.close();
         return NextResponse.json({
           ok: false,
-          error: `v5 — login failed, still at: ${afterUrl}`,
+          error: `v6 — still at ${afterUrl} ("${pageTitle}") after password submit. URL after email step was: ${urlAfterEmail}`,
         }, { status: 401 });
       }
 
