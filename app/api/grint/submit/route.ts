@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
         })),
       }));
       await browser.close();
-      return NextResponse.json({ ok: false, diag }, { status: 422 });
+      return NextResponse.json({ ok: false, error: JSON.stringify(diag, null, 2) }, { status: 422 });
 
       const jsFocus = async (selectors: string[]) => {
         return page.evaluate((sels: string[]) => {
