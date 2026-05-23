@@ -24,23 +24,10 @@ type SubmitPayload = {
   practiceRound: boolean;
 };
 
-const EMAIL_SELS = [
-  'input[name="user[email]"]',
-  'input[name="email"]',
-  'input[name="session[email]"]',
-  'input[type="email"]',
-  'input[placeholder*="email" i]',
-  'input[autocomplete="email"]',
-  'input[autocomplete="username"]',
-  'input[id*="email"]',
-];
-
-const PASS_SELS = [
-  'input[name="user[password]"]',
-  'input[name="password"]',
-  'input[name="session[password]"]',
-  'input[type="password"]',
-];
+// TheGrint /passthru login form IDs (confirmed via DOM inspection)
+const GRINT_USERNAME = "#usernameLogin";
+const GRINT_PASSWORD = "#pwdLogin";
+const GRINT_SUBMIT   = "#submit-form-login";
 
 async function tryFill(page: import("playwright").Page, selectors: string[], value: string) {
   for (const sel of selectors) {
@@ -99,73 +86,32 @@ export async function POST(req: NextRequest) {
       !!(await page.$('input[type="password"]'));
 
     if (needsLogin) {
-      // ── Diagnostic: return /passthru DOM structure so we can target the right elements
-      const diag = await page.evaluate(() => ({
-        inputs: Array.from(document.querySelectorAll("input")).map(el => ({
-          type: el.type, name: el.name, id: el.id,
-          placeholder: el.placeholder,
-          visible: (el as HTMLElement).offsetParent !== null,
-        })),
-        buttons: Array.from(document.querySelectorAll("button, input[type=submit]")).map(el => ({
-          tag: el.tagName,
-          type: (el as HTMLButtonElement).type,
-          text: el.textContent?.trim().substring(0, 80),
-          id: el.id,
-          visible: (el as HTMLElement).offsetParent !== null,
-        })),
-      }));
-      await browser.close();
-      return NextResponse.json({ ok: false, error: JSON.stringify(diag, null, 2) }, { status: 422 });
-
-      const jsFocus = async (selectors: string[]) => {
-        return page.evaluate((sels: string[]) => {
-          for (const sel of sels) {
-            const el = document.querySelector(sel) as HTMLInputElement | null;
-            if (el) { el.focus(); return true; }
-          }
-          return false;
-        }, selectors);
-      };
-
-      // ── Step A: type email then press Enter ────────────────────────────────────
-      const emailFocused = await jsFocus(EMAIL_SELS);
-      if (!emailFocused) {
+      // Known selectors from DOM inspection: #usernameLogin, #pwdLogin, #submit-form-login
+      // All are invisible on load — wait for React to mount before interacting.
+      try {
+        await page.waitForSelector("#usernameLogin", { state: "visible", timeout: 15000 });
+      } catch {
         await browser.close();
         return NextResponse.json({
           ok: false,
-          error: `v6 — login form not found at: ${landedUrl} (${await page.title()})`,
+          error: `Login form did not appear at ${landedUrl} within 15s.`,
         }, { status: 422 });
       }
-      await page.keyboard.type(email, { delay: 40 });
-      await page.waitForTimeout(300);
-      await page.keyboard.press("Enter");
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(2500);
 
-      // ── Step B: type password then press Enter ─────────────────────────────────
-      const urlAfterEmail = page.url();
-      const passFocused = await jsFocus(PASS_SELS);
-      if (!passFocused) {
-        await browser.close();
-        return NextResponse.json({
-          ok: false,
-          error: `v6 — password field not found at: ${urlAfterEmail} (${await page.title()})`,
-        }, { status: 422 });
-      }
-      await page.keyboard.type(password, { delay: 40 });
-      await page.waitForTimeout(300);
-      await page.keyboard.press("Enter");
+      await page.fill(GRINT_USERNAME, email);
+      await page.fill(GRINT_PASSWORD, password);
+      await page.click(GRINT_SUBMIT);
       await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(3000);
 
-      // Check login succeeded
       const afterUrl = page.url();
-      if (afterUrl.includes("sign_in") || afterUrl.includes("login") || afterUrl.includes("passthru")) {
-        const pageTitle = await page.title();
+      if (afterUrl.includes("passthru")) {
+        const errEl = await page.$('[class*="alert"], [class*="error"], .invalid-feedback');
+        const errMsg = errEl ? await errEl.textContent() : "";
         await browser.close();
         return NextResponse.json({
           ok: false,
-          error: `v6 — still at ${afterUrl} ("${pageTitle}") after password submit. URL after email step was: ${urlAfterEmail}`,
+          error: errMsg?.trim() || "Login failed — check your TheGrint username/email and password.",
         }, { status: 401 });
       }
 
