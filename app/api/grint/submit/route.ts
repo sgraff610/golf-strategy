@@ -52,17 +52,6 @@ async function tryFill(page: import("playwright").Page, selectors: string[], val
   return false;
 }
 
-async function findEmailInput(page: import("playwright").Page, maxWaitMs = 8000) {
-  const deadline = Date.now() + maxWaitMs;
-  while (Date.now() < deadline) {
-    for (const sel of EMAIL_SELS) {
-      const el = await page.$(sel);
-      if (el) return el;
-    }
-    await page.waitForTimeout(400);
-  }
-  return null;
-}
 
 export async function POST(req: NextRequest) {
   let payload: SubmitPayload;
@@ -110,62 +99,69 @@ export async function POST(req: NextRequest) {
       !!(await page.$('input[type="password"]'));
 
     if (needsLogin) {
-      const emailInput = await findEmailInput(page, 8000);
-      if (!emailInput) {
+      // All input is done via page.evaluate + keyboard.type — zero fill() calls.
+      // This bypasses Playwright's visibility checks entirely.
+
+      const jsClick = async (selectors: string[]) => {
+        await page.evaluate((sels: string[]) => {
+          for (const sel of sels) {
+            const el = document.querySelector(sel) as HTMLElement | null;
+            if (el) { el.click(); return; }
+          }
+        }, selectors);
+      };
+
+      const jsFocus = async (selectors: string[]) => {
+        return page.evaluate((sels: string[]) => {
+          for (const sel of sels) {
+            const el = document.querySelector(sel) as HTMLInputElement | null;
+            if (el) { el.focus(); return true; }
+          }
+          return false;
+        }, selectors);
+      };
+
+      // ── Step A: type email ─────────────────────────────────────────────────────
+      const emailFocused = await jsFocus(EMAIL_SELS);
+      if (!emailFocused) {
         await browser.close();
         return NextResponse.json({
           ok: false,
-          error: `Login form not found. Landed on: ${landedUrl} — title: "${await page.title()}"`,
+          error: `v5 — login form not found at: ${landedUrl} (${await page.title()})`,
         }, { status: 422 });
       }
+      await page.keyboard.type(email, { delay: 40 });
+      await page.waitForTimeout(300);
 
-      // ── Step A: fill email and submit ─────────────────────────────────────────
-      await emailInput.fill(email);
-
-      const submitStep1 = async () => {
-        for (const sel of ['input[type="submit"]', 'button[type="submit"]', 'button:has-text("Sign")', 'button:has-text("Log")', 'button:has-text("Next")', 'button:has-text("Continue")']) {
-          const el = await page.$(sel);
-          if (el) { await el.click(); return; }
-        }
-      };
-      await submitStep1();
+      // Submit email step
+      await jsClick(['input[type="submit"]', 'button[type="submit"]', 'button']);
       await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(2500); // wait for /passthru to load
 
-      // ── Step B: /passthru — password input is hidden during React animation ────
-      // Strategy: focus the input via JS (ignores visibility), then use
-      // page.keyboard.type() which sends raw keystrokes to whatever is focused.
-      // This is the only approach that bypasses ALL Playwright visibility checks.
-      await page.waitForTimeout(2000);
-
-      const passFocused = await page.evaluate((sels: string[]) => {
-        for (const sel of sels) {
-          const el = document.querySelector(sel) as HTMLInputElement | null;
-          if (el) { el.focus(); return true; }
-        }
-        return false;
-      }, PASS_SELS);
-
+      // ── Step B: type password on /passthru ────────────────────────────────────
+      const passFocused = await jsFocus(PASS_SELS);
       if (!passFocused) {
-        await browser.close();
-        return NextResponse.json({ ok: false, error: "Could not find password field on /passthru page." }, { status: 422 });
-      }
-
-      await page.keyboard.type(password, { delay: 40 });
-      await page.waitForTimeout(400);
-      await submitStep1();
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(2000);
-
-      // Detect wrong password / still on login
-      const afterUrl = page.url();
-      if (afterUrl.includes("sign_in") || afterUrl.includes("login") || afterUrl.includes("passthru")) {
-        const errEl = await page.$('[class*="alert"], [class*="error"], [class*="flash"]');
-        const errMsg = errEl ? await errEl.textContent() : "";
         await browser.close();
         return NextResponse.json({
           ok: false,
-          error: errMsg?.trim() || "Login failed — check your TheGrint email and password.",
+          error: `v5 — password field not found at: ${page.url()} (${await page.title()})`,
+        }, { status: 422 });
+      }
+      await page.keyboard.type(password, { delay: 40 });
+      await page.waitForTimeout(300);
+
+      // Submit password step
+      await jsClick(['input[type="submit"]', 'button[type="submit"]', 'button']);
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.waitForTimeout(2500);
+
+      // Check login succeeded
+      const afterUrl = page.url();
+      if (afterUrl.includes("sign_in") || afterUrl.includes("login") || afterUrl.includes("passthru")) {
+        await browser.close();
+        return NextResponse.json({
+          ok: false,
+          error: `v5 — login failed, still at: ${afterUrl}`,
         }, { status: 401 });
       }
 
