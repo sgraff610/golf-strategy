@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Share2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
 
@@ -278,6 +278,15 @@ export default function RoundsPage() {
                         </div>
                       )}
                     </div>
+                    <a
+                      href={`/rounds/grint?roundId=${round.id}`}
+                      title="Export to TheGrint"
+                      style={iconBtn("#0f6e56", `grint-${round.id}`)}
+                      onMouseEnter={() => setHoveredBtn(`grint-${round.id}`)}
+                      onMouseLeave={() => setHoveredBtn(null)}
+                    >
+                      <Share2 size={15} />
+                    </a>
                     <a
                       href={`/rounds/${round.id}/edit`}
                       title="Edit"
