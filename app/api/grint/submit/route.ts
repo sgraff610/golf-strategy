@@ -132,36 +132,36 @@ export async function POST(req: NextRequest) {
       await page.waitForLoadState("domcontentloaded").catch(() => {});
       await page.waitForTimeout(1500);
 
-      // ── Step B: handle /passthru or similar — wait for password to appear ────
-      // TheGrint uses a two-step login: email first, then password on a new page.
-      // The password input may be hidden initially and reveal via animation.
-      let passInput: import("playwright").ElementHandle | null = null;
-      const passDeadline = Date.now() + 12000;
-      while (Date.now() < passDeadline) {
-        for (const sel of PASS_SELS) {
-          try {
-            const el = await page.$(sel);
-            if (el && await el.isVisible()) { passInput = el; break; }
-          } catch {}
+      // ── Step B: /passthru — password is in DOM but hidden during React animation ─
+      // Wait for the element to exist in the DOM (doesn't need to be visible).
+      await page.waitForTimeout(1500);
+
+      // Fill password via JS to bypass Playwright's strict visibility checks.
+      // TheGrint's /passthru page keeps the input hidden during React animation.
+      const passFilled = await page.evaluate(({ sels, val }: { sels: string[]; val: string }) => {
+        for (const sel of sels) {
+          const el = document.querySelector(sel) as HTMLInputElement | null;
+          if (!el) continue;
+          // React-compatible value setter
+          const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+          if (nativeSetter) nativeSetter.call(el, val);
+          else el.value = val;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          return true;
         }
-        if (passInput) break;
-        await page.waitForTimeout(400);
+        return false;
+      }, { sels: PASS_SELS, val: password });
+
+      if (!passFilled) {
+        await browser.close();
+        return NextResponse.json({ ok: false, error: "Could not find password field on /passthru page." }, { status: 422 });
       }
 
-      if (passInput) {
-        // Found a password step — fill it and submit
-        await passInput.fill(password);
-        await page.waitForTimeout(300);
-        await submitStep1();
-        await page.waitForLoadState("domcontentloaded").catch(() => {});
-        await page.waitForTimeout(2000);
-      } else {
-        // Single-step login — password was already in the first form
-        await tryFill(page, PASS_SELS, password);
-        await submitStep1();
-        await page.waitForLoadState("domcontentloaded").catch(() => {});
-        await page.waitForTimeout(2000);
-      }
+      await page.waitForTimeout(500);
+      await submitStep1();
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.waitForTimeout(2000);
 
       // Detect wrong password / still on login
       const afterUrl = page.url();
