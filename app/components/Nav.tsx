@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Mark, Wordmark } from "./ui/Mark";
+import { supabase } from "@/lib/supabase";
 
 const LINKS = [
   { href: "/",                label: "Home" },
@@ -14,8 +15,15 @@ const LINKS = [
 
 export default function Nav() {
   const pathname = usePathname() ?? "/";
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 720);
@@ -75,6 +83,17 @@ export default function Nav() {
               background: "var(--accent)",
               color: "var(--ink)",
             }}>+ New round</Link>
+            <button onClick={signOut} style={{
+              marginLeft: 4,
+              padding: "8px 14px",
+              borderRadius: "var(--r-pill)",
+              fontSize: "var(--t-ui)",
+              fontWeight: 500,
+              border: "1px solid var(--line)",
+              background: "transparent",
+              color: "var(--ink-mute)",
+              cursor: "pointer",
+            }}>Sign out</button>
           </div>
         )}
 
@@ -108,11 +127,18 @@ export default function Nav() {
             );
           })}
           <Link href="/plan" onClick={() => setOpen(false)} style={{
-            display: "block", textAlign: "center", margin: "12px 24px",
+            display: "block", textAlign: "center", margin: "12px 24px 4px",
             padding: "12px", borderRadius: "var(--r-pill)",
             background: "var(--accent)", color: "var(--ink)",
             fontWeight: 600, textDecoration: "none",
           }}>+ New round</Link>
+          <button onClick={signOut} style={{
+            display: "block", width: "calc(100% - 48px)", margin: "0 24px 12px",
+            padding: "12px", borderRadius: "var(--r-pill)",
+            background: "transparent", border: "1px solid var(--line)",
+            color: "var(--ink-mute)", fontWeight: 500,
+            fontSize: "var(--t-ui)", cursor: "pointer",
+          }}>Sign out</button>
         </div>
       )}
     </nav>
