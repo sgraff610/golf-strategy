@@ -21,6 +21,7 @@ type SubmitPayload = {
   courseName: string;
   tee: string;
   holes: HoleEntry[];
+  practiceRound: boolean;
 };
 
 export async function POST(req: NextRequest) {
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { email, password, date, courseName, tee, holes } = payload;
+  const { email, password, date, courseName, tee, holes, practiceRound } = payload;
   if (!email || !password) {
     return NextResponse.json({ ok: false, error: "Missing credentials" }, { status: 400 });
   }
@@ -143,7 +144,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── 7. Submit ──────────────────────────────────────────────────────────────
+    // ── 7. Practice round checkbox ─────────────────────────────────────────────
+    if (practiceRound) {
+      const practiceSelectors = [
+        'input[name*="practice"]',
+        'input#score_practice',
+        'label:has-text("Practice") input',
+        'input[id*="practice"]',
+      ];
+      for (const sel of practiceSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el) {
+            const checked = await el.isChecked();
+            if (!checked) await el.check();
+            break;
+          }
+        } catch {}
+      }
+      // Fallback: find label containing "Practice" and click adjacent checkbox
+      try {
+        await page.locator('label', { hasText: /Practice/i }).first().click();
+      } catch {}
+    }
+
+    // ── 8. Submit ──────────────────────────────────────────────────────────────
     const submitBtn = await page.$('input[type="submit"][value*="Submit"], button:has-text("Submit")');
     if (submitBtn) {
       await submitBtn.click();

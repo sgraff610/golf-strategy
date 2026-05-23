@@ -62,6 +62,7 @@ function GrintContent() {
   const [credsSaved, setCredsSaved] = useState(false);
 
   // Submit state
+  const [practiceRound, setPracticeRound] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string } | null>(null);
 
@@ -185,6 +186,7 @@ function GrintContent() {
           courseName: round.course_name,
           tee: course?.tee_box || "",
           holes: holesData,
+          practiceRound,
         }),
       });
       const json = await res.json();
@@ -463,6 +465,28 @@ function GrintContent() {
               )}
             </div>
           </div>
+
+          {/* Practice round toggle */}
+          <label style={{
+            display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+            padding: "10px 12px", borderRadius: 8,
+            background: practiceRound ? "rgba(var(--accent-rgb,255,120,0),0.08)" : "transparent",
+            border: `1px solid ${practiceRound ? "var(--accent)" : "var(--line)"}`,
+            marginBottom: 12, userSelect: "none",
+          }}>
+            <input
+              type="checkbox"
+              checked={practiceRound}
+              onChange={e => setPracticeRound(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: "var(--accent)", cursor: "pointer" }}
+            />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+              Practice / Offseason Round
+            </span>
+            <span style={{ fontSize: 11, color: "var(--ink-mute)", marginLeft: "auto" }}>
+              Won't count toward handicap
+            </span>
+          </label>
 
           {submitResult && (
             <div style={{
