@@ -119,29 +119,53 @@ export async function POST(req: NextRequest) {
         }, { status: 422 });
       }
 
+      // ── Step A: fill email and submit ─────────────────────────────────────────
       await emailInput.fill(email);
-      await tryFill(page, PASS_SELS, password);
 
-      // Submit login form
-      const submitted = await (async () => {
-        for (const sel of ['input[type="submit"]', 'button[type="submit"]', 'button:has-text("Sign")', 'button:has-text("Log")']) {
+      const submitStep1 = async () => {
+        for (const sel of ['input[type="submit"]', 'button[type="submit"]', 'button:has-text("Sign")', 'button:has-text("Log")', 'button:has-text("Next")', 'button:has-text("Continue")']) {
           const el = await page.$(sel);
-          if (el) { await el.click(); return true; }
+          if (el) { await el.click(); return; }
         }
-        return false;
-      })();
+      };
+      await submitStep1();
+      await page.waitForLoadState("domcontentloaded").catch(() => {});
+      await page.waitForTimeout(1500);
 
-      if (!submitted) {
-        await browser.close();
-        return NextResponse.json({ ok: false, error: "Could not find login submit button." }, { status: 422 });
+      // ── Step B: handle /passthru or similar — wait for password to appear ────
+      // TheGrint uses a two-step login: email first, then password on a new page.
+      // The password input may be hidden initially and reveal via animation.
+      let passInput: import("playwright").ElementHandle | null = null;
+      const passDeadline = Date.now() + 12000;
+      while (Date.now() < passDeadline) {
+        for (const sel of PASS_SELS) {
+          try {
+            const el = await page.$(sel);
+            if (el && await el.isVisible()) { passInput = el; break; }
+          } catch {}
+        }
+        if (passInput) break;
+        await page.waitForTimeout(400);
       }
 
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(2000);
+      if (passInput) {
+        // Found a password step — fill it and submit
+        await passInput.fill(password);
+        await page.waitForTimeout(300);
+        await submitStep1();
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
+        await page.waitForTimeout(2000);
+      } else {
+        // Single-step login — password was already in the first form
+        await tryFill(page, PASS_SELS, password);
+        await submitStep1();
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
+        await page.waitForTimeout(2000);
+      }
 
-      // Detect wrong password
+      // Detect wrong password / still on login
       const afterUrl = page.url();
-      if (afterUrl.includes("sign_in") || afterUrl.includes("login")) {
+      if (afterUrl.includes("sign_in") || afterUrl.includes("login") || afterUrl.includes("passthru")) {
         const errEl = await page.$('[class*="alert"], [class*="error"], [class*="flash"]');
         const errMsg = errEl ? await errEl.textContent() : "";
         await browser.close();
