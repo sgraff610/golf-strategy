@@ -99,8 +99,23 @@ export async function POST(req: NextRequest) {
       !!(await page.$('input[type="password"]'));
 
     if (needsLogin) {
-      // All input is done via page.evaluate + keyboard.type — zero fill() calls.
-      // This bypasses Playwright's visibility checks entirely.
+      // ── Diagnostic: return /passthru DOM structure so we can target the right elements
+      const diag = await page.evaluate(() => ({
+        inputs: Array.from(document.querySelectorAll("input")).map(el => ({
+          type: el.type, name: el.name, id: el.id,
+          placeholder: el.placeholder,
+          visible: (el as HTMLElement).offsetParent !== null,
+        })),
+        buttons: Array.from(document.querySelectorAll("button, input[type=submit]")).map(el => ({
+          tag: el.tagName,
+          type: (el as HTMLButtonElement).type,
+          text: el.textContent?.trim().substring(0, 80),
+          id: el.id,
+          visible: (el as HTMLElement).offsetParent !== null,
+        })),
+      }));
+      await browser.close();
+      return NextResponse.json({ ok: false, diag }, { status: 422 });
 
       const jsFocus = async (selectors: string[]) => {
         return page.evaluate((sels: string[]) => {
