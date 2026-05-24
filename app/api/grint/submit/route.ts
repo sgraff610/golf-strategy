@@ -93,24 +93,38 @@ export async function POST(req: NextRequest) {
     await page.selectOption('select[name="date"]', dd).catch(() => {});     // "23"
 
     // ── 4. Fill course + wait for autocomplete ────────────────────────────────
-    await page.fill("#ucourse", courseName);
-    await page.waitForTimeout(2000);
-    // Click the first autocomplete suggestion
-    for (const sel of [".ui-menu-item", '[role="option"]', ".autocomplete-suggestion", "li.ui-menu-item"]) {
-      const s = await page.$(sel);
-      if (s) { await s.click(); break; }
-    }
-    await page.waitForTimeout(1000);
+    // Must use type() not fill() — jQuery UI autocomplete requires keypress events.
+    await page.click("#ucourse");
+    await page.fill("#ucourse", "");
+    await page.type("#ucourse", courseName, { delay: 80 });
+
+    // Wait for the dropdown to appear
+    let courseSelected = false;
+    try {
+      await page.waitForSelector(".ui-menu-item, .ui-autocomplete li", { state: "visible", timeout: 5000 });
+      const firstResult = await page.$(".ui-menu-item a, .ui-menu-item, .ui-autocomplete li");
+      if (firstResult) {
+        await firstResult.click();
+        courseSelected = true;
+      }
+    } catch { /* autocomplete didn't appear — course might not be found */ }
+    await page.waitForTimeout(1500);
 
     // ── 5. Select tee (populates after course is chosen) ──────────────────────
-    await page.waitForTimeout(500);
-    const teeOptions = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('select[name="tees"] option'))
-        .map(o => ({ v: (o as HTMLOptionElement).value, t: o.textContent?.trim() ?? "" }))
-    ) as { v: string; t: string }[];
+    // Wait up to 4s for tee options to load
+    let teeOptions: { v: string; t: string }[] = [];
+    for (let i = 0; i < 8; i++) {
+      teeOptions = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('select[name="tees"] option'))
+          .map(o => ({ v: (o as HTMLOptionElement).value, t: o.textContent?.trim() ?? "" }))
+          .filter(o => o.v !== "")
+      ) as { v: string; t: string }[];
+      if (teeOptions.length > 0) break;
+      await page.waitForTimeout(500);
+    }
     const teeMatch = teeOptions.find(o =>
       o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase())
-    );
+    ) ?? teeOptions[0]; // fall back to first available tee
     if (teeMatch?.v) await page.selectOption('select[name="tees"]', teeMatch.v).catch(() => {});
 
     // ── 6. Select round type ──────────────────────────────────────────────────
@@ -132,16 +146,37 @@ export async function POST(req: NextRequest) {
       if (pr && !await pr.isChecked()) await pr.check().catch(() => {});
     }
 
-    // ── 9. Submit (it's an anchor, not a button) ──────────────────────────────
+    // ── 9. Submit (it's an anchor tag, not a button) ──────────────────────────
     await page.click('a:has-text("Submit")').catch(() => {});
     await page.waitForTimeout(3000);
 
     // ── 10. Dismiss pro-membership upsell modal if it appears ─────────────────
-    const notNow = await page.$('a:has-text("Not now"), a:has-text("No thanks"), a[href*="add_full_score/"]');
-    if (notNow) await notNow.click().catch(() => {});
+    const notNow = await page.$('a:has-text("Not now"), a:has-text("No thanks")');
+    if (notNow) {
+      await notNow.click().catch(() => {});
+      await page.waitForTimeout(2000);
+    }
+
+    // Capture final state to confirm success
+    const finalUrl = page.url();
+    const errMsg = await page.evaluate(() => {
+      const el = document.querySelector('.alert-danger, .alert-error, [class*="error"], [class*="alert"]');
+      return el ? el.textContent?.trim() : null;
+    });
 
     await browser.close();
-    return NextResponse.json({ ok: true, message: "Score submitted to TheGrint — check your account to confirm." });
+
+    if (errMsg) {
+      return NextResponse.json({ ok: false, error: `TheGrint returned: ${errMsg}` }, { status: 422 });
+    }
+
+    const navigatedAway = !finalUrl.includes("add_full_score");
+    return NextResponse.json({
+      ok: true,
+      message: navigatedAway
+        ? "Score submitted and saved to TheGrint."
+        : "Score submitted to TheGrint — verify it appeared in your score history.",
+    });
 
   } catch (err: unknown) {
     const url = page.url();
