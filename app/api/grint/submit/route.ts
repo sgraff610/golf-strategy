@@ -140,76 +140,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: `Unexpected page: ${scoreUrl}` }, { status: 422 });
     }
 
-    // ── 6. Click "Hole by Hole" tab ───────────────────────────────────────────
-    for (const sel of ['a:has-text("Hole by Hole")', '[data-tab="hole_by_hole"]']) {
-      const el = await page.$(sel);
-      if (el) { await el.click(); await page.waitForTimeout(700); break; }
-    }
-
-    // ── 7. Fill date ──────────────────────────────────────────────────────────
-    const [yyyy, mm, dd] = date.split("-");
-    await page.selectOption('select[name*="year"], #score_year', yyyy).catch(() => {});
-    await page.selectOption('select[name*="month"], #score_month', String(parseInt(mm))).catch(() => {});
-    await page.selectOption('select[name*="day"], #score_day', String(parseInt(dd))).catch(() => {});
-
-    // ── 8. Fill course ────────────────────────────────────────────────────────
-    for (const sel of ['input[placeholder*="golf course" i]', 'input[placeholder*="course" i]', 'input[name*="course"]']) {
-      const el = await page.$(sel);
-      if (el) {
-        await el.fill(courseName);
-        await page.waitForTimeout(1800);
-        for (const sug of ['.autocomplete-suggestion', '.ui-menu-item', '[role="option"]']) {
-          const s = await page.$(sug);
-          if (s) { await s.click(); break; }
-        }
-        break;
-      }
-    }
-
-    // ── 9. Select tee ─────────────────────────────────────────────────────────
-    await page.waitForTimeout(800);
-    for (const sel of ['select[name*="tee"]', '#score_tee_id']) {
-      const el = await page.$(sel);
-      if (el) {
-        const options = await el.evaluate(node =>
-          Array.from((node as HTMLSelectElement).options).map(o => ({ v: o.value, t: o.text }))
-        ) as { v: string; t: string }[];
-        const match = options.find(o =>
-          o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase())
-        );
-        if (match) await page.selectOption(sel, match.v);
-        break;
-      }
-    }
-
-    // ── 10. Fill hole scores ──────────────────────────────────────────────────
-    await page.waitForTimeout(800);
-    for (const h of holes) {
-      const n = h.hole;
-      await tryFill(page, [`input[name*="score"][name*="${n}"]`, `#score_h${n}`, `input[data-hole="${n}"]`], String(h.score));
-      if (h.putts) await tryFill(page, [`input[name*="putt"][name*="${n}"]`, `#putt_h${n}`], String(h.putts));
-      if (h.penalties) await tryFill(page, [`input[name*="penalt"][name*="${n}"]`, `#penalty_h${n}`], h.penalties);
-    }
-
-    // ── 11. Practice round ────────────────────────────────────────────────────
-    if (practiceRound) {
-      const pr = await page.$('input[name*="practice"], input#score_practice');
-      if (pr && !await pr.isChecked()) await pr.check();
-      else {
-        try { await page.locator("label", { hasText: /Practice/i }).first().click(); } catch {}
-      }
-    }
-
-    // ── 12. Submit ────────────────────────────────────────────────────────────
-    const submitBtn = await page.$('input[type="submit"][value*="Submit" i], button:has-text("Submit")');
-    if (submitBtn) {
-      await submitBtn.click();
-      await page.waitForLoadState("domcontentloaded").catch(() => {});
-      await page.waitForTimeout(2000);
-    }
-
+    // ── DIAGNOSTIC: dump score form inputs/selects/buttons ────────────────────
+    const scoreDiag = await page.evaluate(() => ({
+      url: location.href,
+      inputs: Array.from(document.querySelectorAll("input:not([type=hidden])")).map(el => ({
+        type: (el as HTMLInputElement).type,
+        name: (el as HTMLInputElement).name,
+        id: el.id,
+        placeholder: (el as HTMLInputElement).placeholder,
+        value: (el as HTMLInputElement).value,
+      })),
+      selects: Array.from(document.querySelectorAll("select")).map(el => ({
+        name: el.name, id: el.id,
+        options: Array.from(el.options).slice(0, 5).map(o => `${o.value}:${o.text}`),
+      })),
+      links: Array.from(document.querySelectorAll("a")).filter(a => a.textContent?.trim())
+        .map(a => ({ text: a.textContent?.trim().substring(0, 40), href: a.href })).slice(0, 20),
+    }));
     await browser.close();
-    return NextResponse.json({ ok: true, message: "Score submitted to TheGrint — check your account to confirm." });
+    return NextResponse.json({ ok: false, error: JSON.stringify(scoreDiag, null, 2) }, { status: 422 });
 
   } catch (err: unknown) {
     const url = page.url();
