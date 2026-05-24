@@ -38,7 +38,11 @@ export default function Nav() {
   useEffect(() => {
     supabase.from("rounds").select("id, date, holes_played, holes").then(({ data }) => {
       if (!data) return;
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7);
+      const cutoffStr = cutoff.toISOString().split("T")[0];
       const incomplete = data.filter(r =>
+        r.date >= cutoffStr &&
         Array.isArray(r.holes) &&
         r.holes.some((h: any) => h.score === "" || h.score === null || h.score === undefined || Number(h.score) === 0)
       );
@@ -78,13 +82,20 @@ export default function Nav() {
           {incompleteRoundId && (
             <Link
               href={`/rounds/play?roundId=${incompleteRoundId}`}
-              title="Resume incomplete round"
               style={{
-                width: 10, height: 10, borderRadius: "50%",
-                background: "#e67e22", display: "block", flexShrink: 0,
-                boxShadow: "0 0 0 2px rgba(230,126,34,0.25)",
+                display: "inline-flex", alignItems: "center",
+                padding: "3px 8px",
+                borderRadius: "var(--r-pill)",
+                background: "var(--green)",
+                color: "var(--paper)",
+                fontSize: 10,
+                fontWeight: 700,
+                textDecoration: "none",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
+                lineHeight: 1.3,
               }}
-            />
+            >Go to round</Link>
           )}
         </div>
 

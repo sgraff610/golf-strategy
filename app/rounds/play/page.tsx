@@ -870,8 +870,8 @@ function scoreBg(score: number|"", par: number): string {
                   </tr>
                   <tr>
                     <td style={{ ...lc }}>Scoring</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const OPP_BOLD: Record<string,string>={birdie:"#60a5fa","go-for-it":"#34d399",caution:"#fbbf24",danger:"#f87171"}; const oppBg=h.opportunity?OPP_BOLD[h.opportunity]:null; const scoringVal=h.scoring_opp!==""?(h.scoring_opp===0?"E":`+${h.scoring_opp}`):"—"; return <td key={i} style={{ ...tc, borderLeft:"1px solid var(--line)", background:oppBg??cBg(ai,"var(--paper)"), fontWeight:h.scoring_opp!==""?700:400, color:h.scoring_opp!==""?"#000":"var(--muted-2)" }}>{scoringVal}</td>;})}
-                    <td style={{ ...sc }}>{(()=>{ const sum=ph.reduce((s,h)=>s+(h.scoring_opp!==""?Number(h.scoring_opp):0),0); if(!ph.some(h=>h.scoring_opp!=="")) return "—"; const d=sum%1===0?String(sum):sum.toFixed(1); return sum===0?"E":sum>0?`+${d}`:d; })()}</td>
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const OPP_BOLD: Record<string,string>={birdie:"#60a5fa","go-for-it":"#34d399",caution:"#fbbf24",danger:"#f87171"}; const oppBg=h.opportunity?OPP_BOLD[h.opportunity]:null; const hasScoring=h.scoring_opp!=null&&h.scoring_opp!==""; const scoringVal=hasScoring?(h.scoring_opp===0?"E":`+${h.scoring_opp}`):"—"; return <td key={i} style={{ ...tc, borderLeft:"1px solid var(--line)", background:oppBg??cBg(ai,"var(--paper)"), fontWeight:hasScoring?700:400, color:hasScoring?"#000":"var(--muted-2)" }}>{scoringVal}</td>;})}
+                    <td style={{ ...sc }}>{(()=>{ const sum=ph.reduce((s,h)=>s+((h.scoring_opp!=null&&h.scoring_opp!=="")?Number(h.scoring_opp):0),0); if(!ph.some(h=>h.scoring_opp!=null&&h.scoring_opp!=="")) return "—"; const d=sum%1===0?String(sum):sum.toFixed(1); return sum===0?"E":sum>0?`+${d}`:d; })()}</td>
                   </tr>
                   <tr>
                     <td style={{ ...lc, background:"var(--paper-alt)" }}>Club</td>
@@ -1287,7 +1287,7 @@ function scoreBg(score: number|"", par: number): string {
               <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                 <span style={{ fontSize:9, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:"var(--muted-2)", marginRight:2 }}>Max</span>
                 <span style={{ padding:"4px 10px", borderRadius:999, fontSize:12, fontWeight:700, border:"1.5px solid var(--line)", background:"var(--paper-alt)", color:"var(--muted)" }}>
-                  {currentHole.diff_max !== "" ? `+${currentHole.diff_max}` : "—"}
+                  {currentHole.diff_max != null && currentHole.diff_max !== "" ? `+${currentHole.diff_max}` : "—"}
                 </span>
               </div>
               {/* Opportunity — read-only, auto-updates with Scoring */}
