@@ -320,7 +320,7 @@ export default function RoundsPage() {
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" as const }}>
                   {(() => {
                     const hasAnalysis = round.holes.some((h: any) => h.drive_water_ob_pct !== undefined);
                     const isCalc = calculatingId === round.id;
@@ -351,6 +351,17 @@ export default function RoundsPage() {
                     }}
                   >
                     {round.recap ? "✓ Recap" : "+ Add recap"}
+                  </a>
+                  <a
+                    href={`/rounds/grint?roundId=${round.id}`}
+                    style={{
+                      fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
+                      textDecoration: "none",
+                      background: "#f6f6f6", color: "#0f6e56",
+                      border: "1px solid #0f6e56",
+                    }}
+                  >
+                    Submit to TheGrint
                   </a>
                 </div>
               </div>

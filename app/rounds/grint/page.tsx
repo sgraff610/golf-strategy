@@ -488,6 +488,16 @@ function GrintContent() {
             </span>
           </label>
 
+          {holesData.some(h => h.score === 0) && (
+            <div style={{
+              padding: "10px 12px", borderRadius: 8, marginBottom: 10,
+              background: "#fff8e1", border: "1px solid #f0c040",
+              color: "#7a5a00", fontSize: 13,
+            }}>
+              ⚠ Some holes are missing scores. Fill in all scores before submitting.
+            </div>
+          )}
+
           {submitResult && (
             <div style={{
               padding: "10px 12px", borderRadius: 8, marginBottom: 10,
@@ -502,14 +512,14 @@ function GrintContent() {
 
           <button
             onClick={submitToGrint}
-            disabled={!email || !password || submitting}
+            disabled={!email || !password || submitting || holesData.some(h => h.score === 0)}
             style={{
               width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
               border: "none",
-              background: (!email || !password || submitting) ? "var(--line)" : "var(--accent-deep)",
-              color: (!email || !password || submitting) ? "var(--ink-mute)" : "#fff",
+              background: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "var(--line)" : "var(--accent-deep)",
+              color: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "var(--ink-mute)" : "#fff",
               fontSize: 14, fontWeight: 600,
-              cursor: (!email || !password || submitting) ? "not-allowed" : "pointer",
+              cursor: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
             }}
           >
             {submitting ? "Submitting…" : "Submit to TheGrint"}

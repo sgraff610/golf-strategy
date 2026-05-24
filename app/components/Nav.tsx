@@ -18,6 +18,7 @@ export default function Nav() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [incompleteRoundId, setIncompleteRoundId] = useState<string | null>(null);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -33,6 +34,25 @@ export default function Nav() {
   }, []);
 
   useEffect(() => { setOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    supabase.from("rounds").select("id, date, holes_played, holes").then(({ data }) => {
+      if (!data) return;
+      const incomplete = data.filter(r =>
+        Array.isArray(r.holes) &&
+        r.holes.some((h: any) => h.score === "" || h.score === null || h.score === undefined || Number(h.score) === 0)
+      );
+      if (incomplete.length === 0) { setIncompleteRoundId(null); return; }
+      incomplete.sort((a, b) => {
+        if (a.date < b.date) return -1;
+        if (a.date > b.date) return 1;
+        const tsA = parseInt(String(a.id).replace("round_", "")) || 0;
+        const tsB = parseInt(String(b.id).replace("round_", "")) || 0;
+        return tsA - tsB;
+      });
+      setIncompleteRoundId(incomplete[0].id);
+    });
+  }, [pathname]);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -50,10 +70,23 @@ export default function Nav() {
         gap: 16,
       }}>
         {/* Brand */}
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", flexShrink: 0 }}>
-          <Mark size={34} />
-          <Wordmark size={20} />
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+            <Mark size={34} />
+            <Wordmark size={20} />
+          </Link>
+          {incompleteRoundId && (
+            <Link
+              href={`/rounds/play?roundId=${incompleteRoundId}`}
+              title="Resume incomplete round"
+              style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: "#e67e22", display: "block", flexShrink: 0,
+                boxShadow: "0 0 0 2px rgba(230,126,34,0.25)",
+              }}
+            />
+          )}
+        </div>
 
         {/* Desktop links */}
         {!isMobile && (

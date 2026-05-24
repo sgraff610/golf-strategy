@@ -1443,7 +1443,19 @@ function scoreBg(score: number|"", par: number): string {
           </div>
         )}
 
-        <div style={{ marginTop:24, textAlign:"center" }}>
+        {roundId && roundHoles.length > 0 && roundHoles.every(h => h.score !== "") && (
+          <div style={{ marginTop:20, textAlign:"center" }}>
+            <a href={`/rounds/grint?roundId=${roundId}`} style={{
+              display:"inline-block", padding:"11px 28px",
+              background:"#0f6e56", color:"white", borderRadius:8,
+              fontWeight:600, fontSize:14, textDecoration:"none",
+            }}>
+              Submit to TheGrint →
+            </a>
+          </div>
+        )}
+
+        <div style={{ marginTop:16, textAlign:"center" }}>
           <button onClick={cancelRound} style={{ fontSize:13, color:"#c0392b", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
             {isEditMode?"← Back to edit round":"Cancel round"}
           </button>
