@@ -192,6 +192,9 @@ export default function RoundsPage() {
   function girsHit(holes: any[]) {
     return holes.filter(h => h.gir).length;
   }
+  function twoChipPlus(holes: any[]) {
+    return holes.filter(h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 2).length;
+  }
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -312,7 +315,7 @@ export default function RoundsPage() {
                     { label: "Putts", value: totalPutts(round.holes) },
                     { label: "Driving", value: `${fairwaysHit(round.holes)}/${drivingTotal(round.holes)}` },
                     { label: "GIR", value: `${girsHit(round.holes)}/${round.holes.length}` },
-                    { label: "GRINTS", value: `${round.holes.filter((h: any) => h.grints).length}/${round.holes.length}` },
+                    { label: "2+ Chip", value: `${twoChipPlus(round.holes)}/${round.holes.length}` },
                   ].map(({ label, value }) => (
                     <div key={label} style={{ background: "#f6f6f6", borderRadius: 8, padding: "8px 12px", textAlign: "center" as const }}>
                       <p style={{ fontSize: 11, color: "#0f6e56", margin: "0 0 2px" }}>{label}</p>

@@ -781,6 +781,7 @@ function CoachBriefing({
       { id: "3putt",    label: "3+ putt",              goodWhenHigh: false, pool: hs => hs,                                                  match: h => h.putts >= 3 },
       { id: "1putt",    label: "1-putt",               goodWhenHigh: true,  pool: hs => hs,                                                  match: h => h.putts === 1 },
       { id: "gs-bunk",  label: "GS bunker",            goodWhenHigh: false, pool: hs => hs,                                                  match: h => h.greenside_bunker > 0 },
+      { id: "two-chip", label: "2+ chip (chip+GS)",   goodWhenHigh: false, pool: hs => hs,                                                  match: h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 2 },
     ];
 
     return patterns.map(p => {
@@ -1192,6 +1193,7 @@ export default function RoundsInsights() {
           corrItem("par3",        "Par 3 holes",           enriched.filter(h => h.par === 3),                 "Take one more club — most par 3 misses are short."),
           corrItem("par5",        "Par 5 holes",           enriched.filter(h => h.par === 5),                 "Par 5s are a scoring opportunity — play to your strengths."),
           corrItem("gs-bunker",   "Greenside bunker",      enriched.filter(h => h.greenside_bunker > 0),      "Avoid short-siding yourself — miss on the safe side."),
+          corrItem("two-chip",    "2+ chip (chip+GS)",     enriched.filter(h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 2), "Scrambling from around the green costs strokes — avoid short-siding."),
         ].filter((c): c is CachedLeak => c !== null);
 
         const leaks_: CachedLeak[] = candidates_.filter(c => c.impact > 0).sort((a, b) => b.impact - a.impact).slice(0, 5);
@@ -1281,6 +1283,7 @@ export default function RoundsInsights() {
     { label: "GIR",              holes: filtered.filter(h => h.gir) },
     { label: "Non-GIR",          holes: filtered.filter(h => !h.gir) },
     { label: "GS Bunker",        holes: filtered.filter(h => h.greenside_bunker > 0) },
+    { label: "2+ Chip",          holes: filtered.filter(h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 2) },
     { label: "1+ Chips",         holes: holesWithKnownChips.filter(h => (h.chips ?? 0) >= 1) },
     { label: "1 Putt",           holes: filtered.filter(h => h.putts === 1) },
     { label: "2 Putts",          holes: filtered.filter(h => h.putts === 2) },

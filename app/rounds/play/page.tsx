@@ -399,7 +399,7 @@ function PlayCourseInner() {
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const [clubDistances, setClubDistances] = useState<ClubDistances | null>(null);
-  const [scoreInputMode, setScoreInputMode] = useState<"quick"|"full">("quick");
+  const [scoreInputMode, setScoreInputMode] = useState<"quick"|"full">("full");
   const [scorecardPanel, setScorecardPanel] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number|null>(null);
 
@@ -496,6 +496,13 @@ function PlayCourseInner() {
   const ds = strategy?.data_summary;
   const conf = strat?.confidence;
   const isPar3 = currentHole?.par === 3;
+  const teeFilled = isPar3
+    ? !!(currentHole?.tee_accuracy)
+    : !!(currentHole?.club && currentHole?.tee_accuracy);
+  const scoreFilled = !!(currentHole?.score !== "" && currentHole?.score !== undefined &&
+    currentHole?.putts !== "" && currentHole?.putts !== undefined);
+  const inputPhase: "tee" | "approach" | "normal" =
+    !currentHole || scoreFilled ? "normal" : teeFilled ? "approach" : "tee";
   const scorecardCourse = selectedCourse ?? allTeeVersions[0] ?? null;
 
   // ── Helper functions ──────────────────────────────────────────────────────────
@@ -923,11 +930,11 @@ function scoreBg(score: number|"", par: number): string {
       </div>
 
       {/* ── Hole detail ── */}
-      <div style={{ maxWidth:520, margin:"0 auto", padding:"12px 16px" }}>
+      <div style={{ maxWidth:520, margin:"0 auto", padding:"12px 16px", display:"flex", flexDirection:"column" }}>
 
         {/* Score entry */}
         {currentHole && (
-          <div key={"hole-" + currentHoleIdx + "-" + currentHole.score} style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+          <div key={"hole-" + currentHoleIdx + "-" + currentHole.score} style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"14px 16px", marginBottom:12, order:0 }}>
 
             {/* Header row */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
@@ -1055,77 +1062,119 @@ function scoreBg(score: number|"", par: number): string {
               </>
             ) : (
               <>
-                <p style={{ fontSize:10, fontWeight:600, color:"var(--muted)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Scoring</p>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
-                  {[{label:"Score",field:"score",min:1,max:20},{label:"Putts",field:"putts",min:0,max:10},{label:"Chips",field:"chips",min:0,max:10}].map(({label,field,min,max}) => (
-                    <div key={field}>
-                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
-                      <input type="number" min={min} max={max}
-                        style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"34px" }}
-                        value={(currentHole as any)[field]===""||((currentHole as any)[field]==null)?"":(Number((currentHole as any)[field]))}
-                        onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
+                {/* Section 1: Tee */}
+                <div style={{ background:"var(--green-soft)", border:"1.5px solid var(--green)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+                  <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 6px" }}>Tee</p>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    <div>
+                      <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>Tee Club</label>
+                      <select style={{ width:"100%", padding:"6px 4px", fontSize:13, border:"1.5px solid var(--green)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
+                        value={isPar3?"":currentHole.club} disabled={isPar3}
+                        onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
+                        <option value="">—</option>
+                        {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
                     </div>
-                  ))}
-                  <div>
-                    <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
-                      value={currentHole.first_putt_distance}
-                      onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
-                      <option value="">—</option>
-                      {["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"].map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                    <div>
+                      <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--green-deep)", fontWeight:700, display:"block", marginBottom:3 }}>Tee Acc</label>
+                      <select style={{ width:"100%", padding:"6px 4px", fontSize:13, border:"1.5px solid var(--green)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
+                        value={isPar3?"":currentHole.tee_accuracy} disabled={isPar3}
+                        onChange={e => !isPar3 && updateHoleFieldTracked("tee_accuracy", e.target.value as TeeAccuracy)}>
+                        <option value="">—</option>
+                        {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
-                <p style={{ fontSize:10, fontWeight:600, color:"var(--muted)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Tee & Approach</p>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
-                  <div>
-                    <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>DRIV Club</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
-                      value={isPar3?"":currentHole.club} disabled={isPar3}
-                      onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
-                      <option value="">—</option>
-                      {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize:10, color:isPar3?"var(--muted-2)":"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>DRIV Acc</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:isPar3?"var(--paper-alt)":"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
-                      value={isPar3?"":currentHole.tee_accuracy} disabled={isPar3}
-                      onChange={e => !isPar3 && updateHoleFieldTracked("tee_accuracy", e.target.value as TeeAccuracy)}>
-                      <option value="">—</option>
-                      {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Club</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
-                      value={currentHole.appr_distance}
-                      onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
-                      <option value="">—</option>
-                      {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Acc</label>
-                    <select style={{ width:"100%", padding:"6px 4px", fontSize:15, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
-                      value={currentHole.appr_accuracy}
-                      onChange={e => updateHoleFieldTracked("appr_accuracy", e.target.value as TeeAccuracy)}>
-                      <option value="">—</option>
-                      {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <p style={{ fontSize:10, fontWeight:600, color:"var(--muted)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 8px" }}>Penalties</p>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
-                  {[{label:"Water",field:"water_penalty"},{label:"Drop/OB",field:"drop_or_out"},{label:"Tree/Haz",field:"tree_haz"},{label:"FWY Bkr",field:"fairway_bunker"},{label:"GS Bkr",field:"greenside_bunker"}].map(({label,field}) => (
-                    <div key={field}>
-                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
+                {/* Section 2: Approach & Penalties */}
+                <div style={{ background:"var(--paper-alt)", border:"1px solid var(--line-soft)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+                  <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 6px" }}>Approach &amp; Penalties</p>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Club</label>
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.appr_distance}
+                        onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
+                        <option value="">—</option>
+                        {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:700, display:"block", marginBottom:3 }}>APPR Acc</label>
+                      <select style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.appr_accuracy}
+                        onChange={e => updateHoleFieldTracked("appr_accuracy", e.target.value as TeeAccuracy)}>
+                        <option value="">—</option>
+                        {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>Chips</label>
                       <input type="number" min={0} max={10}
-                        style={{ width:"100%", padding:"6px 4px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)" }}
-                        value={(currentHole as any)[field]===""||((currentHole as any)[field]==null)?"":(Number((currentHole as any)[field]))}
-                        onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
+                        style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.chips===""||currentHole.chips==null?"":Number(currentHole.chips)}
+                        onChange={e => updateHoleFieldTracked("chips", e.target.value===""?"":Number(e.target.value))} />
                     </div>
-                  ))}
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>Water</label>
+                      <input type="number" min={0} max={10}
+                        style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.water_penalty===""||currentHole.water_penalty==null?"":Number(currentHole.water_penalty)}
+                        onChange={e => updateHoleFieldTracked("water_penalty", e.target.value===""?"":Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>Drop/OB</label>
+                      <input type="number" min={0} max={10}
+                        style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.drop_or_out===""||currentHole.drop_or_out==null?"":Number(currentHole.drop_or_out)}
+                        onChange={e => updateHoleFieldTracked("drop_or_out", e.target.value===""?"":Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>Tree/Haz</label>
+                      <input type="number" min={0} max={10}
+                        style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.tree_haz===""||currentHole.tree_haz==null?"":Number(currentHole.tree_haz)}
+                        onChange={e => updateHoleFieldTracked("tree_haz", e.target.value===""?"":Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>FWY Bkr</label>
+                      <input type="number" min={0} max={10}
+                        style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.fairway_bunker===""||currentHole.fairway_bunker==null?"":Number(currentHole.fairway_bunker)}
+                        onChange={e => updateHoleFieldTracked("fairway_bunker", e.target.value===""?"":Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>GS Bkr</label>
+                      <input type="number" min={0} max={10}
+                        style={{ width:"100%", padding:"5px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"32px" }}
+                        value={currentHole.greenside_bunker===""||currentHole.greenside_bunker==null?"":Number(currentHole.greenside_bunker)}
+                        onChange={e => updateHoleFieldTracked("greenside_bunker", e.target.value===""?"":Number(e.target.value))} />
+                    </div>
+                  </div>
+                </div>
+                {/* Section 3: Score */}
+                <div style={{ background:"var(--paper-alt)", border:"1px solid var(--line-soft)", borderRadius:10, padding:"10px 12px" }}>
+                  <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 6px" }}>Score</p>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                    {[{label:"Score",field:"score",min:1,max:20},{label:"Putts",field:"putts",min:0,max:10}].map(({label,field,min,max}) => (
+                      <div key={field}>
+                        <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
+                        <input type="number" min={min} max={max}
+                          style={{ width:"100%", padding:"6px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"34px" }}
+                          value={(currentHole as any)[field]===""||((currentHole as any)[field]==null)?"":(Number((currentHole as any)[field]))}
+                          onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
+                      </div>
+                    ))}
+                    <div>
+                      <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
+                      <select style={{ width:"100%", padding:"6px 4px", fontSize:13, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
+                        value={currentHole.first_putt_distance}
+                        onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
+                        <option value="">—</option>
+                        {["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"].map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
@@ -1134,7 +1183,7 @@ function scoreBg(score: number|"", par: number): string {
 
         {/* Club reference */}
         {currentHole && (
-          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12 }}>
+          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12, order: inputPhase === "approach" ? 11 : 1 }}>
             <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 10px" }}>Tee Club</p>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <div>
@@ -1159,7 +1208,7 @@ function scoreBg(score: number|"", par: number): string {
 
         {/* Scoring Plan */}
         {currentHole && (
-          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12 }}>
+          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12, order:2 }}>
             <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 10px" }}>Scoring Plan</p>
             <div style={{ display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
               {/* Scoring Opp */}
@@ -1206,10 +1255,10 @@ function scoreBg(score: number|"", par: number): string {
           </div>
         )}
 
-        {loadingStrategy && <p style={{ color:"var(--muted)", fontSize:13, textAlign:"center", marginTop:24 }}>Loading strategy...</p>}
+        <div style={{ order:3 }}>{loadingStrategy && <p style={{ color:"var(--muted)", fontSize:13, textAlign:"center", marginTop:24 }}>Loading strategy...</p>}</div>
 
         {!loadingStrategy && strategy && hole && strat && (
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:12, order:4 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <span style={{ fontSize:11, fontWeight:700, letterSpacing:1, color:confidenceColor[conf]??"#0f6e56", textTransform:"uppercase" }}>{conf} confidence</span>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -1285,53 +1334,77 @@ function scoreBg(score: number|"", par: number): string {
               )}
             </div>
 
-            {hole.par>=4&&(
-              <div style={card("#f6f6f6")}>
-                <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE STRATEGY</p>
-                {hazardImpacts.length>0&&(
-                  <div style={{ marginBottom:14 }}>
-                    <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 6px" }}>TEE SHOT HAZARDS</p>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6 }}>
-                      {hazardImpacts.map((h,i)=>{
-                        const colors=impactColor(h.impact);
-                        return(
-                          <div key={i} style={{background:colors.bg,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <span style={{fontSize:12,color:colors.color,fontWeight:500}}>{h.label}</span>
-                            <div style={{textAlign:"right"}}>
-                              <p style={{fontSize:13,fontWeight:700,color:colors.color,margin:0}}>{fmtSTP(h.impact)}</p>
-                              <p style={{fontSize:10,color:colors.color,opacity:0.75,margin:0}}>{h.count} holes</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                <div style={{ marginTop:8 }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:3, marginBottom:3 }}>
-                    {["Club","Left","Hit","Right","Unk"].map(h=>(
-                      <div key={h} style={{fontSize:9,fontWeight:600,color:"#0f6e56",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
-                    ))}
-                  </div>
-                  {gridData.map(row=>(
-                    <div key={row.club} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
-                      <div style={{background:"#f6f6f6",borderRadius:4,padding:"3px 4px",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"center"}}>
-                        <p style={{fontSize:10,fontWeight:600,color:"#1a1a1a",margin:0}}>{row.club}</p>
-                        <p style={{fontSize:9,color:"#0f6e56",margin:0}}>{row.count}</p>
-                      </div>
-                      {row.cols.map((col,ci)=>{
-                        const isLeftCol=ci===0, isRightCol=ci===2;
-                        const leftHazard=hole.tee_water_out_left||hole.tee_tree_hazard_left||hole.tee_bunkers_left;
-                        const rightHazard=hole.tee_water_out_right||hole.tee_tree_hazard_right||hole.tee_bunkers_right;
-                        const greyed=(isLeftCol&&!leftHazard)||(isRightCol&&!rightHazard);
-                        return<GridCell key={ci} likelihood={col.likelihood} impact={col.impact} count={col.count} greyed={greyed}/>;
-                      })}
-                    </div>
-                  ))}
-                </div>
+            {strat.warning&&(
+              <div style={{background:"#fff4e5",border:"1px solid #f0a500",borderRadius:12,padding:"14px 20px"}}>
+                <p style={{fontSize:11,color:"#b37400",fontWeight:700,letterSpacing:1,margin:"0 0 6px"}}>⚠ WATCH OUT</p>
+                <p style={{fontSize:13,color:"#7a4f00",margin:0}}>{strat.warning}</p>
               </div>
             )}
 
+            {ds?.insights?.length>0&&(
+              <div style={card("#f0f9f6")}>
+                <p style={{fontSize:11,color:"#0f6e56",fontWeight:700,letterSpacing:1,margin:"0 0 8px"}}>YOUR TENDENCIES ON SIMILAR HOLES</p>
+                <ul style={{margin:0,paddingLeft:16}}>
+                  {ds.insights.map((ins:string,i:number)=><li key={i} style={{fontSize:13,color:"#333",marginBottom:4}}>{ins}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tee Strategy — sibling section, order depends on inputPhase */}
+        {!loadingStrategy && hole && strat && hole.par >= 4 && (
+          <div style={{ order: inputPhase === "approach" ? 12 : 5 }}>
+            <div style={card("#f6f6f6")}>
+              <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 8px" }}>TEE STRATEGY</p>
+              {hazardImpacts.length>0&&(
+                <div style={{ marginBottom:14 }}>
+                  <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:"0 0 6px" }}>TEE SHOT HAZARDS</p>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6 }}>
+                    {hazardImpacts.map((h,i)=>{
+                      const colors=impactColor(h.impact);
+                      return(
+                        <div key={i} style={{background:colors.bg,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:12,color:colors.color,fontWeight:500}}>{h.label}</span>
+                          <div style={{textAlign:"right"}}>
+                            <p style={{fontSize:13,fontWeight:700,color:colors.color,margin:0}}>{fmtSTP(h.impact)}</p>
+                            <p style={{fontSize:10,color:colors.color,opacity:0.75,margin:0}}>{h.count} holes</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div style={{ marginTop:8 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:3, marginBottom:3 }}>
+                  {["Club","Left","Hit","Right","Unk"].map(h=>(
+                    <div key={h} style={{fontSize:9,fontWeight:600,color:"#0f6e56",textAlign:"center",textTransform:"uppercase"}}>{h}</div>
+                  ))}
+                </div>
+                {gridData.map(row=>(
+                  <div key={row.club} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:3,marginBottom:3}}>
+                    <div style={{background:"#f6f6f6",borderRadius:4,padding:"3px 4px",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"center"}}>
+                      <p style={{fontSize:10,fontWeight:600,color:"#1a1a1a",margin:0}}>{row.club}</p>
+                      <p style={{fontSize:9,color:"#0f6e56",margin:0}}>{row.count}</p>
+                    </div>
+                    {row.cols.map((col,ci)=>{
+                      const isLeftCol=ci===0, isRightCol=ci===2;
+                      const leftHazard=hole.tee_water_out_left||hole.tee_tree_hazard_left||hole.tee_bunkers_left;
+                      const rightHazard=hole.tee_water_out_right||hole.tee_tree_hazard_right||hole.tee_bunkers_right;
+                      const greyed=(isLeftCol&&!leftHazard)||(isRightCol&&!rightHazard);
+                      return<GridCell key={ci} likelihood={col.likelihood} impact={col.impact} count={col.count} greyed={greyed}/>;
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Approach — sibling section, order depends on inputPhase */}
+        {!loadingStrategy && hole && strat && (
+          <div style={{ order: inputPhase === "approach" ? 1 : 6 }}>
             <div style={card("#f6f6f6")}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
                 <p style={{ fontSize:11, color:"#0f6e56", fontWeight:600, letterSpacing:1, margin:0 }}>APPROACH</p>
@@ -1424,41 +1497,27 @@ function scoreBg(score: number|"", par: number): string {
               )}
               <p style={{ fontSize:13, color:"#0f6e56", margin:"8px 0 0" }}>{strat.approach_strategy?.reason}</p>
             </div>
-
-            {strat.warning&&(
-              <div style={{background:"#fff4e5",border:"1px solid #f0a500",borderRadius:12,padding:"14px 20px"}}>
-                <p style={{fontSize:11,color:"#b37400",fontWeight:700,letterSpacing:1,margin:"0 0 6px"}}>⚠ WATCH OUT</p>
-                <p style={{fontSize:13,color:"#7a4f00",margin:0}}>{strat.warning}</p>
-              </div>
-            )}
-
-            {ds?.insights?.length>0&&(
-              <div style={card("#f0f9f6")}>
-                <p style={{fontSize:11,color:"#0f6e56",fontWeight:700,letterSpacing:1,margin:"0 0 8px"}}>YOUR TENDENCIES ON SIMILAR HOLES</p>
-                <ul style={{margin:0,paddingLeft:16}}>
-                  {ds.insights.map((ins:string,i:number)=><li key={i} style={{fontSize:13,color:"#333",marginBottom:4}}>{ins}</li>)}
-                </ul>
-              </div>
-            )}
           </div>
         )}
 
-        {roundId && roundHoles.length > 0 && roundHoles.every(h => h.score !== "") && (
-          <div style={{ marginTop:20, textAlign:"center" }}>
-            <a href={`/rounds/grint?roundId=${roundId}`} style={{
-              display:"inline-block", padding:"11px 28px",
-              background:"#0f6e56", color:"white", borderRadius:8,
-              fontWeight:600, fontSize:14, textDecoration:"none",
-            }}>
-              Submit to TheGrint →
-            </a>
-          </div>
-        )}
+        <div style={{ order:20 }}>
+          {roundId && roundHoles.length > 0 && roundHoles.every(h => h.score !== "") && (
+            <div style={{ marginTop:20, textAlign:"center" }}>
+              <a href={`/rounds/grint?roundId=${roundId}`} style={{
+                display:"inline-block", padding:"11px 28px",
+                background:"#0f6e56", color:"white", borderRadius:8,
+                fontWeight:600, fontSize:14, textDecoration:"none",
+              }}>
+                Submit to TheGrint →
+              </a>
+            </div>
+          )}
 
-        <div style={{ marginTop:16, textAlign:"center" }}>
-          <button onClick={cancelRound} style={{ fontSize:13, color:"#c0392b", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
-            {isEditMode?"← Back to edit round":"Cancel round"}
-          </button>
+          <div style={{ marginTop:16, textAlign:"center" }}>
+            <button onClick={cancelRound} style={{ fontSize:13, color:"#c0392b", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
+              {isEditMode?"← Back to edit round":"Cancel round"}
+            </button>
+          </div>
         </div>
 
       </div>
