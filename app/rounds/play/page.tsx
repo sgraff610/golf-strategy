@@ -817,6 +817,9 @@ function scoreBg(score: number|"", par: number): string {
           const parSum = ph.reduce((s,h)=>s+h.par,0);
           const scoreSum = ph.reduce((s,h)=>s+(Number(h.score)||0),0);
           const chipsSum = ph.reduce((s,h)=>s+(Number(h.chips)||0),0);
+          const chipsGsSum = ph.reduce((s,h)=>s+(Number(h.chips)||0)+(Number(h.greenside_bunker)||0),0);
+          const puttsSum = ph.reduce((s,h)=>s+(Number(h.putts)||0),0);
+          const hzdObSum = ph.reduce((s,h)=>s+(Number(h.tree_haz)||0)+(Number(h.water_penalty)||0)+(Number(h.drop_or_out)||0),0);
           const tc: React.CSSProperties = { padding:"3px 5px", textAlign:"center", fontSize:11, whiteSpace:"nowrap" };
           const lc: React.CSSProperties = { padding:"3px 8px", fontSize:10, color:"var(--green)", fontWeight:600, position:"sticky", left:0, zIndex:2, whiteSpace:"nowrap", background:"var(--paper)" };
           const sc: React.CSSProperties = { ...tc, background:"var(--green-soft)", fontWeight:700, color:"var(--green-deep)", borderLeft:"2px solid var(--green)", minWidth:28 };
@@ -903,26 +906,44 @@ function scoreBg(score: number|"", par: number): string {
                     ); })}
                     <td style={{ ...sc, color:scoreSum>parSum?"var(--flag)":scoreSum<parSum?"var(--good)":"var(--ink-soft)" }}>{scoreSum>0?scoreSum:"—"}</td>
                   </tr>
-                  <tr>
-                    <td style={{ ...lc, background:"var(--paper-alt)" }}>Appr</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{h.appr_distance||"—"}</td>; })}
-                    <td style={sc}></td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...lc }}>Acc</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}><span style={{ fontSize:11, fontWeight:700, color:accColor(h.appr_accuracy) }}>{accLabel(h.appr_accuracy)}</span></td>; })}
-                    <td style={sc}></td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...lc, background:"var(--paper-alt)" }}>Chips</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, color:Number(h.chips)>0?"var(--sand)":"var(--muted-2)", fontWeight:Number(h.chips)>0?700:400, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{h.chips!==""?h.chips:"—"}</td>; })}
-                    <td style={{ ...sc, color:"var(--sand)" }}>{chipsSum>0?chipsSum:"—"}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ ...lc }}>Haz</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, color:"var(--accent)", fontSize:10, fontWeight:600, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{hazardCode(h)}</td>; })}
-                    <td style={sc}></td>
-                  </tr>
+                  {scoreInputMode === "full" ? (<>
+                    <tr>
+                      <td style={{ ...lc, background:"var(--paper-alt)" }}>Putts</td>
+                      {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const v=Number(h.putts)||0; return <td key={i} style={{ ...tc, color:v>0?"var(--ink)":"var(--muted-2)", fontWeight:v>0?600:400, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{v>0?v:"—"}</td>; })}
+                      <td style={{ ...sc }}>{puttsSum>0?puttsSum:"—"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...lc }}>Chip/GS</td>
+                      {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const v=(Number(h.chips)||0)+(Number(h.greenside_bunker)||0); return <td key={i} style={{ ...tc, color:v>0?"var(--sand)":"var(--muted-2)", fontWeight:v>0?700:400, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{v>0?v:"—"}</td>; })}
+                      <td style={{ ...sc, color:"var(--sand)" }}>{chipsGsSum>0?chipsGsSum:"—"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...lc, background:"var(--paper-alt)" }}>Hzd/OB</td>
+                      {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const v=(Number(h.tree_haz)||0)+(Number(h.water_penalty)||0)+(Number(h.drop_or_out)||0); return <td key={i} style={{ ...tc, color:v>0?"var(--accent)":"var(--muted-2)", fontWeight:v>0?700:400, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{v>0?v:"—"}</td>; })}
+                      <td style={{ ...sc, color:"var(--accent)" }}>{hzdObSum>0?hzdObSum:"—"}</td>
+                    </tr>
+                  </>) : (<>
+                    <tr>
+                      <td style={{ ...lc, background:"var(--paper-alt)" }}>Appr</td>
+                      {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{h.appr_distance||"—"}</td>; })}
+                      <td style={sc}></td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...lc }}>Acc</td>
+                      {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}><span style={{ fontSize:11, fontWeight:700, color:accColor(h.appr_accuracy) }}>{accLabel(h.appr_accuracy)}</span></td>; })}
+                      <td style={sc}></td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...lc, background:"var(--paper-alt)" }}>Chips</td>
+                      {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, color:Number(h.chips)>0?"var(--sand)":"var(--muted-2)", fontWeight:Number(h.chips)>0?700:400, fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper-alt)") }}>{h.chips!==""?h.chips:"—"}</td>; })}
+                      <td style={{ ...sc, color:"var(--sand)" }}>{chipsSum>0?chipsSum:"—"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...lc }}>Haz</td>
+                      {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); return <td key={i} style={{ ...tc, color:"var(--accent)", fontSize:10, fontWeight:600, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{hazardCode(h)}</td>; })}
+                      <td style={sc}></td>
+                    </tr>
+                  </>)}
                 </tbody>
               </table>
             </div>
