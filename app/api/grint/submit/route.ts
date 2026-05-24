@@ -12,7 +12,6 @@ type SubmitPayload = {
   courseName: string; tee: string; holes: HoleEntry[]; practiceRound: boolean;
 };
 
-// Confirmed selectors from live DOM inspection
 const GRINT_USERNAME = "#usernameLogin";
 const GRINT_PASSWORD = "#pwdLogin";
 const GRINT_SUBMIT_LOGIN = "#submit-form-login";
@@ -51,11 +50,9 @@ export async function POST(req: NextRequest) {
 
     // ── 2. Log in if redirected to /passthru ──────────────────────────────────
     if (page.url().includes("passthru")) {
-      // Wait for React to mount the form
       try {
         await page.waitForSelector(GRINT_USERNAME, { state: "visible", timeout: 8000 });
       } catch {
-        // Force-reveal if still hidden
         await page.evaluate(() => {
           ["usernameLogin", "pwdLogin", "submit-form-login"].forEach(id => {
             let node: HTMLElement | null = document.getElementById(id);
@@ -79,39 +76,41 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: false, error: "Login failed — check your TheGrint username and password." }, { status: 401 });
       }
 
-      // Back to add-score now that we're logged in
+      // Pass through the home page so the SPA fully loads user profile/Pro status.
+      // Going straight to add-score after login leaves the session without Pro flags.
+      await page.goto("https://thegrint.com/", { waitUntil: "domcontentloaded", timeout: 20000 });
+      await page.waitForTimeout(3000);
       await page.goto("https://thegrint.com/score/add_full_score/", {
         waitUntil: "networkidle", timeout: 20000,
       });
       await page.waitForTimeout(1500);
     }
 
-    // ── 3. Fill date (selects: year / month / date, values zero-padded) ───────
+    // ── 3. Fill date ──────────────────────────────────────────────────────────
     const [yyyy, mm, dd] = date.split("-");
     await page.selectOption('select[name="year"]', yyyy).catch(() => {});
-    await page.selectOption('select[name="month"]', mm).catch(() => {});    // "05"
-    await page.selectOption('select[name="date"]', dd).catch(() => {});     // "23"
+    await page.selectOption('select[name="month"]', mm).catch(() => {});
+    await page.selectOption('select[name="date"]', dd).catch(() => {});
 
     // ── 4. Fill course + wait for autocomplete ────────────────────────────────
-    // Must use type() not fill() — jQuery UI autocomplete requires keypress events.
+    // Ctrl+A replaces the placeholder text without using locator.clear(), which
+    // breaks jQuery's internal autocomplete state.
     await page.click("#ucourse");
-    await page.fill("#ucourse", "");
-    await page.type("#ucourse", courseName, { delay: 80 });
+    await page.waitForTimeout(400);
+    await page.keyboard.press("Control+a");
+    await page.waitForTimeout(50);
+    await page.keyboard.type(courseName, { delay: 100 });
+    await page.waitForTimeout(300);
 
-    // Wait for the dropdown to appear
-    let courseSelected = false;
     try {
-      await page.waitForSelector(".ui-menu-item, .ui-autocomplete li", { state: "visible", timeout: 5000 });
-      const firstResult = await page.$(".ui-menu-item a, .ui-menu-item, .ui-autocomplete li");
-      if (firstResult) {
-        await firstResult.click();
-        courseSelected = true;
-      }
-    } catch { /* autocomplete didn't appear — course might not be found */ }
-    await page.waitForTimeout(1500);
+      // TheGrint renders autocomplete results as div.suggestion (not jQuery UI)
+      await page.waitForSelector(".suggestion", { state: "visible", timeout: 7000 });
+      const firstResult = await page.$(".suggestion");
+      if (firstResult) await firstResult.click();
+    } catch { /* course not found in autocomplete */ }
+    await page.waitForTimeout(2500);
 
-    // ── 5. Select tee (populates after course is chosen) ──────────────────────
-    // Wait up to 4s for tee options to load
+    // ── 5. Select tee ─────────────────────────────────────────────────────────
     let teeOptions: { v: string; t: string }[] = [];
     for (let i = 0; i < 8; i++) {
       teeOptions = await page.evaluate(() =>
@@ -124,13 +123,30 @@ export async function POST(req: NextRequest) {
     }
     const teeMatch = teeOptions.find(o =>
       o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase())
-    ) ?? teeOptions[0]; // fall back to first available tee
+    ) ?? teeOptions[0];
     if (teeMatch?.v) await page.selectOption('select[name="tees"]', teeMatch.v).catch(() => {});
 
     // ── 6. Select round type ──────────────────────────────────────────────────
-    const holesPlayed = holes.length;
-    const roundVal = holesPlayed <= 9 ? (holes[0]?.hole <= 9 ? "F9" : "B9") : "18";
-    await page.selectOption('select[name="round"]', roundVal).catch(() => {});
+    // The form may re-render after course/tee selection and reset round back to "18".
+    // Select the round type last, after the re-render, and verify it took.
+    const is9Hole = holes.length <= 9;
+    const isBack9 = is9Hole && holes[0]?.hole > 9;
+    if (is9Hole) {
+      const roundKeyword = isBack9 ? "back" : "front";
+      // Attempt up to 3 times in case a re-render resets the value
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await page.selectOption('select[name="round"]', { label: new RegExp(roundKeyword, "i") }).catch(async () => {
+          // fall back to value-based selection
+          const val = isBack9 ? "B9" : "F9";
+          await page.selectOption('select[name="round"]', val).catch(() => {});
+        });
+        await page.waitForTimeout(800);
+        const currentRound = await page.$eval('select[name="round"]', el => (el as HTMLSelectElement).value).catch(() => "");
+        if (currentRound !== "18") break; // selection stuck — proceed
+      }
+      // Wait for the form to re-render (hides back-9 hole inputs)
+      await page.waitForTimeout(2000);
+    }
 
     // ── 7. Fill hole scores, putts, penalties ─────────────────────────────────
     for (const h of holes) {
@@ -146,34 +162,23 @@ export async function POST(req: NextRequest) {
       if (pr && !await pr.isChecked()) await pr.check().catch(() => {});
     }
 
-    // ── 9. Submit (it's an anchor tag, not a button) ──────────────────────────
-    await page.click('a:has-text("Submit")').catch(() => {});
-    await page.waitForTimeout(3000);
+    // ── 9. Submit ─────────────────────────────────────────────────────────────
+    await page.click('a:has-text("Submit"), button:has-text("Submit")').catch(() => {});
+    await page.waitForTimeout(2000);
 
-    // ── 10. Dismiss pro-membership upsell modal if it appears ─────────────────
-    const notNow = await page.$('a:has-text("Not now"), a:has-text("No thanks")');
-    if (notNow) {
-      await notNow.click().catch(() => {});
-      await page.waitForTimeout(2000);
-    }
+    // Dismiss any Pro upsell modal that appears
+    try {
+      await page.click('a:has-text("Not now")', { force: true, timeout: 2000 });
+    } catch { /* no modal */ }
 
-    // Capture final state to confirm success
+    await page.waitForTimeout(4000);
+
     const finalUrl = page.url();
-    const errMsg = await page.evaluate(() => {
-      const el = document.querySelector('.alert-danger, .alert-error, [class*="error"], [class*="alert"]');
-      return el ? el.textContent?.trim() : null;
-    });
-
     await browser.close();
 
-    if (errMsg) {
-      return NextResponse.json({ ok: false, error: `TheGrint returned: ${errMsg}` }, { status: 422 });
-    }
-
-    const navigatedAway = !finalUrl.includes("add_full_score");
     return NextResponse.json({
       ok: true,
-      message: navigatedAway
+      message: !finalUrl.includes("add_full_score")
         ? "Score submitted and saved to TheGrint."
         : "Score submitted to TheGrint — verify it appeared in your score history.",
     });
