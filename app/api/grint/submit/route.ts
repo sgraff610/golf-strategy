@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       const roundKeyword = isBack9 ? "back" : "front";
       // Attempt up to 3 times in case a re-render resets the value
       for (let attempt = 0; attempt < 3; attempt++) {
-        await page.selectOption('select[name="round"]', { label: new RegExp(roundKeyword, "i") }).catch(async () => {
+        await page.selectOption('select[name="round"]', { label: isBack9 ? "Back 9" : "Front 9" }).catch(async () => {
           // fall back to value-based selection
           const val = isBack9 ? "B9" : "F9";
           await page.selectOption('select[name="round"]', val).catch(() => {});
