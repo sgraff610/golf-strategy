@@ -17,6 +17,7 @@ type RoundHole = {
   gir: boolean; grints: boolean;
   preferred_club_override: string;
   plan_club: string;
+  tee_land: "L" | "LF" | "CF" | "RF" | "R" | "";
   scoring_opp: 0 | 0.5 | 1 | "";
   diff_max: 2 | 3 | "";
   opportunity: string;
@@ -43,7 +44,7 @@ function blankHole(h: any): RoundHole {
     club:"", tee_accuracy:"", appr_distance:"", appr_accuracy:"",
     water_penalty:"", drop_or_out:"", tree_haz:"",
     fairway_bunker:"", greenside_bunker:"", gir:false, grints:false,
-    preferred_club_override:"", plan_club:"",
+    preferred_club_override:"", plan_club:"", tee_land:"",
     scoring_opp:"", diff_max:"", opportunity:"",
   };
 }
@@ -880,7 +881,7 @@ function scoreBg(score: number|"", par: number): string {
                   </tr>
                   <tr>
                     <td style={{ ...lc }}>Land</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{(ch2 as any)?.preferred_landing||"—"}</td>; })}
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); return <td key={i} style={{ ...tc, color:"var(--green)", fontSize:10, borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>{h.tee_land||(ch2 as any)?.preferred_landing||"—"}</td>; })}
                     <td style={sc}></td>
                   </tr>
                   <tr>
@@ -1239,10 +1240,10 @@ function scoreBg(score: number|"", par: number): string {
         {/* Club reference */}
         {currentHole && (
           <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12, order: inputPhase === "approach" ? 11 : 1 }}>
-            <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 10px" }}>Tee Club</p>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <p style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:"0 0 10px" }}>Tee Plan</p>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
               <div>
-                <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:4 }}>Course Preferred</label>
+                <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:4 }}>Preferred Club</label>
                 <select
                   style={{ width:"100%", padding:"7px 8px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", fontWeight:600, boxSizing:"border-box" }}
                   value={currentHole.preferred_club_override || (selectedCourse?.holes.find((x:any)=>x.hole===currentHole.hole) as any)?.preferred_club || ""}
@@ -1256,6 +1257,16 @@ function scoreBg(score: number|"", par: number): string {
                 <div style={{ padding:"7px 10px", fontSize:14, fontWeight:700, color: currentHole.plan_club ? "var(--green)" : "var(--muted-2)", background:"var(--green-soft)", border:"1px solid var(--green-soft)", borderRadius:8, minHeight:36, display:"flex", alignItems:"center" }}>
                   {currentHole.plan_club || "—"}
                 </div>
+              </div>
+              <div>
+                <label style={{ fontSize:10, color:"var(--muted)", fontWeight:600, display:"block", marginBottom:4 }}>Land Preference</label>
+                <select
+                  style={{ width:"100%", padding:"7px 8px", fontSize:14, border:"1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", fontWeight:600, boxSizing:"border-box" }}
+                  value={currentHole.tee_land || (selectedCourse?.holes.find((x:any)=>x.hole===currentHole.hole) as any)?.preferred_landing || ""}
+                  onChange={e => updateHoleFieldTracked("tee_land", e.target.value as RoundHole["tee_land"])}>
+                  <option value="">—</option>
+                  {["L","LF","CF","RF","R"].map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
               </div>
             </div>
           </div>
