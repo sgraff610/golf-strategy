@@ -94,7 +94,7 @@ export default function Home() {
   const [leakImpact, setLeakImpact] = useState(0);
   const [leakCount, setLeakCount] = useState(0);
   const [totalRounds, setTotalRounds] = useState(0);
-  const [recentRoundsData, setRecentRoundsData] = useState<Array<{date:string;weekday:string;course:string;score:number;diff:number;badges:string[];stp?:number;gir?:number;putts?:number;fwyHit?:number;fwyTotal?:number}>>([]);
+  const [recentRoundsData, setRecentRoundsData] = useState<Array<{id:string;date:string;weekday:string;course:string;score:number;diff:number;badges:string[];stp?:number;gir?:number;putts?:number;fwyHit?:number;fwyTotal?:number}>>([]);
   const [bestScore, setBestScore] = useState<number|null>(null);
   const [bestCourse, setBestCourse] = useState("");
   const [streak, setStreak] = useState(0);
@@ -115,7 +115,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const CACHE_KEY = "gl-home-v3";
+    const CACHE_KEY = "gl-home-v4";
     const CACHE_TTL = 10 * 60 * 1000; // 10 min
 
     // ── Render from cache immediately ───────────────────────────────────────
@@ -265,7 +265,7 @@ export default function Home() {
         if(r.score_differential!=null) diff=r.holes_played<=9?r.score_differential*2:r.score_differential;
         else if(ci?.rating&&ci?.slope){const is9=(r.holes_played??holes.length)<=9;const rat=is9&&(ci.hole_count??18)>9?ci.rating/2:ci.rating;diff=is9?(113/ci.slope*(score-rat))*2:(score-rat)*113/ci.slope;}
         const d=new Date(r.date+"T12:00:00");
-        return{date:d.toLocaleDateString("en-US",{month:"short",day:"numeric"}),weekday:d.toLocaleDateString("en-US",{weekday:"short"}),course:ci?.name??r.course_name??"Unknown",score,diff,badges:[] as string[],stp,gir,putts,fwyHit,fwyTotal};
+        return{id:r.id as string,date:d.toLocaleDateString("en-US",{month:"short",day:"numeric"}),weekday:d.toLocaleDateString("en-US",{weekday:"short"}),course:ci?.name??r.course_name??"Unknown",score,diff,badges:[] as string[],stp,gir,putts,fwyHit,fwyTotal};
       });
       setRecentRoundsData(recentArr);
 
@@ -473,57 +473,59 @@ export default function Home() {
             {/* ── Stat row ───────────────────────────────────────────────────── */}
             <div style={{ display:"grid", gridTemplateColumns:statCols, gap:14, marginBottom:24 }}>
               {/* Big HI */}
-              <HandicapHero
-                handicap={hi ?? 0}
-                delta30d={trend30 ?? 0}
-                spark={sparkData.length >= 4 ? (
-                  <Sparkline data={sparkData} w={isMobile ? 260 : 300} h={42} stroke="rgba(255,255,255,0.7)" fill="rgba(255,255,255,0.12)" />
-                ) : undefined}
-              />
+              <a href="/clubhouse" style={{ textDecoration:"none", display:"contents" }}>
+                <HandicapHero
+                  handicap={hi ?? 0}
+                  delta30d={trend30 ?? 0}
+                  spark={sparkData.length >= 4 ? (
+                    <Sparkline data={sparkData} w={isMobile ? 260 : 300} h={42} stroke="rgba(255,255,255,0.7)" fill="rgba(255,255,255,0.12)" />
+                  ) : undefined}
+                />
+              </a>
 
               {/* Small stats — 2×2 grid on mobile/tablet, two separate cols on desktop */}
               {(isMobile||isTablet) ? (
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, alignContent:"start" }}>
                   {[
-                    {label:"LAST ROUND",val:totalScore||"—",sub:totalScore>0?`${lastSTP>0?"+":""}${lastSTP===0?"E":lastSTP} at ${lastCourse}`:"No rounds yet"},
-                    {label:"STREAK",val:streak,sub:"sub-90, current",suffix:" rounds"},
-                    {label:"ROUNDS LOGGED",val:totalRounds,sub:"season 2026"},
-                    {label:"CAREER BEST",val:bestScore??("—" as any),sub:bestCourse||"No rounds yet"},
-                  ].map(({label,val,sub,suffix})=>(
-                    <div key={label} style={{...B.statSmall, padding:"14px 16px"}}>
+                    {label:"LAST ROUND",val:totalScore||"—",sub:totalScore>0?`${lastSTP>0?"+":""}${lastSTP===0?"E":lastSTP} at ${lastCourse}`:"No rounds yet",href:lastRound?`/rounds/${lastRound.id}/edit`:"/clubhouse"},
+                    {label:"STREAK",val:streak,sub:"sub-90, current",suffix:" rounds",href:"/clubhouse"},
+                    {label:"ROUNDS LOGGED",val:totalRounds,sub:"season 2026",href:"/clubhouse"},
+                    {label:"CAREER BEST",val:bestScore??("—" as any),sub:bestCourse||"No rounds yet",href:"/clubhouse"},
+                  ].map(({label,val,sub,suffix,href})=>(
+                    <a key={label} href={href} style={{...B.statSmall, padding:"14px 16px", textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                       <div style={B.statLabel}><span style={B.statDot}/> {label}</div>
                       <div style={{...B.statSmallNum, fontSize:smallNumSize, fontVariantNumeric:"tabular-nums"}}>
                         {val}{suffix&&<span style={B.streakUnit}>{suffix}</span>}
                       </div>
                       <div style={B.statSmallSub}>{sub}</div>
-                    </div>
+                    </a>
                   ))}
                 </div>
               ) : (
                 <>
                   <div style={B.statCol}>
-                    <div style={B.statSmall}>
+                    <a href={lastRound?`/rounds/${lastRound.id}/edit`:"/clubhouse"} style={{...B.statSmall, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                       <div style={B.statLabel}><span style={B.statDot}/> LAST ROUND</div>
                       <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{totalScore||"—"}</div>
                       <div style={B.statSmallSub}>{totalScore>0?`${lastSTP>0?"+":""}${lastSTP===0?"E":lastSTP} at ${lastCourse}`:"No rounds yet"}</div>
-                    </div>
-                    <div style={B.statSmall}>
+                    </a>
+                    <a href="/clubhouse" style={{...B.statSmall, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                       <div style={B.statLabel}><span style={B.statDot}/> STREAK</div>
                       <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{streak}<span style={B.streakUnit}> rounds</span></div>
                       <div style={B.statSmallSub}>sub-90, current</div>
-                    </div>
+                    </a>
                   </div>
                   <div style={B.statCol}>
-                    <div style={B.statSmall}>
+                    <a href="/clubhouse" style={{...B.statSmall, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                       <div style={B.statLabel}><span style={B.statDot}/> ROUNDS LOGGED</div>
                       <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{totalRounds}</div>
                       <div style={B.statSmallSub}>season 2026</div>
-                    </div>
-                    <div style={B.statSmall}>
+                    </a>
+                    <a href="/clubhouse" style={{...B.statSmall, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                       <div style={B.statLabel}><span style={B.statDot}/> CAREER BEST</div>
                       <div style={{...B.statSmallNum, fontVariantNumeric:"tabular-nums"}}>{bestScore??("—" as any)}</div>
                       <div style={B.statSmallSub}>{bestCourse||"No rounds yet"}</div>
-                    </div>
+                    </a>
                   </div>
                 </>
               )}
@@ -675,7 +677,7 @@ export default function Home() {
               </a>
 
               {/* 04 LAST RECAP */}
-              <a href="/clubhouse" style={{...B.card, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
+              <a href={lastRound?`/rounds/recap?roundId=${lastRound.id}`:"/clubhouse"} style={{...B.card, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                 <div style={B.cardHead}>
                   <span style={B.cardLabel}>04 · LAST RECAP{lastRound?` · ${fmtDate(lastRound.date).toUpperCase()}`:""}</span>
                   <span style={B.cardArrow}>↗</span>
@@ -717,7 +719,7 @@ export default function Home() {
             </div>
             <div style={{ display:"grid", gridTemplateColumns:actCols, gap:12, marginBottom:24 }}>
               {recentRoundsData.length>0?recentRoundsData.map((r,i)=>(
-                <div key={i} style={B.actCard}>
+                <a key={i} href={`/rounds/${r.id}/edit`} style={{...B.actCard, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                   <div style={B.actDate}>{r.date} · {r.weekday}</div>
                   <div style={B.actWhere}>{r.course}</div>
                   <div style={B.actScoreRow}>
@@ -731,7 +733,7 @@ export default function Home() {
                     {r.gir!=null&&r.gir>0&&<span style={B.actStat}>{r.gir} GIR</span>}
                     {r.fwyTotal!=null&&r.fwyTotal>0&&<span style={B.actStat}>{r.fwyHit}/{r.fwyTotal} fwy</span>}
                   </div>
-                </div>
+                </a>
               )):(
                 <div style={{...B.actCard, color:"var(--ink-mute)", fontSize:13, gridColumn:"1/-1"}}>
                   No completed rounds yet. Start your first round to see activity here.
