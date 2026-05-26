@@ -2,12 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  serverExternalPackages: ["playwright", "playwright-core", "puppeteer-core", "@sparticuz/chromium"],
-  experimental: {
-    outputFileTracingIncludes: {
-      "/api/grint/submit": ["./node_modules/@sparticuz/chromium/bin/**"],
-    },
-  },
+  serverExternalPackages: ["playwright", "playwright-core"],
   async headers() {
     return [
       {
