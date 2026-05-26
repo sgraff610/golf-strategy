@@ -425,10 +425,12 @@ export default function ClubhousePage() {
 
             {/* Row 2, Col 1: 5×4 diff chip grid */}
             {last20WithInfo.length > 0 ? (
+              <div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, alignContent: "center" }}>
                 {last20WithInfo.map((item, i) => {
                   const used = item.diff <= threshold;
                   const active = activeDiffIdx === i;
+                  const isNewest = i === last20WithInfo.length - 1;
                   return (
                     <div key={i} style={{ position: "relative" }}>
                       <a
@@ -442,7 +444,7 @@ export default function ClubhousePage() {
                           background: used ? "linear-gradient(135deg,#f29450,#b85320)" : "rgba(255,255,255,.1)",
                           color: used ? "#fff8e3" : "rgba(255,255,255,.4)",
                           boxShadow: used ? "0 1px 2px rgba(80,55,15,.3)" : "none",
-                          border: used ? "none" : "1px solid rgba(255,255,255,.07)",
+                          border: isNewest ? "1px solid rgba(255,255,255,.35)" : used ? "none" : "1px solid rgba(255,255,255,.07)",
                         }}
                       >
                         {item.diff.toFixed(1)}
@@ -461,6 +463,11 @@ export default function ClubhousePage() {
                     </div>
                   );
                 })}
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop: 4 }}>
+                <span style={{ fontSize:7, color:"rgba(255,255,255,.22)", fontWeight:600, letterSpacing:0.4, textTransform:"uppercase" }}>oldest</span>
+                <span style={{ fontSize:7, color:"rgba(255,255,255,.22)", fontWeight:600, letterSpacing:0.4, textTransform:"uppercase" }}>newest</span>
+              </div>
               </div>
             ) : <div />}
 
