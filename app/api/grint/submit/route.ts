@@ -73,10 +73,8 @@ export default async function({ page, context }) {
   await selectOpt('select[name="date"]', dd);
 
   // 4. Course
-  await page.click("#ucourse");
+  await page.click("#ucourse", { clickCount: 3 });
   await waitMs(400);
-  await page.keyboard.press("Control+a");
-  await waitMs(50);
   await page.keyboard.type(courseName, { delay: 80 });
   await waitMs(300);
   try {
