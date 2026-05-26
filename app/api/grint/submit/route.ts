@@ -32,13 +32,13 @@ export default async function({ page, context }) {
     await page.select(sel, val).catch(() => {});
   }
 
-  // 1. Navigate
-  await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "networkidle2", timeout: 30000 });
+  // 1. Navigate — domcontentloaded is much faster than networkidle2 on ad-heavy sites
+  await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 20000 });
 
   // 2. Login if redirected
   if (page.url().includes("passthru")) {
     try {
-      await page.waitForSelector("#usernameLogin", { visible: true, timeout: 8000 });
+      await page.waitForSelector("#usernameLogin", { visible: true, timeout: 6000 });
     } catch {
       await page.evaluate(() => {
         ["usernameLogin","pwdLogin","submit-form-login"].forEach(id => {
@@ -49,21 +49,19 @@ export default async function({ page, context }) {
           }
         });
       });
-      await waitMs(500);
+      await waitMs(300);
     }
     await fill("#usernameLogin", email);
     await fill("#pwdLogin", password);
     await page.click("#submit-form-login");
-    await waitMs(3000);
+    await waitMs(2500);
 
     if (page.url().includes("passthru")) {
       return Response.json({ ok: false, error: "Login failed — check your TheGrint username and password." });
     }
 
-    await page.goto("https://thegrint.com/", { waitUntil: "domcontentloaded", timeout: 20000 });
-    await waitMs(3000);
-    await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "networkidle2", timeout: 20000 });
-    await waitMs(1500);
+    await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 15000 });
+    await waitMs(1000);
   }
 
   // 3. Date — set all three in one evaluate to avoid context loss between calls
@@ -79,16 +77,12 @@ export default async function({ page, context }) {
     setSelect("month", m);
     setSelect("date", d);
   }, yyyy, mm, dd);
-  // Wait for any AJAX/navigation triggered by date changes
-  await Promise.race([
-    page.waitForNavigation({ waitUntil: "networkidle2", timeout: 5000 }),
-    waitMs(3000),
-  ]).catch(() => {});
+  await waitMs(500);
 
-  // 4. Course — wait for field to be ready after any navigation
-  await page.waitForSelector("#ucourse", { visible: true, timeout: 10000 }).catch(() => {});
+  // 4. Course
+  await page.waitForSelector("#ucourse", { visible: true, timeout: 5000 }).catch(() => {});
   await page.click("#ucourse");
-  await waitMs(400);
+  await waitMs(300);
   await page.$eval("#ucourse", (el, name) => {
     el.value = name;
     el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -96,22 +90,22 @@ export default async function({ page, context }) {
   }, courseName);
   await waitMs(300);
   try {
-    await page.waitForSelector(".suggestion", { visible: true, timeout: 7000 });
+    await page.waitForSelector(".suggestion", { visible: true, timeout: 5000 });
     const first = await page.$(".suggestion");
     if (first) await first.click();
   } catch {}
-  await waitMs(2500);
+  await waitMs(1500);
 
   // 5. Tee
   let teeOpts = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     teeOpts = await page.evaluate(() =>
       Array.from(document.querySelectorAll('select[name="tees"] option'))
         .map(o => ({ v: o.value, t: (o.textContent || "").trim() }))
         .filter(o => o.v !== "")
     );
     if (teeOpts.length) break;
-    await waitMs(500);
+    await waitMs(400);
   }
   const teeMatch = teeOpts.find(o =>
     o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase())
@@ -150,12 +144,12 @@ export default async function({ page, context }) {
     const el = Array.from(document.querySelectorAll("a,button")).find(e => (e.textContent || "").includes("Submit"));
     if (el) el.click();
   });
-  await waitMs(2000);
+  await waitMs(1500);
   await page.evaluate(() => {
     const el = Array.from(document.querySelectorAll("a")).find(e => (e.textContent || "").includes("Not now"));
     if (el) el.click();
   });
-  await waitMs(4000);
+  await waitMs(3000);
 
   const finalUrl = page.url();
   return Response.json({
