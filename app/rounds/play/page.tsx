@@ -959,7 +959,7 @@ function scoreBg(score: number|"", par: number): string {
 
         {/* Score entry */}
         {currentHole && (
-          <div key={"hole-" + currentHoleIdx + "-" + currentHole.score} style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"14px 16px", marginBottom:12, order:0 }}>
+          <div key={"hole-" + currentHoleIdx} style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"14px 16px", marginBottom:12, order:0 }}>
 
             {/* Header row */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>

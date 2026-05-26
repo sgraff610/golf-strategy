@@ -125,12 +125,18 @@ export default async function({ page, context }) {
     await waitMs(2000);
   }
 
-  // 7. Scores
+  // 7. Scores + tee accuracy
+  const teeAccMap = { "Hit":"H", "Left":"L", "Right":"R", "Short":"S", "Long":"P" };
   for (const h of holes) {
     const n = h.hole;
     if (h.score) await fill('input[name="scH' + n + '"]', String(h.score)).catch(() => {});
     if (h.putts) await fill('input[name="ptH' + n + '"]', String(h.putts)).catch(() => {});
     if (h.penalties) await fill('input[name="pH' + n + '"]', h.penalties).catch(() => {});
+    const ta = teeAccMap[h.tee_accuracy];
+    if (ta) {
+      await page.select('select[name="drH' + n + '"]', ta).catch(() => {});
+      await page.$eval('input[name="drH' + n + '"][value="' + ta + '"]', el => el.click()).catch(() => {});
+    }
   }
 
   // 8. Practice round

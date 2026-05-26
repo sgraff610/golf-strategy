@@ -64,7 +64,7 @@ function GrintContent() {
   const [credsSaved, setCredsSaved] = useState(false);
 
   // Submit state
-  const [practiceRound, setPracticeRound] = useState(true);
+  const [practiceRound, setPracticeRound] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string } | null>(null);
 
@@ -506,7 +506,7 @@ function GrintContent() {
               background: submitResult.ok ? "#f0fff7" : "#fff0f0",
               border: `1px solid ${submitResult.ok ? "#a3d9b8" : "#ffcccc"}`,
               color: submitResult.ok ? "#0a5c3f" : "#cc0000",
-              fontSize: 13,
+              fontSize: 13, wordBreak: "break-word", overflowWrap: "break-word", maxWidth: "100%",
             }}>
               {submitResult.ok ? submitResult.message : submitResult.error}
             </div>
