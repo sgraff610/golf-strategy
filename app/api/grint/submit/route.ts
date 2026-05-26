@@ -16,18 +16,13 @@ const GRINT_USERNAME = "#usernameLogin";
 const GRINT_PASSWORD = "#pwdLogin";
 const GRINT_SUBMIT_LOGIN = "#submit-form-login";
 
-// @sparticuz/chromium v127+ no longer bundles the binary — pass a URL so it downloads to /tmp at runtime.
-// Use CHROMIUM_EXECUTABLE_PATH env var to skip the download (point to a pre-hosted binary for faster cold starts).
-const CHROMIUM_PACK_URL =
-  process.env.CHROMIUM_EXECUTABLE_PATH ||
-  "https://github.com/Sparticuz/chromium/releases/download/v148.0.0/chromium-v148.0.0-pack.tar";
-
 async function launchBrowser() {
-  // @sparticuz/chromium + puppeteer-core — the supported serverless combination
+  // @sparticuz/chromium + puppeteer-core — the supported serverless combination.
+  // The bin/ directory is included via outputFileTracingIncludes in next.config.ts.
   try {
     const chromium = (await import("@sparticuz/chromium")).default;
     const puppeteer = (await import("puppeteer-core")).default;
-    const executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
+    const executablePath = await chromium.executablePath();
     return await puppeteer.launch({
       args: [...chromium.args, "--disable-blink-features=AutomationControlled"],
       executablePath,
