@@ -124,7 +124,7 @@ function Sparkline({ data, w = 96, h = 36, stroke = "var(--green)", fill }: {
   const d = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
   const last = pts[pts.length - 1];
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block", overflow: "visible" }}>
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block", overflow: "visible" }}>
       {fill && <path d={`${d} L${last[0]} ${h} L${pts[0][0]} ${h} Z`} fill={fill} />}
       <path d={d} fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={last[0]} cy={last[1]} r="2.5" fill={stroke} />
@@ -415,18 +415,37 @@ export default function ClubhousePage() {
               )}
             </div>
 
-            {/* Row 1, Col 2: sparkline — vertically centered in the HI row */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <Sparkline data={sparklineData} w={190} h={60} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
+            {/* Row 1, Col 2: sparkline — fills column width to align with chip grid below */}
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+              <Sparkline data={sparklineData} w={200} h={55} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
               <div style={{ fontSize: 9, color: "rgba(255,255,255,.35)", marginTop: 3, letterSpacing: 0.3 }}>
                 last {sparklineData.length} rounds
               </div>
             </div>
 
-            {/* Row 2, Col 1: 5×4 diff chip grid */}
+            {/* Row 2, Col 1: 2×2 sub-stats under the HI number */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+              {[
+                { label: "Score", val: fmtStp(stats20?.avgScoreToPar) },
+                { label: "Putts", val: fmtPuts(stats20?.avgPuttsPer18) },
+                { label: "Fwy",   val: fmtPct(stats20?.drivingPct) },
+                { label: "GIR",   val: fmtPct(stats20?.girPct) },
+              ].map(s => (
+                <div key={s.label} style={{ textAlign: "center" }}>
+                  <div style={{ fontFamily: "Georgia,serif", fontSize: 20, fontWeight: 600, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
+                    {s.val}
+                  </div>
+                  <div style={{ fontSize: 8, color: "rgba(255,255,255,.4)", marginTop: 3, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                    {s.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Row 2, Col 2: 5×4 diff chip grid — bottom right */}
             {last20WithInfo.length > 0 ? (
               <div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5, alignContent: "center" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
                 {last20WithInfo.map((item, i) => {
                   const used = item.diff <= threshold;
                   const active = activeDiffIdx === i;
@@ -470,27 +489,6 @@ export default function ClubhousePage() {
               </div>
               </div>
             ) : <div />}
-
-            {/* Row 2, Col 2: 2×2 stats — vertically centered in the diff row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, width: "100%" }}>
-                {[
-                  { label: "Score", val: fmtStp(stats20?.avgScoreToPar) },
-                  { label: "Putts", val: fmtPuts(stats20?.avgPuttsPer18) },
-                  { label: "Fwy",   val: fmtPct(stats20?.drivingPct) },
-                  { label: "GIR",   val: fmtPct(stats20?.girPct) },
-                ].map(s => (
-                  <div key={s.label} style={{ textAlign: "center" }}>
-                    <div style={{ fontFamily: "Georgia,serif", fontSize: 20, fontWeight: 600, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
-                      {s.val}
-                    </div>
-                    <div style={{ fontSize: 8, color: "rgba(255,255,255,.4)", marginTop: 3, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
-                      {s.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
 
           </div>
         </div>
