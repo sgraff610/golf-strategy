@@ -25,14 +25,29 @@ export async function POST(req: NextRequest) {
   if (!email || !password)
     return NextResponse.json({ ok: false, error: "Missing credentials" }, { status: 400 });
 
-  let chromium: typeof import("playwright").chromium;
-  try { const pw = await import("playwright"); chromium = pw.chromium; }
-  catch { return NextResponse.json({ ok: false, error: "Browser not available. Use CSV download." }, { status: 503 }); }
+  // Try @sparticuz/chromium (works on Vercel/serverless), fall back to local playwright
+  let browser: Awaited<ReturnType<typeof import("playwright-core").chromium.launch>>;
+  try {
+    const chromiumPkg = (await import("@sparticuz/chromium")).default;
+    const { chromium } = await import("playwright-core");
+    const executablePath = await chromiumPkg.executablePath();
+    browser = await chromium.launch({
+      args: [...chromiumPkg.args, "--disable-blink-features=AutomationControlled"],
+      executablePath,
+      headless: true,
+    });
+  } catch {
+    try {
+      const { chromium } = await import("playwright");
+      browser = await chromium.launch({
+        headless: true,
+        args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+      });
+    } catch {
+      return NextResponse.json({ ok: false, error: "Browser not available on this server. Use CSV download instead." }, { status: 503 });
+    }
+  }
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
-  });
   const ctx = await browser.newContext({
     viewport: { width: 1280, height: 900 },
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
