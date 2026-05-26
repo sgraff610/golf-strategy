@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  serverExternalPackages: ["playwright", "playwright-core", "@sparticuz/chromium"],
+  serverExternalPackages: ["playwright", "playwright-core", "puppeteer-core", "@sparticuz/chromium"],
   async headers() {
     return [
       {
