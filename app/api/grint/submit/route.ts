@@ -73,9 +73,14 @@ export default async function({ page, context }) {
   await selectOpt('select[name="date"]', dd);
 
   // 4. Course
-  await page.click("#ucourse", { clickCount: 3 });
+  await page.click("#ucourse");
   await waitMs(400);
-  await page.keyboard.type(courseName, { delay: 80 });
+  await page.$eval("#ucourse", (el, name) => {
+    el.value = name;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+  }, courseName);
   await waitMs(300);
   try {
     await page.waitForSelector(".suggestion", { visible: true, timeout: 7000 });
