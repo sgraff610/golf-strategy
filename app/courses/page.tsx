@@ -35,7 +35,7 @@ const courseYards = (c: CourseRecord) => c.holes.reduce((s, h) => s + (h.yards |
 type CourseStat = {
   rounds: number; best: number | null; avg: number | null;
   last: number | null; lastDate: string | null;
-  history: { date: string; score: number; toPar: number }[];
+  history: { id: string; date: string; score: number; toPar: number }[];
 };
 type CourseGroup = { name: string; teeBoxes: CourseRecord[]; tone: string };
 
@@ -301,7 +301,7 @@ function PhotoPicker({ courseName, current, onSave }: {
 
 // ─── ScoreChart ───────────────────────────────────────────────────────────────
 
-function ScoreChart({ history }: { history: { date: string; score: number; toPar: number }[] }) {
+function ScoreChart({ history }: { history: { id: string; date: string; score: number; toPar: number }[] }) {
   const [hov, setHov] = useState<number | null>(null);
   if (history.length < 2) return (
     <div style={{ color: 'var(--muted)', fontSize: 12, fontStyle: 'italic', padding: '20px 0', textAlign: 'center' }}>
@@ -347,7 +347,7 @@ function ScoreChart({ history }: { history: { date: string; score: number; toPar
         const isBest = r.toPar === bestToPar;
         const isHov = hov === i;
         return (
-          <g key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)} style={{ cursor: 'crosshair' }}>
+          <g key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)} onClick={() => { window.location.href = `/rounds/${r.id}/edit`; }} style={{ cursor: 'pointer' }}>
             <circle cx={xs(i)} cy={ys(r.toPar)} r={14} fill="transparent" />
             <circle cx={xs(i)} cy={ys(r.toPar)} r={isHov ? 5 : isBest ? 5 : 3.5}
               fill={isBest ? 'var(--green)' : isHov ? 'var(--accent)' : 'var(--paper)'}
@@ -541,14 +541,14 @@ function CourseDetail({ group, stat, onBack, onDeleteTee, onSaveImage, onSavePos
                 const isBest = r.score === stat!.best;
                 const tp = r.toPar;
                 return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 70px 70px 1fr', gap: 16, padding: '13px 22px', borderTop: i > 0 ? '1px solid var(--line-soft)' : 'none', alignItems: 'center', background: isBest ? 'var(--green-soft)' : 'transparent' }}>
+                  <a key={i} href={`/rounds/${r.id}/edit`} style={{ display: 'grid', gridTemplateColumns: '130px 70px 70px 1fr', gap: 16, padding: '13px 22px', borderTop: i > 0 ? '1px solid var(--line-soft)' : 'none', alignItems: 'center', background: isBest ? 'var(--green-soft)' : 'transparent', textDecoration: 'none', cursor: 'pointer' }}>
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', letterSpacing: 0.3, fontFamily: 'monospace' }}>{r.date}</div>
                     <div style={{ fontFamily: 'Georgia, serif', fontSize: 26, fontWeight: 500, fontStyle: 'italic', color: isBest ? 'var(--green-deep)' : 'var(--ink)', lineHeight: 1 }}>{r.score}</div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: tp < 0 ? 'var(--good)' : tp === 0 ? 'var(--ink)' : 'var(--muted)' }}>
                       {tp > 0 ? `+${tp}` : tp === 0 ? 'E' : tp}
                     </div>
                     {isBest && <Chip tone="green">Best round</Chip>}
-                  </div>
+                  </a>
                 );
               })}
             </div>
@@ -681,7 +681,7 @@ export default function CoursesPage() {
             const score = hs.reduce((s: number, h: any) => s + (Number(h.score) || 0), 0);
             const par   = hs.reduce((s: number, h: any) => s + (Number(h.par)   || 4), 0);
             const playedHoles = hs.filter((h: any) => Number(h.score) > 0).length;
-            return { date: r.date as string, score, par, toPar: score - par, playedHoles };
+            return { id: r.id as string, date: r.date as string, score, par, toPar: score - par, playedHoles };
           })
           .filter(r => r.score > 0 && r.playedHoles === expectedHoles); // skip incomplete/wrong-length rounds
         const scores = scored.map(r => r.score);
@@ -691,7 +691,7 @@ export default function CoursesPage() {
           avg:      scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null,
           last:     scored[0]?.score ?? null,
           lastDate: scored[0]?.date  ?? null,
-          history:  scored.map(r => ({ date: r.date, score: r.score, toPar: r.toPar })),
+          history:  scored.map(r => ({ id: r.id, date: r.date, score: r.score, toPar: r.toPar })),
         };
       }
       setStats(statMap);

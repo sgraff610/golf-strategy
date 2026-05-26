@@ -81,12 +81,19 @@ function calcStats(slice: Round[]) {
   const chipHoles = scoredHoles.filter((h: any) =>
     Number(h.chips) > 0 && PUTT_DIST_MAP[h.first_putt_distance] !== undefined
   );
+  const threePuttHoles = scoredHoles.filter((h: any) => Number(h.putts) >= 3);
+  // Only count chip+GS bunker from 2026+ rounds (not tracked before then)
+  const chipGsRounds = slice.filter(r => r.date >= "2026-01-01");
+  const chipGsScoredHoles = chipGsRounds.flatMap(r => r.holes.filter((h: any) => h.score && Number(h.score) > 0));
+  const doubleChipGsHoles = chipGsScoredHoles.filter((h: any) => Number(h.chips) >= 2 || Number(h.greenside_bunker) > 0);
   return {
     avgScoreToPar: roundScoresPar.length ? roundScoresPar.reduce((s, v) => s + v, 0) / roundScoresPar.length : 0,
     avgPuttsPer18: totalHoles > 0 ? (scoredHoles.reduce((s, h: any) => s + (Number(h.putts) || 0), 0) / totalHoles) * 18 : null,
     drivingPct: drivingHoles.length > 0 ? drivingHoles.filter((h: any) => h.tee_accuracy === "Hit").length / drivingHoles.length : null,
     girPct: totalHoles > 0 ? scoredHoles.filter((h: any) => h.gir).length / totalHoles : null,
     avgPuttAfterChip: chipHoles.length > 0 ? chipHoles.reduce((s, h: any) => s + PUTT_DIST_MAP[h.first_putt_distance], 0) / chipHoles.length : null,
+    threePuttPer18: totalHoles > 0 ? (threePuttHoles.length / totalHoles) * 18 : null,
+    doubleChipGsBkrPer18: chipGsScoredHoles.length > 0 ? (doubleChipGsHoles.length / chipGsScoredHoles.length) * 18 : null,
   };
 }
 
@@ -97,6 +104,7 @@ const fmtDiff = (n?: number | null) => n == null ? "—" : n >= 0 ? `+${n.toFixe
 const fmtPct = (n?: number | null) => n == null ? "—" : `${Math.round(n * 100)}%`;
 const fmtPuts = (n?: number | null) => n == null ? "—" : n.toFixed(1);
 const fmtFt = (n?: number | null) => n == null ? "—" : `${n.toFixed(1)}ft`;
+const fmtSge = (n?: number | null) => n == null ? "—" : n.toFixed(1);
 const fmtDateShort = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -107,8 +115,7 @@ function fairwaysHit(holes: any[]) { return holes.filter(h => (h.par === 4 || h.
 function drivingTotal(holes: any[]) { return holes.filter(h => h.par === 4 || h.par === 5).length; }
 function girsHit(holes: any[]) { return holes.filter(h => h.gir).length; }
 function threePuttCount(holes: any[]) { return holes.filter(h => Number(h.putts) >= 3).length; }
-function twoChipCount(holes: any[]) { return holes.filter(h => Number(h.chips) >= 2).length; }
-function gsBunkerChipCount(holes: any[]) { return holes.filter(h => Number(h.greenside_bunker) > 0 && Number(h.chips) > 0).length; }
+function doubleChipOrGsBkrCount(holes: any[]) { return holes.filter(h => Number(h.chips) >= 2 || Number(h.greenside_bunker) > 0).length; }
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
@@ -182,7 +189,7 @@ export default function ClubhousePage() {
   const [loading, setLoading] = useState(true);
 
   // UI
-  const [tab, setTab] = useState<"rounds" | "stats" | "bag" | "notes">("stats");
+  const [tab, setTab] = useState<"rounds" | "trophy" | "bag" | "notes">("rounds");
   const [courseFilter, setCourseFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
   const [activeDiffIdx, setActiveDiffIdx] = useState<number | null>(null);
@@ -444,6 +451,7 @@ export default function ClubhousePage() {
             {/* Row 2, Col 2: 5×4 diff chip grid — bottom right */}
             {last20WithInfo.length > 0 ? (
               <div>
+              <div style={{ fontSize:7, color:"rgba(255,255,255,.22)", fontWeight:600, letterSpacing:0.4, textTransform:"uppercase", marginBottom:3 }}>oldest ←</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
                 {last20WithInfo.map((item, i) => {
                   const used = item.diff <= threshold;
@@ -482,90 +490,47 @@ export default function ClubhousePage() {
                   );
                 })}
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop: 4 }}>
-                <span style={{ fontSize:7, color:"rgba(255,255,255,.22)", fontWeight:600, letterSpacing:0.4, textTransform:"uppercase" }}>oldest</span>
-                <span style={{ fontSize:7, color:"rgba(255,255,255,.22)", fontWeight:600, letterSpacing:0.4, textTransform:"uppercase" }}>newest</span>
-              </div>
+              <div style={{ textAlign:"right", marginTop:3, fontSize:7, color:"rgba(255,255,255,.22)", fontWeight:600, letterSpacing:0.4, textTransform:"uppercase" }}>→ newest</div>
               </div>
             ) : <div />}
 
           </div>
         </div>
 
-        {/* ── Trophy Case ── */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", fontWeight: 500, fontSize: 20, color: "var(--ink)", marginBottom: 10 }}>
-            Trophy case
+        {/* ── Key Stats (always visible) ── */}
+        <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
+            <div style={{ fontSize: 9.5, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 700 }}>Key Stats</div>
           </div>
-          {(() => {
-            const brScore = bestRound ? totalScore(bestRound.holes) : null;
-            const brPar = bestRound ? totalPar(bestRound.holes) : null;
-            const brToPar = brScore != null && brPar ? brScore - brPar : null;
-            const trophyCardBase: React.CSSProperties = {
-              background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14,
-              padding: "14px 16px", position: "relative", display: "block", textDecoration: "none",
-            };
-            const trophyInner = (kind: string, big: string, label: string, sub: string, extra?: React.ReactNode) => (
-              <>
-                <div style={{ position: "absolute", top: 12, right: 12 }}><MilestoneBadge kind={kind} size={22} /></div>
-                <div style={{ fontFamily: "Georgia,serif", fontWeight: 600, fontSize: 32, color: "var(--green-deep)", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>{big}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}>{label}</div>
-                {extra}
-                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>
-              </>
-            );
-            return (
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
-                {/* Best round — links to round */}
-                <a href={bestRound ? `/rounds/${bestRound.id}/edit` : undefined} style={trophyCardBase}>
-                  {trophyInner(
-                    "pr",
-                    brScore != null ? String(brScore) : "—",
-                    "Best round",
-                    bestRound ? `${bestRound.course_name} · ${bestRound.date}` : "No 18-hole rounds yet",
-                    brToPar != null ? (
-                      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-                        {brToPar === 0 ? "Even par" : brToPar > 0 ? `+${brToPar} vs par` : `${brToPar} vs par`}
-                      </div>
-                    ) : null,
-                  )}
-                </a>
-                {/* Best differential — links to round */}
-                <a href={bestDiffEntry ? `/rounds/${bestDiffEntry.id}/edit` : undefined} style={trophyCardBase}>
-                  {trophyInner(
-                    "diff",
-                    bestDiffEntry ? bestDiffEntry.diff.toFixed(1) : "—",
-                    "Best differential",
-                    bestDiffEntry ? `${bestDiffEntry.course_name} · ${bestDiffEntry.date}` : "—",
-                  )}
-                </a>
-                {/* Sub-90 streak — scrolls to rounds tab */}
-                <div style={{ ...trophyCardBase, cursor: "pointer" }} onClick={() => { setTab("rounds"); setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>
-                  {trophyInner(
-                    "streak", String(streak),
-                    streak === 1 ? "Sub-90 round" : "Sub-90 streak",
-                    streak > 0 ? "Current run" : "Break 90 to start one",
-                  )}
-                </div>
-                {/* Courses this year — scrolls to rounds tab */}
-                <div style={{ ...trophyCardBase, cursor: "pointer" }} onClick={() => { setTab("rounds"); setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>
-                  {trophyInner(
-                    "course",
-                    String(coursesThisYear || new Set(rounds.map(r => r.course_id)).size),
-                    coursesThisYear ? "Courses this year" : "Courses played",
-                    `${rounds.length} total rounds`,
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", fontSize: 9.5, color: "var(--muted-2)", fontWeight: 700, padding: "8px 16px 4px", letterSpacing: 0.5, textTransform: "uppercase" }}>
+            <span />
+            <span style={{ textAlign: "center" }}>Last 5</span>
+            <span style={{ textAlign: "center" }}>Last 20</span>
+            <span style={{ textAlign: "center" }}>All time</span>
+          </div>
+          {[
+            { label: "Score to par", v: [stats5, stats20, statsAll].map(s => fmtStp(s?.avgScoreToPar)) },
+            { label: "Putts / 18",  v: [stats5, stats20, statsAll].map(s => fmtPuts(s?.avgPuttsPer18)) },
+            { label: "Fairways",    v: [stats5, stats20, statsAll].map(s => fmtPct(s?.drivingPct)) },
+            { label: "GIR",         v: [stats5, stats20, statsAll].map(s => fmtPct(s?.girPct)) },
+            { label: "1st putt",        v: [stats5, stats20, statsAll].map(s => fmtFt(s?.avgPuttAfterChip)) },
+            { label: "3-Putts / 18",    v: [stats5, stats20, statsAll].map(s => fmtSge(s?.threePuttPer18)) },
+            { label: "Double Chip+GS Bunker/18", v: [stats5, stats20, statsAll].map(s => fmtSge(s?.doubleChipGsBkrPer18)) },
+          ].map((row) => (
+            <div key={row.label} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", padding: "9px 16px", borderTop: "1px solid var(--line-soft)", fontSize: 13, alignItems: "center" }}>
+              <span style={{ color: "var(--ink)", fontWeight: 500 }}>{row.label}</span>
+              {row.v.map((val, j) => (
+                <span key={j} style={{ textAlign: "center", color: "var(--green-deep)", fontWeight: 700, fontFeatureSettings: '"tnum" 1' }}>{val}</span>
+              ))}
+            </div>
+          ))}
         </div>
 
         {/* ── Tabs ── */}
         <div ref={tabsRef} style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 18, gap: 0 }}>
           {([
-            { id: "stats",  label: "Stats" },
             { id: "rounds", label: "Rounds", count: rounds.length },
+            { id: "trophy", label: "Trophy Case" },
             { id: "bag",    label: "Bag" },
             { id: "notes",  label: "Notes" },
           ] as const).map(t => {
@@ -684,11 +649,10 @@ export default function ClubhousePage() {
                             </div>
                           ))}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 4 }}>
                           {[
                             { label: "3-Putt", val: threePuttCount(round.holes) || "—" },
-                            { label: "2-Chip", val: twoChipCount(round.holes) || "—" },
-                            { label: "GS Bkr", val: gsBunkerChipCount(round.holes) || "—" },
+                            { label: "Chip/GS Bkr", val: doubleChipOrGsBkrCount(round.holes) || "—" },
                           ].map(({ label, val }) => (
                             <div key={label} style={{ background: "var(--paper-alt)", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
                               <div style={{ fontSize: 8.5, color: "var(--muted-2)", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
@@ -729,56 +693,61 @@ export default function ClubhousePage() {
           </div>
         )}
 
-        {/* ── Stats tab ── */}
-        {tab === "stats" && (
+        {/* ── Trophy Case tab ── */}
+        {tab === "trophy" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {/* Stats comparison table */}
-            <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
-                <div style={{ fontSize: 9.5, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 700 }}>Form</div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", fontSize: 9.5, color: "var(--muted-2)", fontWeight: 700, padding: "8px 16px 4px", letterSpacing: 0.5, textTransform: "uppercase" }}>
-                <span />
-                <span style={{ textAlign: "center" }}>Last 5</span>
-                <span style={{ textAlign: "center" }}>Last 20</span>
-                <span style={{ textAlign: "center" }}>All time</span>
-              </div>
-              {[
-                { label: "Score to par", v: [stats5, stats20, statsAll].map(s => fmtStp(s?.avgScoreToPar)) },
-                { label: "Putts / 18",  v: [stats5, stats20, statsAll].map(s => fmtPuts(s?.avgPuttsPer18)) },
-                { label: "Fairways",    v: [stats5, stats20, statsAll].map(s => fmtPct(s?.drivingPct)) },
-                { label: "GIR",         v: [stats5, stats20, statsAll].map(s => fmtPct(s?.girPct)) },
-                { label: "1st putt",    v: [stats5, stats20, statsAll].map(s => fmtFt(s?.avgPuttAfterChip)) },
-              ].map((row, i) => (
-                <div key={row.label} style={{
-                  display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr",
-                  padding: "9px 16px", borderTop: `1px solid var(--line-soft)`, fontSize: 13, alignItems: "center",
-                }}>
-                  <span style={{ color: "var(--ink)", fontWeight: 500 }}>{row.label}</span>
-                  {row.v.map((val, j) => (
-                    <span key={j} style={{ textAlign: "center", color: "var(--green-deep)", fontWeight: 700, fontFeatureSettings: '"tnum" 1' }}>{val}</span>
-                  ))}
+            {(() => {
+              const brScore = bestRound ? totalScore(bestRound.holes) : null;
+              const brPar = bestRound ? totalPar(bestRound.holes) : null;
+              const brToPar = brScore != null && brPar ? brScore - brPar : null;
+              const trophyCardBase: React.CSSProperties = {
+                background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 14,
+                padding: "14px 16px", position: "relative", display: "block", textDecoration: "none",
+              };
+              const trophyInner = (kind: string, big: string, label: string, sub: string, extra?: React.ReactNode) => (
+                <>
+                  <div style={{ position: "absolute", top: 12, right: 12 }}><MilestoneBadge kind={kind} size={22} /></div>
+                  <div style={{ fontFamily: "Georgia,serif", fontWeight: 600, fontSize: 32, color: "var(--green-deep)", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>{big}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", marginTop: 6 }}>{label}</div>
+                  {extra}
+                  <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>
+                </>
+              );
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
+                  <a href={bestRound ? `/rounds/${bestRound.id}/edit` : undefined} style={trophyCardBase}>
+                    {trophyInner("pr", brScore != null ? String(brScore) : "—", "Best round",
+                      bestRound ? `${bestRound.course_name} · ${bestRound.date}` : "No 18-hole rounds yet",
+                      brToPar != null ? <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{brToPar === 0 ? "Even par" : brToPar > 0 ? `+${brToPar} vs par` : `${brToPar} vs par`}</div> : null,
+                    )}
+                  </a>
+                  <a href={bestDiffEntry ? `/rounds/${bestDiffEntry.id}/edit` : undefined} style={trophyCardBase}>
+                    {trophyInner("diff", bestDiffEntry ? bestDiffEntry.diff.toFixed(1) : "—", "Best differential",
+                      bestDiffEntry ? `${bestDiffEntry.course_name} · ${bestDiffEntry.date}` : "—")}
+                  </a>
+                  <div style={{ ...trophyCardBase, cursor: "pointer" }} onClick={() => { setTab("rounds"); setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>
+                    {trophyInner("streak", String(streak), streak === 1 ? "Sub-90 round" : "Sub-90 streak",
+                      streak > 0 ? "Current run" : "Break 90 to start one")}
+                  </div>
+                  <div style={{ ...trophyCardBase, cursor: "pointer" }} onClick={() => { setTab("rounds"); setTimeout(() => tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}>
+                    {trophyInner("course", String(coursesThisYear || new Set(rounds.map(r => r.course_id)).size),
+                      coursesThisYear ? "Courses this year" : "Courses played", `${rounds.length} total rounds`)}
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
-            {/* Best at each course */}
             {courseStatsList.length > 0 && (
               <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
                 <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)" }}>
                   <div style={{ fontSize: 9.5, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 700 }}>Best at each course</div>
                 </div>
                 {courseStatsList.map((cs, i) => (
-                  <div key={cs.courseId} style={{
-                    display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 12, alignItems: "center",
-                    padding: "11px 16px", borderTop: i ? "1px solid var(--line-soft)" : "none",
-                  }}>
+                  <div key={cs.courseId} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 12, alignItems: "center", padding: "11px 16px", borderTop: i ? "1px solid var(--line-soft)" : "none" }}>
                     <CourseGlyph name={cs.name} size={30} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cs.name}</div>
-                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 1 }}>
-                        {cs.rounds} rounds · avg {(cs.total / cs.rounds).toFixed(1)}
-                      </div>
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 1 }}>{cs.rounds} rounds · avg {(cs.total / cs.rounds).toFixed(1)}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontFamily: "Georgia,serif", fontWeight: 600, fontSize: 20, color: "var(--green-deep)", lineHeight: 1 }}>{cs.best}</div>

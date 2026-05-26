@@ -1089,15 +1089,11 @@ function scoreBg(score: number|"", par: number): string {
               <>
                 {/* Section 1: Tee */}
                 {(() => {
-                  const isActive = activeSection === "tee";
+                  const isActive = !teeFilled;
                   return (
                     <div style={{ background: isActive ? "var(--green-soft)" : "var(--paper-alt)", border: isActive ? "1.5px solid var(--green)" : "1px solid var(--line-soft)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                      <div style={{ marginBottom:6 }}>
                         <p style={{ fontSize:10, fontWeight:700, color: isActive ? "var(--green-deep)" : "var(--muted)", letterSpacing:1, textTransform:"uppercase", margin:0 }}>Tee</p>
-                        <button onClick={async () => { await saveCurrentHole(); setActiveSection("approach"); }}
-                          style={{ padding:"3px 10px", fontSize:11, fontWeight:700, background:"var(--green)", color:"white", border:"none", borderRadius:6, cursor:"pointer" }}>
-                          Next →
-                        </button>
                       </div>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                         <div>
@@ -1124,18 +1120,14 @@ function scoreBg(score: number|"", par: number): string {
                 })()}
                 {/* Section 2: Approach & Penalties */}
                 {(() => {
-                  const isActive = activeSection === "approach";
+                  const isActive = currentHole.score === "" || currentHole.score === undefined || currentHole.score === null;
                   const numStyle: React.CSSProperties = { width:"100%", padding:"5px 4px", fontSize:13, border: isActive ? "1.5px solid var(--green)" : "1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"32px" };
                   const selStyle: React.CSSProperties = { width:"100%", padding:"5px 4px", fontSize:13, border: isActive ? "1.5px solid var(--green)" : "1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"32px" };
                   const lbl = (text: string): React.CSSProperties => ({ fontSize:10, color: isActive ? "var(--green-deep)" : "var(--muted)", fontWeight:700, display:"block", marginBottom:3 });
                   return (
                     <div style={{ background: isActive ? "var(--green-soft)" : "var(--paper-alt)", border: isActive ? "1.5px solid var(--green)" : "1px solid var(--line-soft)", borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                      <div style={{ marginBottom:6 }}>
                         <p style={{ fontSize:10, fontWeight:700, color: isActive ? "var(--green-deep)" : "var(--muted)", letterSpacing:1, textTransform:"uppercase", margin:0 }}>Approach &amp; Penalties</p>
-                        <button onClick={async () => { await saveCurrentHole(); setActiveSection("score"); }}
-                          style={{ padding:"3px 10px", fontSize:11, fontWeight:700, background:"var(--green)", color:"white", border:"none", borderRadius:6, cursor:"pointer" }}>
-                          Next →
-                        </button>
                       </div>
                       {/* Row 1: APPR Club | APPR Acc | FWY Bkr | Tree/Haz */}
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:6 }}>
@@ -1200,29 +1192,24 @@ function scoreBg(score: number|"", par: number): string {
                 })()}
                 {/* Section 3: Score */}
                 {(() => {
-                  const isActive = activeSection === "score";
                   return (
-                    <div style={{ background: isActive ? "var(--green-soft)" : "var(--paper-alt)", border: isActive ? "1.5px solid var(--green)" : "1px solid var(--line-soft)", borderRadius:10, padding:"10px 12px" }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                        <p style={{ fontSize:10, fontWeight:700, color: isActive ? "var(--green-deep)" : "var(--muted)", letterSpacing:1, textTransform:"uppercase", margin:0 }}>Score</p>
-                        <button onClick={async () => { await saveCurrentHole(); if (isLastHole) { postScore(); } else { goToHole(currentHoleIdx + 1); } }}
-                          style={{ padding:"3px 10px", fontSize:11, fontWeight:700, background:"var(--green)", color:"white", border:"none", borderRadius:6, cursor:"pointer" }}>
-                          {isLastHole ? "Post ✓" : "Next →"}
-                        </button>
+                    <div style={{ background: "var(--green-soft)", border: "1.5px solid var(--green)", borderRadius:10, padding:"10px 12px" }}>
+                      <div style={{ marginBottom:6 }}>
+                        <p style={{ fontSize:10, fontWeight:700, color: "var(--green-deep)", letterSpacing:1, textTransform:"uppercase", margin:0 }}>Score</p>
                       </div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                         {[{label:"Score",field:"score",min:1,max:20},{label:"Putts",field:"putts",min:0,max:10}].map(({label,field,min,max}) => (
                           <div key={field}>
-                            <label style={{ fontSize:10, color: isActive ? "var(--green-deep)" : "var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
+                            <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:600, display:"block", marginBottom:3 }}>{label}</label>
                             <input type="number" min={min} max={max}
-                              style={{ width:"100%", padding:"6px 4px", fontSize:13, border: isActive ? "1.5px solid var(--green)" : "1px solid var(--line)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"34px" }}
+                              style={{ width:"100%", padding:"6px 4px", fontSize:13, border:"1.5px solid var(--green)", borderRadius:8, textAlign:"center", background:"white", color:"var(--ink)", boxSizing:"border-box", height:"34px" }}
                               value={(currentHole as any)[field]===""||((currentHole as any)[field]==null)?"":(Number((currentHole as any)[field]))}
                               onChange={e => updateHoleFieldTracked(field as keyof RoundHole, e.target.value===""?"":Number(e.target.value))} />
                           </div>
                         ))}
                         <div>
-                          <label style={{ fontSize:10, color: isActive ? "var(--green-deep)" : "var(--muted)", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
-                          <select style={{ width:"100%", padding:"6px 4px", fontSize:13, border: isActive ? "1.5px solid var(--green)" : "1px solid var(--line)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
+                          <label style={{ fontSize:10, color:"var(--green-deep)", fontWeight:600, display:"block", marginBottom:3 }}>1st Putt</label>
+                          <select style={{ width:"100%", padding:"6px 4px", fontSize:13, border:"1.5px solid var(--green)", borderRadius:8, background:"white", color:"var(--green)", boxSizing:"border-box", height:"34px" }}
                             value={currentHole.first_putt_distance}
                             onChange={e => updateHoleFieldTracked("first_putt_distance", e.target.value)}>
                             <option value="">—</option>
@@ -1234,6 +1221,20 @@ function scoreBg(score: number|"", par: number): string {
                   );
                 })()}
               </>
+            )}
+            {/* Prominent Next / Post button — always visible in full mode, green when score entered */}
+            {scoreInputMode === "full" && (
+              <button
+                onClick={async () => { await saveCurrentHole(); if (isLastHole) { postScore(); } else { goToHole(currentHoleIdx + 1); } }}
+                style={{
+                  width:"100%", marginTop:10, padding:"12px", fontSize:15, fontWeight:700, borderRadius:10, cursor:"pointer", border:"none",
+                  background: scoreFilled ? "var(--green)" : "var(--line)",
+                  color: scoreFilled ? "white" : "var(--muted)",
+                  transition:"background 0.2s, color 0.2s",
+                }}
+              >
+                {isLastHole ? "Post ✓" : "Next →"}
+              </button>
             )}
           </div>
         )}
