@@ -33,7 +33,7 @@ export function HandicapHero({
         fontFamily: "var(--font-mono)",
         fontSize: 12, fontWeight: 700,
       }}>
-        {delta30d < 0 ? "▼" : "▲"} {Math.abs(delta30d).toFixed(1)} · 30 days
+        {delta30d < 0 ? "▼" : "▲"} {Math.abs(delta30d).toFixed(1)} · last 5 rounds
       </div>
 
       <div style={{ marginTop: "auto", paddingTop: 18 }}>{spark}</div>

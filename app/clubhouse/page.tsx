@@ -291,16 +291,9 @@ export default function ClubhousePage() {
   const threshold = sorted20[Math.min(7, sorted20.length - 1)] ?? Infinity;
   const sparklineData = diffsOnly.slice(-20);
 
-  // 30-day trend
-  const thirtyAgo = new Date(); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
-  const diffsFor30 = roundsAsc
-    .filter(r => new Date(r.date + "T12:00:00") < thirtyAgo)
-    .map(r => r.score_differential != null
-      ? (r.holes_played <= 9 ? r.score_differential * 2 : r.score_differential)
-      : computeDiffNum(r, courseInfoMap[r.course_id])
-    ).filter((d): d is number => d !== null);
-  const hcp30 = computeHandicapIndex(diffsFor30);
-  const trend = handicapIndex != null && hcp30 != null ? handicapIndex - hcp30 : null;
+  // Last-5-rounds trend: compare current HI to HI computed without the last 5 rounds
+  const hcp5ago = diffsOnly.length > 5 ? computeHandicapIndex(diffsOnly.slice(0, -5)) : null;
+  const trend = handicapIndex != null && hcp5ago != null ? handicapIndex - hcp5ago : null;
 
   const stats5 = calcStats(roundsAsc.slice(-5));
   const stats20 = calcStats(roundsAsc.slice(-20));
@@ -391,32 +384,38 @@ export default function ClubhousePage() {
           {/* 2-row × 2-col grid: stacks to single column on mobile */}
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gridTemplateRows: "auto auto", columnGap: 16, rowGap: 10 }}>
 
-            {/* Row 1, Col 1: HI + trend */}
+            {/* Row 1, Col 1: HI + trend — 2-col inner grid aligned to sub-stats below */}
             <div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,.55)", fontWeight: 700, letterSpacing: 1.8, textTransform: "uppercase", marginBottom: 4 }}>
-                Handicap Index
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "center" }}>
+                <div style={{ textAlign: "center" }}>
+                  {handicapIndex !== null ? (
+                    <div style={{ fontFamily: "Georgia,serif", fontWeight: 500, fontSize: 56, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
+                      {handicapIndex.toFixed(1)}
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily: "Georgia,serif", fontSize: 20, color: "rgba(255,255,255,.5)", lineHeight: 1 }}>
+                      {diffsOnly.length < 3 ? `Need ${3 - diffsOnly.length} more` : "—"}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 8, color: "rgba(255,255,255,.35)", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginTop: 4 }}>
+                    Handicap Index
+                  </div>
+                </div>
+                {trend !== null ? (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontFamily: "Georgia,serif", fontSize: 22, fontWeight: 600, color: trend < 0 ? "#6de8b8" : "#f29450", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
+                      {trend < 0 ? `↓ ${Math.abs(trend).toFixed(1)}` : `↑ ${trend.toFixed(1)}`}
+                    </div>
+                    <div style={{ fontSize: 8, color: "rgba(255,255,255,.4)", marginTop: 4, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                      last 5 rounds
+                    </div>
+                  </div>
+                ) : <div />}
               </div>
-              {handicapIndex !== null ? (
-                <div style={{ fontFamily: "Georgia,serif", fontWeight: 500, fontSize: 60, color: "white", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
-                  {handicapIndex.toFixed(1)}
-                </div>
-              ) : (
-                <div style={{ fontFamily: "Georgia,serif", fontSize: 22, color: "rgba(255,255,255,.5)", lineHeight: 1 }}>
-                  {diffsOnly.length < 3 ? `Need ${3 - diffsOnly.length} more` : "—"}
-                </div>
-              )}
-              {trend !== null && (
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,.65)", marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ color: trend < 0 ? "#6de8b8" : "#f29450", fontWeight: 700 }}>
-                    {trend < 0 ? `↓ ${Math.abs(trend).toFixed(1)}` : `↑ ${trend.toFixed(1)}`}
-                  </span>
-                  <span>30 days</span>
-                </div>
-              )}
             </div>
 
-            {/* Row 1, Col 2: sparkline — fills column width to align with chip grid below */}
-            <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+            {/* Row 1, Col 2: sparkline — width:100% so it fills column same as chip grid below */}
+            <div style={{ width: "100%" }}>
               <Sparkline data={sparklineData} w={200} h={55} stroke="#6de8b8" fill="rgba(109,232,184,.12)" />
               <div style={{ fontSize: 9, color: "rgba(255,255,255,.35)", marginTop: 3, letterSpacing: 0.3 }}>
                 last {sparklineData.length} rounds

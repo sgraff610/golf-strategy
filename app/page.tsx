@@ -349,15 +349,9 @@ export default function Home() {
   // ── Derived values ──────────────────────────────────────────────────────────
   const hi=computeHI(diffs);
 
-  // 30-day trend: same logic as clubhouse — compare current HI to HI computed from
-  // rounds played more than 30 days ago (not prev-20-rounds window)
-  const thirtyAgoCutoff = (() => {
-    const d = new Date(); d.setDate(d.getDate()-30);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  })();
-  const diffsFor30 = diffs.filter((_,i) => diffDates[i] && diffDates[i] < thirtyAgoCutoff);
-  const hcp30 = computeHI(diffsFor30);
-  const trend30 = hi !== null && hcp30 !== null ? hi - hcp30 : null;
+  // Last-5-rounds trend: compare current HI to HI computed without the last 5 rounds
+  const hcp5ago = diffs.length > 5 ? computeHI(diffs.slice(0, -5)) : null;
+  const trend30 = hi !== null && hcp5ago !== null ? hi - hcp5ago : null;
 
   // Sparkline: last 20 round differentials (not negated, lower = better)
   const sparkData = diffs.slice(-20);
