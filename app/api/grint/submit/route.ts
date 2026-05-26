@@ -66,20 +66,33 @@ export default async function({ page, context }) {
     await waitMs(1500);
   }
 
-  // 3. Date
+  // 3. Date — set all three in one evaluate to avoid context loss between calls
   const [yyyy, mm, dd] = date.split("-");
-  await selectOpt('select[name="year"]', yyyy);
-  await selectOpt('select[name="month"]', mm);
-  await selectOpt('select[name="date"]', dd);
+  await page.evaluate((y, m, d) => {
+    function setSelect(name, val) {
+      const el = document.querySelector('select[name="' + name + '"]');
+      if (!el) return;
+      el.value = val;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    setSelect("year", y);
+    setSelect("month", m);
+    setSelect("date", d);
+  }, yyyy, mm, dd);
+  // Wait for any AJAX/navigation triggered by date changes
+  await Promise.race([
+    page.waitForNavigation({ waitUntil: "networkidle2", timeout: 5000 }),
+    waitMs(3000),
+  ]).catch(() => {});
 
-  // 4. Course
+  // 4. Course — wait for field to be ready after any navigation
+  await page.waitForSelector("#ucourse", { visible: true, timeout: 10000 }).catch(() => {});
   await page.click("#ucourse");
   await waitMs(400);
   await page.$eval("#ucourse", (el, name) => {
     el.value = name;
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
-    el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
   }, courseName);
   await waitMs(300);
   try {
