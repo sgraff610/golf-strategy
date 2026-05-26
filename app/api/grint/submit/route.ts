@@ -40,9 +40,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Missing credentials" }, { status: 400 });
 
   if (!process.env.BROWSERLESS_TOKEN) {
+    const keys = Object.keys(process.env).filter(k => k.includes("BROWSER")).join(", ") || "none";
     return NextResponse.json({
       ok: false,
-      error: "Auto-submit is not configured. Set BROWSERLESS_TOKEN in your Vercel environment variables. Get a free token at browserless.io — then auto-submit will work. Until then, use CSV download.",
+      error: `Auto-submit is not configured — BROWSERLESS_TOKEN is not set (browser-related env vars found: ${keys}). Set it in Vercel → Settings → Environment Variables, then redeploy.`,
     }, { status: 503 });
   }
 
