@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useIsMobile } from "@/app/hooks/useIsMobile";
 
 type Hole = {
   hole: number; par: number; yards: number; stroke_index: number;
@@ -49,6 +50,7 @@ function GrintContent() {
   const params = useSearchParams();
   const roundId = params.get("roundId");
   const router = useRouter();
+  const isMobile = useIsMobile(768);
 
   const [round, setRound] = useState<Round | null>(null);
   const [course, setCourse] = useState<CourseInfo | null>(null);
@@ -248,11 +250,11 @@ function GrintContent() {
   }
 
   return (
-    <main style={{ maxWidth: 960, margin: "32px auto", padding: "0 20px" }}>
+    <main style={{ maxWidth: 960, margin: isMobile ? "16px auto" : "32px auto", padding: isMobile ? "0 12px" : "0 20px" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <div style={{ fontFamily: "Georgia,serif", fontSize: 22, fontWeight: 700, color: "var(--ink)" }}>
+          <div style={{ fontFamily: "Georgia,serif", fontSize: isMobile ? 18 : 22, fontWeight: 700, color: "var(--ink)" }}>
             TheGrint Export
           </div>
           <div style={{ fontSize: 13, color: "var(--ink-mute)", marginTop: 2 }}>
@@ -380,7 +382,7 @@ function GrintContent() {
       </div>
 
       {/* ── Actions ─────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20 }}>
 
         {/* CSV Download */}
         <div style={{ background: "var(--paper-alt)", border: "1px solid var(--line)", borderRadius: "var(--r-card)", padding: "20px 24px" }}>

@@ -341,6 +341,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
         {showCalc && <p style={{fontSize:11,color:"#0f6e56",margin:"6px 0 0",fontStyle:"italic"}}>Est Rem = estimated approach yardage · Water/Trees/Bkr = % confidence hazard was implicated</p>}
       </div>
       <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+        <a href={`/rounds/grint?roundId=${roundId}`} style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"#f29450",color:"white",border:"1px solid #f29450",borderRadius:8,textDecoration:"none"}}>Submit to TheGrint →</a>
         <a href={`/rounds/${roundId}/edit`} style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"#0f6e56",color:"white",border:"1px solid #0f6e56",borderRadius:8,textDecoration:"none"}}>Edit this round</a>
         <a href="/rounds" style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"white",color:"#1a1a1a",border:"1px solid #1a1a1a",borderRadius:8,textDecoration:"none"}}>All rounds</a>
         <a href="/" style={{padding:"10px 20px",fontSize:14,fontWeight:600,background:"white",color:"#0f6e56",border:"1px solid #0f6e56",borderRadius:8,textDecoration:"none"}}>Strategy</a>

@@ -695,7 +695,7 @@ export default function ClubhousePage() {
                       </div>
 
                       {/* Action chips */}
-                      <div style={{ marginTop: 10, display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <div style={{ marginTop: 10, display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                         <a href={`/rounds/recap?roundId=${round.id}`} style={{
                           fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 99, textDecoration: "none",
                           background: round.recap ? "var(--green-soft)" : "var(--paper-alt)",
@@ -709,6 +709,12 @@ export default function ClubhousePage() {
                           background: "var(--paper-alt)", color: "var(--muted-2)", border: "1px solid var(--line)",
                         }}>
                           Insights
+                        </a>
+                        <a href={`/rounds/grint?roundId=${round.id}`} style={{
+                          fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 99, textDecoration: "none",
+                          background: "var(--accent-soft)", color: "var(--accent)", border: "1px solid var(--accent)",
+                        }}>
+                          Submit to TheGrint →
                         </a>
                       </div>
                     </div>
