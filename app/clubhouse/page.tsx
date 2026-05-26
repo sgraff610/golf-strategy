@@ -403,7 +403,7 @@ export default function ClubhousePage() {
                 </div>
                 {trend !== null ? (
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontFamily: "Georgia,serif", fontSize: 22, fontWeight: 600, color: trend < 0 ? "#6de8b8" : "#f29450", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
+                    <div style={{ fontFamily: "Georgia,serif", fontSize: 40, fontWeight: 500, color: trend < 0 ? "#6de8b8" : "#f29450", lineHeight: 1, fontFeatureSettings: '"tnum" 1' }}>
                       {trend < 0 ? `↓ ${Math.abs(trend).toFixed(1)}` : `↑ ${trend.toFixed(1)}`}
                     </div>
                     <div style={{ fontSize: 8, color: "rgba(255,255,255,.4)", marginTop: 4, fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase" }}>
