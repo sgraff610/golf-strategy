@@ -85,7 +85,7 @@ function calcStats(slice: Round[]) {
   // Only count chip+GS bunker from 2026+ rounds (not tracked before then)
   const chipGsRounds = slice.filter(r => r.date >= "2026-01-01");
   const chipGsScoredHoles = chipGsRounds.flatMap(r => r.holes.filter((h: any) => h.score && Number(h.score) > 0));
-  const doubleChipGsHoles = chipGsScoredHoles.filter((h: any) => Number(h.chips) >= 2 || Number(h.greenside_bunker) > 0);
+  const gsExtraShots = chipGsScoredHoles.reduce((s: number, h: any) => s + Math.max(0, (Number(h.chips) || 0) + (Number(h.greenside_bunker) || 0) - 1), 0);
   return {
     avgScoreToPar: roundScoresPar.length ? roundScoresPar.reduce((s, v) => s + v, 0) / roundScoresPar.length : 0,
     avgPuttsPer18: totalHoles > 0 ? (scoredHoles.reduce((s, h: any) => s + (Number(h.putts) || 0), 0) / totalHoles) * 18 : null,
@@ -93,7 +93,7 @@ function calcStats(slice: Round[]) {
     girPct: totalHoles > 0 ? scoredHoles.filter((h: any) => h.gir).length / totalHoles : null,
     avgPuttAfterChip: chipHoles.length > 0 ? chipHoles.reduce((s, h: any) => s + PUTT_DIST_MAP[h.first_putt_distance], 0) / chipHoles.length : null,
     threePuttPer18: totalHoles > 0 ? (threePuttHoles.length / totalHoles) * 18 : null,
-    doubleChipGsBkrPer18: chipGsScoredHoles.length > 0 ? (doubleChipGsHoles.length / chipGsScoredHoles.length) * 18 : null,
+    gsExtraShotsPer18: chipGsScoredHoles.length > 0 ? (gsExtraShots / chipGsScoredHoles.length) * 18 : null,
   };
 }
 
@@ -115,7 +115,7 @@ function fairwaysHit(holes: any[]) { return holes.filter(h => (h.par === 4 || h.
 function drivingTotal(holes: any[]) { return holes.filter(h => h.par === 4 || h.par === 5).length; }
 function girsHit(holes: any[]) { return holes.filter(h => h.gir).length; }
 function threePuttCount(holes: any[]) { return holes.filter(h => Number(h.putts) >= 3).length; }
-function doubleChipOrGsBkrCount(holes: any[]) { return holes.filter(h => Number(h.chips) >= 2 || Number(h.greenside_bunker) > 0).length; }
+function gsExtraShotCount(holes: any[]) { return holes.reduce((s, h) => s + Math.max(0, (Number(h.chips) || 0) + (Number(h.greenside_bunker) || 0) - 1), 0); }
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
@@ -515,7 +515,7 @@ export default function ClubhousePage() {
             { label: "GIR",         v: [stats5, stats20, statsAll].map(s => fmtPct(s?.girPct)) },
             { label: "1st putt",        v: [stats5, stats20, statsAll].map(s => fmtFt(s?.avgPuttAfterChip)) },
             { label: "3-Putts / 18",    v: [stats5, stats20, statsAll].map(s => fmtSge(s?.threePuttPer18)) },
-            { label: "Double Chip+GS Bunker/18", v: [stats5, stats20, statsAll].map(s => fmtSge(s?.doubleChipGsBkrPer18)) },
+            { label: "GS Extra Shots/18", v: [stats5, stats20, statsAll].map(s => fmtSge(s?.gsExtraShotsPer18)) },
           ].map((row) => (
             <div key={row.label} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", padding: "9px 16px", borderTop: "1px solid var(--line-soft)", fontSize: 13, alignItems: "center" }}>
               <span style={{ color: "var(--ink)", fontWeight: 500 }}>{row.label}</span>
@@ -652,7 +652,7 @@ export default function ClubhousePage() {
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 4 }}>
                           {[
                             { label: "3-Putt", val: threePuttCount(round.holes) || "—" },
-                            { label: "Chip/GS Bkr", val: doubleChipOrGsBkrCount(round.holes) || "—" },
+                            { label: "GS Extra Shots", val: round.date >= "2026-01-01" ? (gsExtraShotCount(round.holes) || "—") : "—" },
                           ].map(({ label, val }) => (
                             <div key={label} style={{ background: "var(--paper-alt)", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
                               <div style={{ fontSize: 8.5, color: "var(--muted-2)", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
