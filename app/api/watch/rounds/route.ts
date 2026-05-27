@@ -36,6 +36,9 @@ export async function GET(_req: NextRequest) {
         stroke_index: h.stroke_index,
         score: h.score !== "" && h.score !== null && h.score !== undefined ? Number(h.score) : null,
         putts: h.putts !== "" && h.putts !== null && h.putts !== undefined ? Number(h.putts) : null,
+        scoring_opp: typeof h.scoring_opp === "number" ? h.scoring_opp : null,
+        diff_max: typeof h.diff_max === "number" ? h.diff_max : null,
+        opportunity: h.opportunity ?? null,
       })),
     };
   });
