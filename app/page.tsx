@@ -236,7 +236,6 @@ export default function Home() {
           ci("Approach left",   allHoles.filter((h:any)=>h.appr_accuracy==="Left")),
           ci("Approach right",  allHoles.filter((h:any)=>h.appr_accuracy==="Right")),
           ci("GIR",             allHoles.filter((h:any)=>h.gir)),
-          ci("Miss green",      allHoles.filter((h:any)=>!h.gir)),
           ci("1-putt",          allHoles.filter((h:any)=>Number(h.putts)===1)),
           ci("3+ putt",         allHoles.filter((h:any)=>Number(h.putts)>=3)),
           ci("Par 3",           allHoles.filter((h:any)=>h.par===3)),
