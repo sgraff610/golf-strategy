@@ -218,23 +218,28 @@ export default function Home() {
       if (allHoles.length>10) {
         const totalHoles=allHoles.length;
         const baseline=allHoles.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/totalHoles;
-        const ci=(label:string,holes:any[])=>{
-          if(holes.length<5) return null;
+        // For approach/drive direction categories, compute baseline only from holes where that stat is tracked
+        const apprTracked=allHoles.filter((h:any)=>h.appr_accuracy&&h.appr_accuracy!=="");
+        const driveTracked=allHoles.filter((h:any)=>h.tee_accuracy&&h.tee_accuracy!=="");
+        const apprBaseline=apprTracked.length>0?apprTracked.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/apprTracked.length:baseline;
+        const driveBaseline=driveTracked.length>0?driveTracked.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/driveTracked.length:baseline;
+        const ci=(label:string,holes:any[],b=baseline)=>{
+          if(holes.length<3) return null;
           const avg=holes.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/holes.length;
-          const impact=avg-baseline;
+          const impact=avg-b;
           const per18=((impact*holes.length)/totalHoles)*18;
           return {label,impact,per18,count:holes.length};
         };
         const candidates=[
-          ci("Drive hit",       allHoles.filter((h:any)=>h.tee_accuracy==="Hit")),
-          ci("Drive left",      allHoles.filter((h:any)=>h.tee_accuracy==="Left")),
-          ci("Drive right",     allHoles.filter((h:any)=>h.tee_accuracy==="Right")),
-          ci("Drive short",     allHoles.filter((h:any)=>h.tee_accuracy==="Short")),
-          ci("Approach hit",    allHoles.filter((h:any)=>h.appr_accuracy==="Hit")),
-          ci("Approach short",  allHoles.filter((h:any)=>h.appr_accuracy==="Short")),
-          ci("Approach long",   allHoles.filter((h:any)=>h.appr_accuracy==="Long")),
-          ci("Approach left",   allHoles.filter((h:any)=>h.appr_accuracy==="Left")),
-          ci("Approach right",  allHoles.filter((h:any)=>h.appr_accuracy==="Right")),
+          ci("Drive hit",       driveTracked.filter((h:any)=>h.tee_accuracy==="Hit"),   driveBaseline),
+          ci("Drive left",      driveTracked.filter((h:any)=>h.tee_accuracy==="Left"),  driveBaseline),
+          ci("Drive right",     driveTracked.filter((h:any)=>h.tee_accuracy==="Right"), driveBaseline),
+          ci("Drive short",     driveTracked.filter((h:any)=>h.tee_accuracy==="Short"), driveBaseline),
+          ci("Approach hit",    apprTracked.filter((h:any)=>h.appr_accuracy==="Hit"),   apprBaseline),
+          ci("Approach short",  apprTracked.filter((h:any)=>h.appr_accuracy==="Short"), apprBaseline),
+          ci("Approach long",   apprTracked.filter((h:any)=>h.appr_accuracy==="Long"),  apprBaseline),
+          ci("Approach left",   apprTracked.filter((h:any)=>h.appr_accuracy==="Left"),  apprBaseline),
+          ci("Approach right",  apprTracked.filter((h:any)=>h.appr_accuracy==="Right"), apprBaseline),
           ci("GIR",             allHoles.filter((h:any)=>h.gir)),
           ci("1-putt",          allHoles.filter((h:any)=>Number(h.putts)===1)),
           ci("3+ putt",         allHoles.filter((h:any)=>Number(h.putts)>=3)),
