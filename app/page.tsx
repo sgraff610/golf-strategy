@@ -216,11 +216,14 @@ export default function Home() {
       let leakDataVal: Array<{x:string;v:number;hi?:boolean}> = [];
       const allHoles:any[]=rounds.flatMap((r:any)=>(r.holes??[]).filter((h:any)=>Number(h.score)>0));
       if (allHoles.length>10) {
-        const baseline=allHoles.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/allHoles.length;
+        const totalHoles=allHoles.length;
+        const baseline=allHoles.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/totalHoles;
         const ci=(label:string,holes:any[])=>{
           if(holes.length<5) return null;
           const avg=holes.reduce((s:number,h:any)=>s+(Number(h.score)-h.par),0)/holes.length;
-          return {label,impact:avg-baseline,count:holes.length};
+          const impact=avg-baseline;
+          const per18=((impact*holes.length)/totalHoles)*18;
+          return {label,impact,per18,count:holes.length};
         };
         const candidates=[
           ci("Drive hit",       allHoles.filter((h:any)=>h.tee_accuracy==="Hit")),
@@ -239,11 +242,11 @@ export default function Home() {
           ci("Par 3",           allHoles.filter((h:any)=>h.par===3)),
           ci("Par 5",           allHoles.filter((h:any)=>h.par===5)),
           ci("GS bunker",       allHoles.filter((h:any)=>Number(h.greenside_bunker)>0)),
-        ].filter((c):c is {label:string;impact:number;count:number}=>c!==null);
-        const leaks=candidates.filter(c=>c.impact>0).sort((a,b)=>b.impact-a.impact);
+        ].filter((c):c is {label:string;impact:number;per18:number;count:number}=>c!==null);
+        const leaks=candidates.filter(c=>c.per18>0).sort((a,b)=>b.per18-a.per18);
         if(leaks.length>=1){
-          leakTitleVal=leaks[0].label; leakImpactVal=leaks[0].impact; leakCountVal=leaks[0].count;
-          leakDataVal=leaks.slice(0,4).map((l,i)=>({x:l.label,v:l.impact,hi:i===0}));
+          leakTitleVal=leaks[0].label; leakImpactVal=leaks[0].per18; leakCountVal=leaks[0].count;
+          leakDataVal=leaks.slice(0,4).map((l,i)=>({x:l.label,v:l.per18,hi:i===0}));
           setLeakTitle(leakTitleVal); setLeakImpact(leakImpactVal);
           setLeakCount(leakCountVal); setLeakData(leakDataVal);
         }
@@ -669,7 +672,7 @@ export default function Home() {
                     <div style={{...B.leakBigNum, fontSize:isMobile?40:56, fontVariantNumeric:"tabular-nums"}}>
                       {leakImpact>0?`+${leakImpact.toFixed(2)}`:"—"}
                     </div>
-                    <div style={B.leakBigSub}>strokes/round · {leakCount} holes</div>
+                    <div style={B.leakBigSub}>strokes / 18 holes · {leakCount} occurrences</div>
                   </div>
                   {leakImpact>0&&<div style={B.leakBadge}>RANK 1</div>}
                 </div>
