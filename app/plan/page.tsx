@@ -911,7 +911,7 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
       <div>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 500, fontSize: 56, lineHeight: 1.02, margin: "0 0 16px", color: "var(--ink)" }}>
           Let&apos;s build <em style={{ fontStyle: "italic", color: "var(--green-deep)" }}>your</em> strategy
-          <br />for today&apos;s round.
+          <br />for the next round.
         </h1>
         <p style={{ fontSize: 17, lineHeight: 1.5, color: "var(--ink-soft)", maxWidth: 520, margin: "0 0 28px" }}>
           Pick your course, answer a few questions, and we&apos;ll hand you an 18-hole plan.

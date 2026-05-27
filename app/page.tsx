@@ -551,44 +551,49 @@ export default function Home() {
             <div style={{ display:"grid", gridTemplateColumns:mainCols, gap:14, marginBottom:26 }}>
 
               {/* 01 NEXT TEE */}
-              <a href="/courses" style={{...B.card, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
+              <a href={nextRound ? "/courses" : "/plan"} style={{...B.card, textDecoration:"none", color:"inherit", cursor:"pointer"}}>
                 <div style={B.cardHead}>
                   <span style={B.cardLabel}>01 · NEXT TEE</span>
                   <span style={B.cardArrow}>↗</span>
                 </div>
-                <div style={B.cardTitle}>{nrCourseName}</div>
-                <div style={B.cardMetaRow}>
-                  {nextRound ? (
-                    <>
+                {nextRound ? (
+                  <>
+                    <div style={B.cardTitle}>{nrCourseName}</div>
+                    <div style={B.cardMetaRow}>
                       <span style={B.cardMetaStrong}>{nrDate}</span>
                       {nrTeeBox&&<><span style={B.cardMetaDot}>·</span><span>{nrTeeBox} tees</span></>}
                       {wxCity&&<><span style={B.cardMetaDot}>·</span><span style={{color:"var(--muted)"}}>{wxCity}</span></>}
-                    </>
-                  ) : (
-                    <span style={B.cardMetaStrong}>No upcoming round planned</span>
-                  )}
-                </div>
-                <div style={{ display:"flex", gap:6, marginTop:16 }}>
-                  {wxForecast.length>0 ? wxForecast.map(d=>(
-                    <div key={d.day} style={{...B.wxCell, background:d.isTee?"var(--accent)":"var(--bg)", borderColor:d.isTee?"var(--accent-deep)":"var(--line)"}}>
-                      <div style={B.wxDay}>{d.day}</div>
-                      <div style={B.wxIcon}><WxIcon kind={d.icon} size={isMobile?16:20}/></div>
-                      <div style={{...B.wxTemp, fontVariantNumeric:"tabular-nums"}}>{d.hi}°</div>
                     </div>
-                  )) : (
-                    <div style={{color:"var(--muted)",fontSize:11,fontStyle:"italic",paddingTop:4}}>
-                      {nextRoundCourse?.city ? "Loading forecast…" : "Add city to course for weather"}
+                    <div style={{ display:"flex", gap:6, marginTop:16 }}>
+                      {wxForecast.length>0 ? wxForecast.map(d=>(
+                        <div key={d.day} style={{...B.wxCell, background:d.isTee?"var(--accent)":"var(--bg)", borderColor:d.isTee?"var(--accent-deep)":"var(--line)"}}>
+                          <div style={B.wxDay}>{d.day}</div>
+                          <div style={B.wxIcon}><WxIcon kind={d.icon} size={isMobile?16:20}/></div>
+                          <div style={{...B.wxTemp, fontVariantNumeric:"tabular-nums"}}>{d.hi}°</div>
+                        </div>
+                      )) : (
+                        <div style={{color:"var(--muted)",fontSize:11,fontStyle:"italic",paddingTop:4}}>
+                          {nextRoundCourse?.city ? "Loading forecast…" : "Add city to course for weather"}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div style={B.cardFoot}>
-                  {nrGoal&&<span style={B.cardFootK}>Goal · <strong style={{color:"var(--ink)"}}>{nrGoal}</strong></span>}
-                  {nrRating&&nrSlope ? (
-                    <span style={B.cardFootK}>Rating <strong style={{color:"var(--ink)"}}>{nrRating}</strong> / Slope <strong style={{color:"var(--ink)"}}>{nrSlope}</strong></span>
-                  ) : (
-                    <span style={B.cardFootK}>{nextRound?"Open plan →":"Start a plan →"}</span>
-                  )}
-                </div>
+                    <div style={B.cardFoot}>
+                      {nrGoal&&<span style={B.cardFootK}>Goal · <strong style={{color:"var(--ink)"}}>{nrGoal}</strong></span>}
+                      {nrRating&&nrSlope ? (
+                        <span style={B.cardFootK}>Rating <strong style={{color:"var(--ink)"}}>{nrRating}</strong> / Slope <strong style={{color:"var(--ink)"}}>{nrSlope}</strong></span>
+                      ) : (
+                        <span style={B.cardFootK}>Open plan →</span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center" }}>
+                    <div style={{ fontFamily:"var(--font-display)", fontWeight:600, fontStyle:"italic", fontSize:isMobile?28:36, lineHeight:1.1, letterSpacing:-0.5, color:"var(--ink)" }}>
+                      Let&apos;s build your strategy for the upcoming round.
+                    </div>
+                    <div style={{ marginTop:16, fontSize:12, color:"var(--ink-mute)", fontWeight:600, letterSpacing:0.5 }}>Build plan →</div>
+                  </div>
+                )}
               </a>
 
               {/* 02 PRE-ROUND PLAN */}
