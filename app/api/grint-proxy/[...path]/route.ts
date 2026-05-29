@@ -121,17 +121,33 @@ const INJECTED = `<script>
       if(data.holes){
         for(var i=0;i<data.holes.length;i++){
           var h=data.holes[i];
-          if(h.score)setVal('input[name="scH'+h.hole+'"]',h.score);
+          if(h.score){
+            var scEl=document.querySelector('input[name="scH'+h.hole+'"]');
+            if(scEl){
+              scEl.value=String(h.score);
+              scEl.dispatchEvent(new Event('input',{bubbles:true}));
+              scEl.dispatchEvent(new Event('change',{bubbles:true}));
+              /* blur is what triggers TheGrint's per-hole conversion to radio inputs */
+              scEl.dispatchEvent(new Event('blur',{bubbles:true}));
+            }
+          }
           if(h.putts)setVal('input[name="ptH'+h.hole+'"]',h.putts);
           if(h.penalties)setVal('input[name="pH'+h.hole+'"]',h.penalties);
           var ta=taMap[h.tee_accuracy];
           if(ta){
-            /* Step 1: set the select — TheGrint converts it to radio inputs */
-            setVal('select[name="drH'+h.hole+'"]',ta);
-            /* Step 2: wait for conversion, then click the radio */
-            await wait(120);
-            var radio=document.querySelector('input[name="drH'+h.hole+'"][value="'+ta+'"]');
-            if(radio)(radio as HTMLElement).click();
+            /* poll until the radio button appears (up to ~1.5s) */
+            var radio=null;
+            for(var t=0;t<10;t++){
+              await wait(150);
+              radio=document.querySelector('input[name="drH'+h.hole+'"][value="'+ta+'"]');
+              if(radio)break;
+            }
+            if(radio){
+              (radio as HTMLElement).click();
+            }else{
+              /* fallback: try the select if radio never appeared */
+              setVal('select[name="drH'+h.hole+'"]',ta);
+            }
           }
         }
       }
