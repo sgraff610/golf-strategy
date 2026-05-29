@@ -42,7 +42,10 @@ export async function POST(_req: NextRequest) {
       return updated;
     });
 
-    const courseReport = {
+    const courseReport: {
+      id: any; name: any; tee_box: any; changed: boolean;
+      holes: any[]; error?: string;
+    } = {
       id: course.id,
       name: course.name,
       tee_box: course.tee_box,

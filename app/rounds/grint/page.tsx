@@ -191,55 +191,6 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
     URL.revokeObjectURL(url);
   }
 
-  async function callGrintApi(preview: boolean) {
-    if (!round || !email || !password) return;
-    const res = await fetch("/api/grint/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email, password,
-        date: round.date,
-        courseName: round.course_name,
-        tee: course?.tee_box || "",
-        holes: holesData,
-        practiceRound,
-        preview,
-      }),
-    });
-    return res.json();
-  }
-
-  async function previewOnGrint() {
-    setPreviewing(true);
-    setPreviewScreenshot(null);
-    setPreviewError(null);
-    setSubmitResult(null);
-    try {
-      const json = await callGrintApi(true);
-      if (json?.screenshot) {
-        setPreviewScreenshot(json.screenshot);
-      } else {
-        setPreviewError(json?.error || "Preview failed — could not capture the form.");
-      }
-    } catch {
-      setPreviewError("Network error — could not reach the submit service.");
-    }
-    setPreviewing(false);
-  }
-
-  async function submitToGrint() {
-    setSubmitting(true);
-    setSubmitResult(null);
-    try {
-      const json = await callGrintApi(false);
-      setSubmitResult(json);
-      if (json?.ok) setPreviewScreenshot(null);
-    } catch {
-      setSubmitResult({ ok: false, error: "Network error — could not reach the submit service." });
-    }
-    setSubmitting(false);
-  }
-
   if (loading) return (
     <main style={{ maxWidth: 900, margin: "60px auto", padding: "0 24px" }}>
       <p style={{ color: "var(--ink-mute)" }}>Loading…</p>
