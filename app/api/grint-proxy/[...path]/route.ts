@@ -125,7 +125,14 @@ const INJECTED = `<script>
           if(h.putts)setVal('input[name="ptH'+h.hole+'"]',h.putts);
           if(h.penalties)setVal('input[name="pH'+h.hole+'"]',h.penalties);
           var ta=taMap[h.tee_accuracy];
-          if(ta)setVal('select[name="drH'+h.hole+'"]',ta);
+          if(ta){
+            /* Step 1: set the select — TheGrint converts it to radio inputs */
+            setVal('select[name="drH'+h.hole+'"]',ta);
+            /* Step 2: wait for conversion, then click the radio */
+            await wait(120);
+            var radio=document.querySelector('input[name="drH'+h.hole+'"][value="'+ta+'"]');
+            if(radio)(radio as HTMLElement).click();
+          }
         }
       }
 
