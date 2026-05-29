@@ -117,7 +117,7 @@ const INJECTED = `<script>
       }
 
       /* scores */
-      var taMap={Hit:'H',Left:'L',Right:'R',Short:'S',Long:'P'};
+      var taMap={Hit:'3',Left:'1',Right:'2',Short:'4',Long:'6'};
       if(data.holes){
         for(var i=0;i<data.holes.length;i++){
           var h=data.holes[i];
@@ -126,7 +126,7 @@ const INJECTED = `<script>
           if(h.penalties)setVal('input[name="pH'+h.hole+'"]',h.penalties);
           var ta=taMap[h.tee_accuracy];
           if(ta){
-            /* fH{n} is the hidden input that stores tee accuracy (H/L/R/S/P) */
+            /* fH{n} hidden input: 1=Left 2=Right 3=Hit 4=Short 6=Long */
             var fhEl=document.querySelector('input[name="fH'+h.hole+'"]');
             if(fhEl){fhEl.value=ta;fhEl.dispatchEvent(new Event('change',{bubbles:true}));}
           }
