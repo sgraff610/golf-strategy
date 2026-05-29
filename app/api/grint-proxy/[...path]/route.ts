@@ -117,7 +117,7 @@ const INJECTED = `<script>
       }
 
       /* scores */
-      var taMap={Hit:'3',Left:'1',Right:'2',Short:'4',Long:'6'};
+      var taMap={Hit:'H',Left:'L',Right:'R',Short:'S',Long:'P'};
       if(data.holes){
         for(var i=0;i<data.holes.length;i++){
           var h=data.holes[i];
@@ -126,9 +126,9 @@ const INJECTED = `<script>
           if(h.penalties)setVal('input[name="pH'+h.hole+'"]',h.penalties);
           var ta=taMap[h.tee_accuracy];
           if(ta){
-            /* fH{n} hidden input: 1=Left 2=Right 3=Hit 4=Short 6=Long */
             var fhEl=document.querySelector('input[name="fH'+h.hole+'"]');
-            if(fhEl){fhEl.value=ta;fhEl.dispatchEvent(new Event('change',{bubbles:true}));}
+            var txEl=fhEl&&fhEl.previousElementSibling;
+            if(txEl){['keydown','keypress','keyup'].forEach(function(n){txEl.dispatchEvent(new KeyboardEvent(n,{key:ta,charCode:ta.charCodeAt(0),keyCode:ta.charCodeAt(0),which:ta.charCodeAt(0),bubbles:true,cancelable:true}));});await wait(300);}
           }
         }
       }

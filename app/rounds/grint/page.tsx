@@ -112,7 +112,7 @@ function GrintContent() {
   function generateFillScript(): string {
     if (!round) return "";
     const [yyyy, mm, dd] = round.date.split("-");
-    const teeAccMap: Record<string, string> = { Hit: "3", Left: "1", Right: "2", Short: "4", Long: "6" };
+    const teeAccMap: Record<string, string> = { Hit: "H", Left: "L", Right: "R", Short: "S", Long: "P" };
     const is9 = holesData.length <= 9;
     const isBack = is9 && (holesData[0]?.hole ?? 1) > 9;
     const teeBox = (course?.tee_box || "").replace(/'/g, "\\'");
@@ -123,8 +123,16 @@ function GrintContent() {
       const lines: string[] = [`  setVal('input[name="scH${h.hole}"]','${h.score}');`];
       if (h.putts) lines.push(`  setVal('input[name="ptH${h.hole}"]','${h.putts}');`);
       if (h.penalties) lines.push(`  setVal('input[name="pH${h.hole}"]','${h.penalties}');`);
-      // fH{n} hidden input: 1=Left 2=Right 3=Hit 4=Short 6=Long
-      if (ta) lines.push(`  {var fh=document.querySelector('input[name="fH${h.hole}"]');if(fh){fh.value='${ta}';fh.dispatchEvent(new Event('change',{bubbles:true}));}}`);
+      if (ta) {
+        const code = ta.charCodeAt(0);
+        lines.push(
+          `  {var fh=document.querySelector('input[name="fH${h.hole}"]');` +
+          `var tx=fh&&fh.previousElementSibling;` +
+          `if(tx){['keydown','keypress','keyup'].forEach(function(n){` +
+          `tx.dispatchEvent(new KeyboardEvent(n,{key:'${ta}',charCode:${code},keyCode:${code},which:${code},bubbles:true,cancelable:true}));` +
+          `});await wait(300);}}`
+        );
+      }
       return lines.join("\n");
     }).join("\n");
 
