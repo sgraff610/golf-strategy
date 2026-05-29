@@ -435,7 +435,25 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
           {/* Step 1 */}
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-mute)", letterSpacing: 0.5, marginBottom: 6, textTransform: "uppercase" }}>Step 1 — Open TheGrint and log in</div>
           <button
-            onClick={() => { window.location.href = "/rounds/grint/add"; }}
+            onClick={() => {
+              if (!round) return;
+              const fillData = {
+                date: round.date,
+                courseName: round.course_name,
+                tee: course?.tee_box || "",
+                practiceRound,
+                holes: holesData.map(h => ({
+                  hole: h.hole,
+                  score: h.score,
+                  ags: h.ags,
+                  putts: h.putts,
+                  penalties: h.penalties,
+                  tee_accuracy: h.tee_accuracy,
+                })),
+              };
+              const encoded = btoa(encodeURIComponent(JSON.stringify(fillData)));
+              window.location.href = `/rounds/grint/add#gl=${encoded}`;
+            }}
             style={{
               display: "block", width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
               background: "var(--green)", color: "#fff", fontSize: 14, fontWeight: 600,

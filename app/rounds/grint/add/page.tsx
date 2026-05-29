@@ -1,8 +1,18 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function GrintAddScore() {
   const router = useRouter();
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Hash carries encoded round data (#gl=<base64>); pass it straight to the proxy iframe.
+    // The injected proxy script reads it, saves to sessionStorage, and fills the form.
+    const hash = window.location.hash || "";
+    setSrc("/api/grint-proxy/score/add_full_score/" + hash);
+  }, []);
+
   return (
     <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column" }}>
       <div style={{
@@ -17,11 +27,10 @@ export default function GrintAddScore() {
         </button>
         <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.9 }}>TheGrint — Add Score</span>
       </div>
-      <iframe
-        src="https://thegrint.com/score/add_full_score/"
-        style={{ flex: 1, border: "none", width: "100%" }}
-        title="TheGrint Add Score"
-      />
+      {src
+        ? <iframe src={src} style={{ flex: 1, border: "none", width: "100%" }} title="TheGrint Add Score" />
+        : <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#888" }}>Loading…</div>
+      }
     </div>
   );
 }
