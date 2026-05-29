@@ -57,31 +57,8 @@ function GrintContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Credentials stored in localStorage
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [credsSaved, setCredsSaved] = useState(false);
-
-  // Submit state
   const [practiceRound, setPracticeRound] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [previewScreenshot, setPreviewScreenshot] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string } | null>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("gl-grint-creds");
-    if (saved) {
-      try {
-        const { email: e, password: p } = JSON.parse(saved);
-        setEmail(e || "");
-        setPassword(p || "");
-        setCredsSaved(true);
-      } catch {}
-    }
-  }, []);
+  const [scriptCopied, setScriptCopied] = useState(false);
 
   useEffect(() => {
     if (!roundId) { setLoading(false); return; }
@@ -132,17 +109,55 @@ function GrintContent() {
   const puttsBack = back.reduce((s, h) => s + h.putts, 0);
   const puttsTotal = puttsFront + puttsBack;
 
-  function saveCredentials() {
-    if (!email || !password) return;
-    localStorage.setItem("gl-grint-creds", JSON.stringify({ email, password }));
-    setCredsSaved(true);
+  function generateFillScript(): string {
+    if (!round) return "";
+    const [yyyy, mm, dd] = round.date.split("-");
+    const teeAccMap: Record<string, string> = { Hit: "H", Left: "L", Right: "R", Short: "S", Long: "P" };
+    const is9 = holesData.length <= 9;
+    const isBack = is9 && (holesData[0]?.hole ?? 1) > 9;
+    const teeBox = (course?.tee_box || "").replace(/'/g, "\\'");
+    const courseName = round.course_name.replace(/'/g, "\\'");
+
+    const holeLines = holesData.map(h => {
+      const ta = teeAccMap[h.tee_accuracy] ?? "";
+      const lines: string[] = [`  setVal('input[name="scH${h.hole}"]','${h.score}');`];
+      if (h.putts) lines.push(`  setVal('input[name="ptH${h.hole}"]','${h.putts}');`);
+      if (h.penalties) lines.push(`  setVal('input[name="pH${h.hole}"]','${h.penalties}');`);
+      if (ta) lines.push(`  selOpt('select[name="drH${h.hole}"]','${ta}');`);
+      return lines.join("\n");
+    }).join("\n");
+
+    return `(async()=>{
+  function setVal(s,v){const e=document.querySelector(s);if(!e)return;e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));}
+  function selOpt(s,v){try{setVal(s,v);}catch(e){}}
+  function wait(ms){return new Promise(r=>setTimeout(r,ms));}
+
+  setVal('select[name="year"]','${yyyy}');
+  setVal('select[name="month"]','${mm}');
+  setVal('select[name="date"]','${dd}');
+  await wait(300);
+
+  const ci=document.querySelector('#ucourse');
+  if(ci){ci.value='${courseName}';ci.dispatchEvent(new Event('input',{bubbles:true}));ci.dispatchEvent(new Event('change',{bubbles:true}));await wait(1200);const sg=document.querySelector('.suggestion');if(sg){sg.click();await wait(1500);}}
+
+  const teeOpts=Array.from(document.querySelectorAll('select[name="tees"] option')).filter(o=>o.value);
+  const teeMatch=teeOpts.find(o=>o.text.toLowerCase().includes('${teeBox.toLowerCase()}'))||teeOpts[0];
+  if(teeMatch)selOpt('select[name="tees"]',teeMatch.value);
+  await wait(400);
+
+${is9 ? `  selOpt('select[name="round"]','${isBack ? "B9" : "F9"}');await wait(800);` : ""}
+${holeLines}
+${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!pr.checked)pr.click();` : ""}
+  alert('Form filled — review everything above and click Submit.');
+})();`;
   }
 
-  function clearCredentials() {
-    localStorage.removeItem("gl-grint-creds");
-    setEmail("");
-    setPassword("");
-    setCredsSaved(false);
+  function copyScript() {
+    const script = generateFillScript();
+    navigator.clipboard.writeText(script).then(() => {
+      setScriptCopied(true);
+      setTimeout(() => setScriptCopied(false), 2500);
+    });
   }
 
   function downloadCSV() {
@@ -430,69 +445,14 @@ function GrintContent() {
           </button>
         </div>
 
-        {/* Auto-submit */}
+        {/* Submit to TheGrint */}
         <div style={{ background: "var(--paper-alt)", border: "1px solid var(--line)", borderRadius: "var(--r-card)", padding: "20px 24px" }}>
           <div style={{ fontFamily: "Georgia,serif", fontWeight: 700, fontSize: 16, color: "var(--ink)", marginBottom: 6 }}>
-            Auto-submit to TheGrint
+            Submit to TheGrint
           </div>
-          <p style={{ fontSize: 13, color: "var(--ink-mute)", marginBottom: 12 }}>
-            Greenlight logs in and fills the hole-by-hole form for you.
+          <p style={{ fontSize: 13, color: "var(--ink-mute)", marginBottom: 16, lineHeight: 1.5 }}>
+            Open TheGrint, log in, then paste the fill script in the browser console. The form fills automatically — review it and click Submit yourself.
           </p>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-            <input
-              type="email"
-              placeholder="TheGrint email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              style={{
-                padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)",
-                background: "var(--paper)", color: "var(--ink)", fontSize: 13,
-              }}
-            />
-            <div style={{ position: "relative" }}>
-              <input
-                type={showPass ? "text" : "password"}
-                placeholder="TheGrint password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                style={{
-                  width: "100%", padding: "9px 36px 9px 12px", borderRadius: 8,
-                  border: "1px solid var(--line)", background: "var(--paper)",
-                  color: "var(--ink)", fontSize: 13, boxSizing: "border-box",
-                }}
-              />
-              <button
-                onClick={() => setShowPass(!showPass)}
-                style={{
-                  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-                  background: "none", border: "none", cursor: "pointer",
-                  fontSize: 11, color: "var(--ink-mute)",
-                }}
-              >{showPass ? "Hide" : "Show"}</button>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={saveCredentials}
-                disabled={!email || !password}
-                style={{
-                  flex: 1, padding: "7px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                  border: "1px solid var(--line)", background: credsSaved ? "var(--accent)" : "transparent",
-                  color: credsSaved ? "var(--ink)" : "var(--ink-soft)", cursor: "pointer",
-                }}
-              >{credsSaved ? "✓ Saved" : "Save credentials"}</button>
-              {credsSaved && (
-                <button
-                  onClick={clearCredentials}
-                  style={{
-                    padding: "7px 10px", borderRadius: 8, fontSize: 12,
-                    border: "1px solid var(--line)", background: "transparent",
-                    color: "var(--ink-mute)", cursor: "pointer",
-                  }}
-                >Clear</button>
-              )}
-            </div>
-          </div>
 
           {/* Practice round toggle */}
           <label style={{
@@ -500,7 +460,7 @@ function GrintContent() {
             padding: "10px 12px", borderRadius: 8,
             background: practiceRound ? "rgba(var(--accent-rgb,255,120,0),0.08)" : "transparent",
             border: `1px solid ${practiceRound ? "var(--accent)" : "var(--line)"}`,
-            marginBottom: 12, userSelect: "none",
+            marginBottom: 16, userSelect: "none",
           }}>
             <input
               type="checkbox"
@@ -508,110 +468,56 @@ function GrintContent() {
               onChange={e => setPracticeRound(e.target.checked)}
               style={{ width: 16, height: 16, accentColor: "var(--accent)", cursor: "pointer" }}
             />
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
-              Practice / Offseason Round
-            </span>
-            <span style={{ fontSize: 11, color: "var(--ink-mute)", marginLeft: "auto" }}>
-              Won't count toward handicap
-            </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>Practice / Offseason Round</span>
+            <span style={{ fontSize: 11, color: "var(--ink-mute)", marginLeft: "auto" }}>Won't count toward handicap</span>
           </label>
 
           {holesData.some(h => h.score === 0) && (
             <div style={{
-              padding: "10px 12px", borderRadius: 8, marginBottom: 10,
-              background: "#fff8e1", border: "1px solid #f0c040",
-              color: "#7a5a00", fontSize: 13,
+              padding: "10px 12px", borderRadius: 8, marginBottom: 14,
+              background: "#fff8e1", border: "1px solid #f0c040", color: "#7a5a00", fontSize: 13,
             }}>
               ⚠ Some holes are missing scores. Fill in all scores before submitting.
             </div>
           )}
 
-          {previewError && (
-            <div style={{
-              padding: "10px 12px", borderRadius: 8, marginBottom: 10,
-              background: "#fff0f0", border: "1px solid #ffcccc",
-              color: "#cc0000", fontSize: 13,
-            }}>
-              {previewError}
-            </div>
-          )}
-
-          {submitResult && (
-            <div style={{
-              padding: "10px 12px", borderRadius: 8, marginBottom: 10,
-              background: submitResult.ok ? "#f0fff7" : "#fff0f0",
-              border: `1px solid ${submitResult.ok ? "#a3d9b8" : "#ffcccc"}`,
-              color: submitResult.ok ? "#0a5c3f" : "#cc0000",
-              fontSize: 13, wordBreak: "break-word", overflowWrap: "break-word", maxWidth: "100%",
-            }}>
-              {submitResult.ok ? submitResult.message : submitResult.error}
-            </div>
-          )}
-
-          {/* Step 1: Fill & Preview */}
-          <button
-            onClick={previewOnGrint}
-            disabled={!email || !password || previewing || submitting || holesData.some(h => h.score === 0)}
+          {/* Step 1 */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-mute)", letterSpacing: 0.5, marginBottom: 6, textTransform: "uppercase" }}>Step 1 — Open TheGrint and log in</div>
+          <a
+            href="https://thegrint.com/score/add_full_score/"
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
-              width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
-              border: "none",
-              background: (!email || !password || previewing || submitting || holesData.some(h => h.score === 0)) ? "var(--line)" : "var(--green)",
-              color: (!email || !password || previewing || submitting || holesData.some(h => h.score === 0)) ? "var(--ink-mute)" : "#fff",
-              fontSize: 14, fontWeight: 600,
-              cursor: (!email || !password || previewing || submitting || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
-              marginBottom: previewScreenshot ? 8 : 0,
+              display: "block", width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
+              background: "var(--green)", color: "#fff", fontSize: 14, fontWeight: 600,
+              textAlign: "center", textDecoration: "none", boxSizing: "border-box", marginBottom: 16,
             }}
           >
-            {previewing ? "Loading preview…" : "Fill & Preview on TheGrint"}
+            Open TheGrint →
+          </a>
+
+          {/* Step 2 */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-mute)", letterSpacing: 0.5, marginBottom: 6, textTransform: "uppercase" }}>Step 2 — Copy script, paste in browser console (F12 → Console)</div>
+          <button
+            onClick={copyScript}
+            disabled={holesData.some(h => h.score === 0)}
+            style={{
+              width: "100%", padding: "11px", borderRadius: "var(--r-pill)", border: "none",
+              background: scriptCopied ? "#0a7a5c" : holesData.some(h => h.score === 0) ? "var(--line)" : "var(--accent-deep)",
+              color: holesData.some(h => h.score === 0) ? "var(--ink-mute)" : "#fff",
+              fontSize: 14, fontWeight: 600,
+              cursor: holesData.some(h => h.score === 0) ? "not-allowed" : "pointer",
+              transition: "background 0.2s",
+            }}
+          >
+            {scriptCopied ? "✓ Copied to clipboard!" : "Copy Fill Script"}
           </button>
 
-          {/* Step 2: Confirm submit — only shown after a successful preview */}
-          {previewScreenshot && !submitResult?.ok && (
-            <button
-              onClick={submitToGrint}
-              disabled={submitting}
-              style={{
-                width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
-                border: "none",
-                background: submitting ? "var(--line)" : "var(--accent-deep)",
-                color: submitting ? "var(--ink-mute)" : "#fff",
-                fontSize: 14, fontWeight: 600,
-                cursor: submitting ? "not-allowed" : "pointer",
-              }}
-            >
-              {submitting ? "Submitting…" : "Confirm & Submit to TheGrint"}
-            </button>
-          )}
-
-          <p style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 8, lineHeight: 1.4 }}>
-            Preview fills the form so you can review it. Confirm & Submit clicks the submit button.
-            Credentials are saved on this device only. Each step may take up to 30s.
+          <p style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 10, lineHeight: 1.5 }}>
+            On TheGrint: press <b>F12</b> → <b>Console</b> tab → paste → <b>Enter</b>. The form fills and shows an alert when done. Review everything, then click Submit on TheGrint.
           </p>
         </div>
       </div>
-
-      {/* Screenshot preview */}
-      {previewScreenshot && (
-        <div style={{ marginTop: 28, border: "1px solid var(--line)", borderRadius: "var(--r-card)", overflow: "hidden" }}>
-          <div style={{
-            padding: "12px 20px", background: "var(--paper-alt)",
-            borderBottom: "1px solid var(--line)",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
-            <div style={{ fontFamily: "Georgia,serif", fontWeight: 700, fontSize: 15, color: "var(--ink)" }}>
-              TheGrint Form Preview
-            </div>
-            <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>
-              Review the filled form below, then click Confirm &amp; Submit above.
-            </div>
-          </div>
-          <img
-            src={previewScreenshot}
-            alt="TheGrint form filled and ready to submit"
-            style={{ width: "100%", display: "block" }}
-          />
-        </div>
-      )}
     </main>
   );
 }
