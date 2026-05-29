@@ -120,16 +120,11 @@ function GrintContent() {
 
     const holeLines = holesData.map(h => {
       const ta = teeAccMap[h.tee_accuracy] ?? "";
-      const lines: string[] = [
-        // Set score then fire blur — blur triggers TheGrint's per-hole conversion to radio inputs
-        `  {const se=document.querySelector('input[name="scH${h.hole}"]');if(se){se.value='${h.score}';se.dispatchEvent(new Event('input',{bubbles:true}));se.dispatchEvent(new Event('change',{bubbles:true}));se.dispatchEvent(new Event('blur',{bubbles:true}));}}`,
-      ];
+      const lines: string[] = [`  setVal('input[name="scH${h.hole}"]','${h.score}');`];
       if (h.putts) lines.push(`  setVal('input[name="ptH${h.hole}"]','${h.putts}');`);
       if (h.penalties) lines.push(`  setVal('input[name="pH${h.hole}"]','${h.penalties}');`);
-      if (ta) lines.push(
-        // Poll up to 1.5s for the radio button to appear after conversion, then click it
-        `  {let r=null;for(let t=0;t<10;t++){await wait(150);r=document.querySelector('input[name="drH${h.hole}"][value="${ta}"]');if(r)break;}if(r)r.click();else selOpt('select[name="drH${h.hole}"]','${ta}');}`
-      );
+      // fH{n} is the hidden input that stores tee accuracy (H/L/R/S/P)
+      if (ta) lines.push(`  {var fh=document.querySelector('input[name="fH${h.hole}"]');if(fh){fh.value='${ta}';fh.dispatchEvent(new Event('change',{bubbles:true}));}}`);
       return lines.join("\n");
     }).join("\n");
 
