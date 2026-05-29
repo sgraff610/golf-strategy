@@ -434,18 +434,20 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
 
           {/* Step 1 */}
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-mute)", letterSpacing: 0.5, marginBottom: 6, textTransform: "uppercase" }}>Step 1 — Open TheGrint and log in</div>
-          <a
-            href="https://thegrint.com/score/add_full_score/"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => window.open("https://thegrint.com/score/add_full_score/?ref=gl", "_blank", "noopener,noreferrer")}
             style={{
               display: "block", width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
               background: "var(--green)", color: "#fff", fontSize: 14, fontWeight: 600,
-              textAlign: "center", textDecoration: "none", boxSizing: "border-box", marginBottom: 16,
+              textAlign: "center", border: "none", cursor: "pointer", boxSizing: "border-box", marginBottom: 8,
             }}
           >
             Open TheGrint →
-          </a>
+          </button>
+          <p style={{ fontSize: 11, color: "var(--ink-mute)", marginBottom: 12, lineHeight: 1.4 }}>
+            Opens in your browser. If the TheGrint app opens instead, copy this link and paste it in Safari/Chrome manually:
+            {" "}<span style={{ fontFamily: "monospace", wordBreak: "break-all" }}>thegrint.com/score/add_full_score</span>
+          </p>
 
           {/* Step 2 */}
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-mute)", letterSpacing: 0.5, marginBottom: 6, textTransform: "uppercase" }}>Step 2 — Copy script, paste in browser console (F12 → Console)</div>
