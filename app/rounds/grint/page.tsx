@@ -120,10 +120,16 @@ function GrintContent() {
 
     const holeLines = holesData.map(h => {
       const ta = teeAccMap[h.tee_accuracy] ?? "";
-      const lines: string[] = [`  setVal('input[name="scH${h.hole}"]','${h.score}');`];
+      const lines: string[] = [
+        // Set score then fire blur — blur triggers TheGrint's per-hole conversion to radio inputs
+        `  {const se=document.querySelector('input[name="scH${h.hole}"]');if(se){se.value='${h.score}';se.dispatchEvent(new Event('input',{bubbles:true}));se.dispatchEvent(new Event('change',{bubbles:true}));se.dispatchEvent(new Event('blur',{bubbles:true}));}}`,
+      ];
       if (h.putts) lines.push(`  setVal('input[name="ptH${h.hole}"]','${h.putts}');`);
       if (h.penalties) lines.push(`  setVal('input[name="pH${h.hole}"]','${h.penalties}');`);
-      if (ta) lines.push(`  selOpt('select[name="drH${h.hole}"]','${ta}');`);
+      if (ta) lines.push(
+        // Poll up to 1.5s for the radio button to appear after conversion, then click it
+        `  {let r=null;for(let t=0;t<10;t++){await wait(150);r=document.querySelector('input[name="drH${h.hole}"][value="${ta}"]');if(r)break;}if(r)r.click();else selOpt('select[name="drH${h.hole}"]','${ta}');}`
+      );
       return lines.join("\n");
     }).join("\n");
 
