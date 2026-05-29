@@ -9,12 +9,13 @@ type HoleEntry = {
 type SubmitPayload = {
   email: string; password: string; date: string;
   courseName: string; tee: string; holes: HoleEntry[]; practiceRound: boolean;
+  preview?: boolean;
 };
 
 // This code runs inside Browserless's remote browser (Puppeteer API)
 const AUTOMATION_CODE = `
 export default async function({ page, context }) {
-  const { email, password, date, courseName, tee, holes, practiceRound } = context;
+  const { email, password, date, courseName, tee, holes, practiceRound, preview } = context;
 
   async function waitMs(ms) {
     await new Promise(r => setTimeout(r, ms));
@@ -145,7 +146,15 @@ export default async function({ page, context }) {
     if (!checked) await page.click("#practice_score").catch(() => {});
   }
 
-  // 9. Submit
+  // 9a. Preview mode — take a screenshot and return it for review
+  if (preview) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await waitMs(400);
+    const shot = await page.screenshot({ encoding: "base64", fullPage: false });
+    return Response.json({ ok: true, preview: true, screenshot: "data:image/png;base64," + shot });
+  }
+
+  // 9b. Submit mode — click Submit and wait for confirmation
   await page.evaluate(() => {
     const el = Array.from(document.querySelectorAll("a,button")).find(e => (e.textContent || "").includes("Submit"));
     if (el) el.click();
@@ -172,7 +181,7 @@ export async function POST(req: NextRequest) {
   try { payload = await req.json(); }
   catch { return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 }); }
 
-  const { email, password, date, courseName, tee, holes, practiceRound } = payload;
+  const { email, password, date, courseName, tee, holes, practiceRound, preview = false } = payload;
   if (!email || !password)
     return NextResponse.json({ ok: false, error: "Missing credentials" }, { status: 400 });
 
@@ -192,7 +201,7 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code: AUTOMATION_CODE,
-          context: { email, password, date, courseName, tee, holes, practiceRound },
+          context: { email, password, date, courseName, tee, holes, practiceRound, preview },
         }),
         signal: AbortSignal.timeout(58000),
       }

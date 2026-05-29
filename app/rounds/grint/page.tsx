@@ -65,7 +65,10 @@ function GrintContent() {
 
   // Submit state
   const [practiceRound, setPracticeRound] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [previewScreenshot, setPreviewScreenshot] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string } | null>(null);
 
   useEffect(() => {
@@ -173,27 +176,50 @@ function GrintContent() {
     URL.revokeObjectURL(url);
   }
 
-  async function submitToGrint() {
+  async function callGrintApi(preview: boolean) {
     if (!round || !email || !password) return;
+    const res = await fetch("/api/grint/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email, password,
+        date: round.date,
+        courseName: round.course_name,
+        tee: course?.tee_box || "",
+        holes: holesData,
+        practiceRound,
+        preview,
+      }),
+    });
+    return res.json();
+  }
+
+  async function previewOnGrint() {
+    setPreviewing(true);
+    setPreviewScreenshot(null);
+    setPreviewError(null);
+    setSubmitResult(null);
+    try {
+      const json = await callGrintApi(true);
+      if (json?.screenshot) {
+        setPreviewScreenshot(json.screenshot);
+      } else {
+        setPreviewError(json?.error || "Preview failed — could not capture the form.");
+      }
+    } catch {
+      setPreviewError("Network error — could not reach the submit service.");
+    }
+    setPreviewing(false);
+  }
+
+  async function submitToGrint() {
     setSubmitting(true);
     setSubmitResult(null);
     try {
-      const res = await fetch("/api/grint/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          date: round.date,
-          courseName: round.course_name,
-          tee: course?.tee_box || "",
-          holes: holesData,
-          practiceRound,
-        }),
-      });
-      const json = await res.json();
+      const json = await callGrintApi(false);
       setSubmitResult(json);
-    } catch (err) {
+      if (json?.ok) setPreviewScreenshot(null);
+    } catch {
       setSubmitResult({ ok: false, error: "Network error — could not reach the submit service." });
     }
     setSubmitting(false);
@@ -500,6 +526,16 @@ function GrintContent() {
             </div>
           )}
 
+          {previewError && (
+            <div style={{
+              padding: "10px 12px", borderRadius: 8, marginBottom: 10,
+              background: "#fff0f0", border: "1px solid #ffcccc",
+              color: "#cc0000", fontSize: 13,
+            }}>
+              {previewError}
+            </div>
+          )}
+
           {submitResult && (
             <div style={{
               padding: "10px 12px", borderRadius: 8, marginBottom: 10,
@@ -512,26 +548,70 @@ function GrintContent() {
             </div>
           )}
 
+          {/* Step 1: Fill & Preview */}
           <button
-            onClick={submitToGrint}
-            disabled={!email || !password || submitting || holesData.some(h => h.score === 0)}
+            onClick={previewOnGrint}
+            disabled={!email || !password || previewing || submitting || holesData.some(h => h.score === 0)}
             style={{
               width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
               border: "none",
-              background: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "var(--line)" : "var(--accent-deep)",
-              color: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "var(--ink-mute)" : "#fff",
+              background: (!email || !password || previewing || submitting || holesData.some(h => h.score === 0)) ? "var(--line)" : "var(--green)",
+              color: (!email || !password || previewing || submitting || holesData.some(h => h.score === 0)) ? "var(--ink-mute)" : "#fff",
               fontSize: 14, fontWeight: 600,
-              cursor: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
+              cursor: (!email || !password || previewing || submitting || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
+              marginBottom: previewScreenshot ? 8 : 0,
             }}
           >
-            {submitting ? "Submitting…" : "Submit to TheGrint"}
+            {previewing ? "Loading preview…" : "Fill & Preview on TheGrint"}
           </button>
 
+          {/* Step 2: Confirm submit — only shown after a successful preview */}
+          {previewScreenshot && !submitResult?.ok && (
+            <button
+              onClick={submitToGrint}
+              disabled={submitting}
+              style={{
+                width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
+                border: "none",
+                background: submitting ? "var(--line)" : "var(--accent-deep)",
+                color: submitting ? "var(--ink-mute)" : "#fff",
+                fontSize: 14, fontWeight: 600,
+                cursor: submitting ? "not-allowed" : "pointer",
+              }}
+            >
+              {submitting ? "Submitting…" : "Confirm & Submit to TheGrint"}
+            </button>
+          )}
+
           <p style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 8, lineHeight: 1.4 }}>
-            Credentials are saved on this device only. Auto-submit runs server-side and may take up to 30s.
+            Preview fills the form so you can review it. Confirm & Submit clicks the submit button.
+            Credentials are saved on this device only. Each step may take up to 30s.
           </p>
         </div>
       </div>
+
+      {/* Screenshot preview */}
+      {previewScreenshot && (
+        <div style={{ marginTop: 28, border: "1px solid var(--line)", borderRadius: "var(--r-card)", overflow: "hidden" }}>
+          <div style={{
+            padding: "12px 20px", background: "var(--paper-alt)",
+            borderBottom: "1px solid var(--line)",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <div style={{ fontFamily: "Georgia,serif", fontWeight: 700, fontSize: 15, color: "var(--ink)" }}>
+              TheGrint Form Preview
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-mute)" }}>
+              Review the filled form below, then click Confirm &amp; Submit above.
+            </div>
+          </div>
+          <img
+            src={previewScreenshot}
+            alt="TheGrint form filled and ready to submit"
+            style={{ width: "100%", display: "block" }}
+          />
+        </div>
+      )}
     </main>
   );
 }

@@ -491,7 +491,7 @@ export default function EditRound() {
 
   const inputStyle = { width: "100%", padding: "6px 8px", fontSize: 14, border: "1px solid var(--line)", borderRadius: 6, boxSizing: "border-box" as const, background: "var(--paper)", color: "var(--ink)" };
   const selectStyle = { ...inputStyle, color: "var(--green)" };
-  const labelStyle = { fontSize: 11, fontWeight: 600 as const, color: "var(--ink-mute)", display: "block" as const, marginBottom: 3, letterSpacing: 0.3 };
+  const labelStyle = { fontSize: 11, fontWeight: 600 as const, color: "var(--green)", display: "block" as const, marginBottom: 3, letterSpacing: 0.3 };
   const sectionLabel = { fontSize: 10, fontWeight: 700 as const, color: "var(--green)", textTransform: "uppercase" as const, letterSpacing: 1.4, margin: "0 0 8px" };
   const btnStyle = (primary: boolean) => ({
     padding: "11px 20px", fontSize: 14, fontWeight: 600 as const,

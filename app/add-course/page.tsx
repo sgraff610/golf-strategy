@@ -64,9 +64,9 @@ function blankHole(n: number): HoleData {
   };
 }
 
-const LABEL: React.CSSProperties  = { fontSize: 13, color: "white", display: "block", marginBottom: 4 };
-const SECTION: React.CSSProperties = { fontSize: 11, color: "white", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
-const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#d0d0d0" };
+const LABEL: React.CSSProperties  = { fontSize: 13, color: "#0f6e56", display: "block", marginBottom: 4 };
+const SECTION: React.CSSProperties = { fontSize: 11, color: "#0f6e56", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
+const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#084634" };
 
 // ─── Scorecard ────────────────────────────────────────────────────────────────
 

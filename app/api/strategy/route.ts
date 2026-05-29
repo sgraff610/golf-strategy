@@ -402,7 +402,7 @@ function generateStrategy(
   if(tendencies.gsBunkerPct>0.2)warnings.push(`Frequent GS bunker (${Math.round(tendencies.gsBunkerPct*100)}%)`);
   if(tendencies.avgPutts>2.3)warnings.push(`Putting pressure — avg ${tendencies.avgPutts.toFixed(1)} putts`);
   return {
-    tee_strategy:{club:teeClub,aim:teeAim,reason:teeReasons.join("; ")},
+    tee_strategy:targetHole.par===3?null:{club:teeClub,aim:teeAim,reason:teeReasons.join("; ")},
     approach_strategy:{aim:apprAim,reason:apprReasons.join("; ")},
     warning:warnings.length>0?warnings.join(" · "):null,
     confidence,

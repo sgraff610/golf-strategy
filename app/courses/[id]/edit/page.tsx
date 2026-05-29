@@ -44,10 +44,9 @@ const APPROACH_CHECKBOXES: { key: keyof HoleData; label: string }[] = [
   { key: "approach_water_out_long",     label: "Water / OB long" },
 ];
 
-// Shared light-grey label/section styles
 const LABEL: React.CSSProperties   = { fontSize: 13, color: "#0f6e56", display: "block", marginBottom: 4 };
-const SECTION: React.CSSProperties = { fontSize: 11, color: "white", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
-const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#d0d0d0" };
+const SECTION: React.CSSProperties = { fontSize: 11, color: "#0f6e56", fontWeight: 600, letterSpacing: 1, marginBottom: 8, marginTop: 20, display: "block", textTransform: "uppercase" };
+const HOLE_NAME: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#084634" };
 
 // ─── Scorecard ────────────────────────────────────────────────────────────────
 
@@ -650,8 +649,8 @@ function Scorecard({ savedCourse, allVersions, onEditCourse }: {
   return (
     <main style={{ maxWidth:940, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
       <div style={{ marginBottom:20 }}>
-        <h1 style={{ fontSize:22, fontWeight:700, color:"#d0d0d0", margin:"0 0 4px" }}>{savedCourse.name}</h1>
-        <p style={{ fontSize:14, color:"white", margin:0 }}>
+        <h1 style={{ fontSize:22, fontWeight:700, color:"#084634", margin:"0 0 4px" }}>{savedCourse.name}</h1>
+        <p style={{ fontSize:14, color:"#084634", margin:0 }}>
           {savedCourse.city}, {savedCourse.state}
           {savedCourse.rating && savedCourse.slope ? ` · Rating ${savedCourse.rating} / Slope ${savedCourse.slope}`
             : savedCourse.rating ? ` · Rating ${savedCourse.rating}`
@@ -900,8 +899,8 @@ function EditCourseInner() {
     setShowScorecard(true);
   }
 
-  if (loading) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"white" }}>Loading course...</p></main>;
-  if (!course) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"red" }}>Course not found.</p><a href="/courses" style={{ fontSize:13, color:"white" }}>← Back to courses</a></main>;
+  if (loading) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"#0f6e56" }}>Loading course...</p></main>;
+  if (!course) return <main style={{ maxWidth:520, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}><p style={{ color:"red" }}>Course not found.</p><a href="/courses" style={{ fontSize:13, color:"#0f6e56" }}>← Back to courses</a></main>;
 
   if (showScorecard && course) {
     return (
@@ -918,7 +917,7 @@ function EditCourseInner() {
   return (
     <main style={{ maxWidth:520, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
       <div style={{ marginBottom:16 }}>
-        <a href="/courses" style={{ fontSize:13, color:"white" }}>← Back to courses</a>
+        <a href="/courses" style={{ fontSize:13, color:"#0f6e56" }}>← Back to courses</a>
       </div>
       <h1 style={{ fontSize:20, fontWeight:600, marginBottom:20, color:"#d0d0d0" }}>Edit course</h1>
 
@@ -962,7 +961,7 @@ function EditCourseInner() {
         <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
         <div style={{ textAlign:"center", flex:1 }}>
           <div style={HOLE_NAME}>Hole {hole.hole}</div>
-          <div style={{ fontSize:13, color:"white", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
+          <div style={{ fontSize:13, color:"#084634", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
 <a href={`/add-course/scan?holeNum=${hole.hole}&courseId=${id}&returnTo=edit`} style={{ fontSize:12, color:"#0f6e56", textDecoration:"underline", display:"block", marginTop:4 }}>
             Scan with AI →
           </a>
@@ -989,7 +988,7 @@ function EditCourseInner() {
         <div>
           <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"4px 0"}}>
             <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {hole.hole_notes?"✓":""}</span>
-            <span style={{fontSize:13,color:"white"}}>{holeNotesOpen?"▲":"▼"}</span>
+            <span style={{fontSize:13,color:"#0f6e56"}}>{holeNotesOpen?"▲":"▼"}</span>
           </button>
           {holeNotesOpen&&(
             <textarea
@@ -1015,7 +1014,7 @@ function EditCourseInner() {
           {hole.par===3 && <p style={{ fontSize:12, color:"rgba(255,255,255,0.5)", margin:"4px 0 8px" }}>Disabled for par 3</p>}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, opacity:hole.par===3?0.3:1 }}>
             {TEE_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:hole.par===3?"not-allowed":"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#084634", cursor:hole.par===3?"not-allowed":"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => hole.par!==3&&toggleCheck(key)} disabled={hole.par===3} />
                 {label}
               </label>
@@ -1028,7 +1027,7 @@ function EditCourseInner() {
           <span style={SECTION}>Approach Hazards</span>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
             {APPROACH_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#084634", cursor:"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => toggleCheck(key)} />
                 {label}
               </label>
@@ -1039,34 +1038,6 @@ function EditCourseInner() {
         {/* Course Strategy */}
         <div>
           <span style={SECTION}>Course Strategy</span>
-
-          {/* Preferred Club + Preferred Landing */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:16 }}>
-            <div>
-              <label style={LABEL}>Preferred club</label>
-              <input
-                style={inputStyle}
-                type="text"
-                placeholder="e.g. Driver"
-                value={hole.preferred_club ?? ""}
-                onChange={e => updateHole("preferred_club", e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={LABEL}>Preferred landing</label>
-              <select
-                style={selectStyle}
-                value={hole.preferred_landing ?? ""}
-                onChange={e => updateHole("preferred_landing", (e.target.value || null) as any)}
-              >
-                <option value="">—</option>
-                <option value="L">L — Left</option>
-                <option value="LF">LF — Left-Fair</option>
-                <option value="CF">CF — Center</option>
-                <option value="RF">RF — Right-Fair</option>
-              </select>
-            </div>
-          </div>
 
           {/* Green depth + Greenside selector */}
           <div style={{ marginBottom:12 }}>
@@ -1095,7 +1066,7 @@ function EditCourseInner() {
               </div>
               {enrichedMap === null ? (
                 <div style={{ fontSize:12, color:"#888", fontStyle:"italic" }}>Loading similar holes…</div>
-              ) : (
+              ) : (enrichedMap[hole.hole] ?? []).length > 0 ? (
                 <TeeStratGrid
                   enriched={enrichedMap[hole.hole] ?? []}
                   selected={hole.preferred_club ?? ""}
@@ -1103,6 +1074,27 @@ function EditCourseInner() {
                   onChange={club => updateHole("preferred_club", club)}
                   onAimChange={aim => updateHole("preferred_landing", aim)}
                 />
+              ) : (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div>
+                    <label style={{ ...LABEL, fontSize:11 }}>Preferred club</label>
+                    <select style={selectStyle} value={hole.preferred_club ?? ""} onChange={e => updateHole("preferred_club", e.target.value)}>
+                      <option value="">—</option>
+                      {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ ...LABEL, fontSize:11 }}>Landing zone</label>
+                    <select style={selectStyle} value={hole.preferred_landing ?? ""} onChange={e => updateHole("preferred_landing", (e.target.value||null) as any)}>
+                      <option value="">—</option>
+                      <option value="L">L — Left</option>
+                      <option value="LF">LF — Left-Fair</option>
+                      <option value="CF">CF — Center</option>
+                      <option value="RF">RF — Right-Fair</option>
+                      <option value="R">R — Right</option>
+                    </select>
+                  </div>
+                </div>
               )}
               <div style={{ marginTop:16 }}>
                 <AimDial
@@ -1130,7 +1122,7 @@ function EditCourseInner() {
         {/* Bottom nav */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:8, paddingTop:16, borderTop:"1px solid #eee", gap:12 }}>
           <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
-          <span style={{ fontSize:14, fontWeight:600, color:"#d0d0d0" }}>Hole {hole.hole}</span>
+          <span style={{ fontSize:14, fontWeight:600, color:"#084634" }}>Hole {hole.hole}</span>
           <button style={navBtn(currentHole>=holes.length-1)} onClick={goToNextHole} disabled={currentHole>=holes.length-1}>Next →</button>
         </div>
 
