@@ -59,6 +59,10 @@ function GrintContent() {
 
   const [practiceRound, setPracticeRound] = useState(false);
   const [scriptCopied, setScriptCopied] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string } | null>(null);
 
   useEffect(() => {
     if (!roundId) { setLoading(false); return; }
@@ -159,6 +163,32 @@ ${holeLines}
 ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!pr.checked)pr.click();` : ""}
   alert('Form filled — review everything above and click Submit.');
 })();`;
+  }
+
+  async function submitToGrint() {
+    if (!round) return;
+    setSubmitting(true);
+    setSubmitResult(null);
+    try {
+      const res = await fetch("/api/grint/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email, password,
+          date: round.date,
+          courseName: round.course_name,
+          tee: course?.tee_box || "",
+          holes: holesData,
+          practiceRound,
+        }),
+      });
+      const data = await res.json();
+      setSubmitResult(data);
+    } catch (e) {
+      setSubmitResult({ ok: false, error: String(e) });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function copyScript() {
@@ -411,8 +441,31 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
             Submit to TheGrint
           </div>
           <p style={{ fontSize: 13, color: "var(--ink-mute)", marginBottom: 16, lineHeight: 1.5 }}>
-            Open TheGrint, log in, then paste the fill script in the browser console. The form fills automatically — review it and click Submit yourself.
+            Enter your TheGrint credentials and we'll fill and submit the score automatically.
           </p>
+
+          <input
+            type="email"
+            placeholder="TheGrint email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: 8, marginBottom: 10,
+              border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)",
+              fontSize: 13, boxSizing: "border-box",
+            }}
+          />
+          <input
+            type="password"
+            placeholder="TheGrint password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: 8, marginBottom: 16,
+              border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)",
+              fontSize: 13, boxSizing: "border-box",
+            }}
+          />
 
           {/* Practice round toggle */}
           <label style={{
@@ -441,57 +494,53 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
             </div>
           )}
 
-          {/* Step 1 */}
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-mute)", letterSpacing: 0.5, marginBottom: 6, textTransform: "uppercase" }}>Step 1 — Open TheGrint and log in</div>
           <button
-            onClick={() => {
-              if (!round) return;
-              const fillData = {
-                date: round.date,
-                courseName: round.course_name,
-                tee: course?.tee_box || "",
-                practiceRound,
-                holes: holesData.map(h => ({
-                  hole: h.hole,
-                  score: h.score,
-                  ags: h.ags,
-                  putts: h.putts,
-                  penalties: h.penalties,
-                  tee_accuracy: h.tee_accuracy,
-                })),
-              };
-              const encoded = btoa(encodeURIComponent(JSON.stringify(fillData)));
-              window.location.href = `/rounds/grint/add#gl=${encoded}`;
-            }}
-            style={{
-              display: "block", width: "100%", padding: "11px", borderRadius: "var(--r-pill)",
-              background: "var(--green)", color: "#fff", fontSize: 14, fontWeight: 600,
-              textAlign: "center", border: "none", cursor: "pointer", boxSizing: "border-box", marginBottom: 8,
-            }}
-          >
-            Open TheGrint →
-          </button>
-
-          {/* Step 2 */}
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-mute)", letterSpacing: 0.5, marginBottom: 6, textTransform: "uppercase" }}>Step 2 — Copy script, paste in browser console (F12 → Console)</div>
-          <button
-            onClick={copyScript}
-            disabled={holesData.some(h => h.score === 0)}
+            onClick={submitToGrint}
+            disabled={submitting || !email || !password || holesData.some(h => h.score === 0)}
             style={{
               width: "100%", padding: "11px", borderRadius: "var(--r-pill)", border: "none",
-              background: scriptCopied ? "#0a7a5c" : holesData.some(h => h.score === 0) ? "var(--line)" : "var(--accent-deep)",
-              color: holesData.some(h => h.score === 0) ? "var(--ink-mute)" : "#fff",
+              background: submitting ? "var(--line)" : (!email || !password || holesData.some(h => h.score === 0)) ? "var(--line)" : "var(--green)",
+              color: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "var(--ink-mute)" : "#fff",
               fontSize: 14, fontWeight: 600,
-              cursor: holesData.some(h => h.score === 0) ? "not-allowed" : "pointer",
+              cursor: (submitting || !email || !password || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
               transition: "background 0.2s",
             }}
           >
-            {scriptCopied ? "✓ Copied to clipboard!" : "Copy Fill Script"}
+            {submitting ? "Submitting…" : "Submit to TheGrint"}
           </button>
 
-          <p style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 10, lineHeight: 1.5 }}>
-            On TheGrint: press <b>F12</b> → <b>Console</b> tab → paste → <b>Enter</b>. The form fills and shows an alert when done. Review everything, then click Submit on TheGrint.
-          </p>
+          {submitResult && (
+            <div style={{
+              marginTop: 12, padding: "10px 12px", borderRadius: 8, fontSize: 13,
+              background: submitResult.ok ? "#e8f5e9" : "#fdecea",
+              border: `1px solid ${submitResult.ok ? "#81c784" : "#e57373"}`,
+              color: submitResult.ok ? "#1b5e20" : "#b71c1c",
+            }}>
+              {submitResult.ok ? `✓ ${submitResult.message}` : `✗ ${submitResult.error}`}
+            </div>
+          )}
+
+          <details style={{ marginTop: 16 }}>
+            <summary style={{ fontSize: 12, color: "var(--ink-mute)", cursor: "pointer", userSelect: "none" }}>
+              Manual fallback — copy fill script
+            </summary>
+            <div style={{ marginTop: 10 }}>
+              <button
+                onClick={copyScript}
+                disabled={holesData.some(h => h.score === 0)}
+                style={{
+                  width: "100%", padding: "9px", borderRadius: "var(--r-pill)", border: "none",
+                  background: scriptCopied ? "#0a7a5c" : "var(--accent-deep)",
+                  color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {scriptCopied ? "✓ Copied!" : "Copy Fill Script"}
+              </button>
+              <p style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 8, lineHeight: 1.5 }}>
+                Open TheGrint, log in, press <b>F12</b> → <b>Console</b>, paste, and hit Enter.
+              </p>
+            </div>
+          </details>
         </div>
       </div>
     </main>

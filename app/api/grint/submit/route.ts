@@ -145,8 +145,15 @@ export default async function({ page, context }) {
     if (h.penalties) await fill('input[name="pH' + n + '"]', h.penalties).catch(() => {});
     const ta = teeAccMap[h.tee_accuracy];
     if (ta) {
-      await page.select('select[name="drH' + n + '"]', ta).catch(() => {});
-      await page.$eval('input[name="drH' + n + '"][value="' + ta + '"]', el => el.click()).catch(() => {});
+      await page.$eval('input[name="fH' + n + '"]', (fh, key) => {
+        const tx = fh.previousElementSibling;
+        if (!tx) return;
+        const code = key.charCodeAt(0);
+        ['keydown', 'keypress', 'keyup'].forEach(type => {
+          tx.dispatchEvent(new KeyboardEvent(type, { key, charCode: code, keyCode: code, which: code, bubbles: true, cancelable: true }));
+        });
+      }, ta).catch(() => {});
+      await waitMs(300);
     }
   }
 
