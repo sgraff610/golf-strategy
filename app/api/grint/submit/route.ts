@@ -33,7 +33,7 @@ export default async function({ page, context }) {
     await page.select(sel, val).catch(() => {});
   }
 
-  // 1. Navigate — domcontentloaded is much faster than networkidle2 on ad-heavy sites
+  // 1. Navigate
   await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 20000 });
 
   // 2. Login if redirected
@@ -50,22 +50,22 @@ export default async function({ page, context }) {
           }
         });
       });
-      await waitMs(300);
+      await waitMs(200);
     }
     await fill("#usernameLogin", email);
     await fill("#pwdLogin", password);
     await page.click("#submit-form-login");
-    await waitMs(2500);
+    await waitMs(1800);
 
     if (page.url().includes("passthru")) {
       return Response.json({ ok: false, error: "Login failed — check your TheGrint username and password." });
     }
 
     await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 15000 });
-    await waitMs(1000);
+    await waitMs(600);
   }
 
-  // 3. Date — set all three in one evaluate to avoid context loss between calls
+  // 3. Date
   const [yyyy, mm, dd] = date.split("-");
   await page.evaluate((y, m, d) => {
     function setSelect(name, val) {
@@ -78,55 +78,65 @@ export default async function({ page, context }) {
     setSelect("month", m);
     setSelect("date", d);
   }, yyyy, mm, dd);
-  await waitMs(500);
+  await waitMs(300);
 
   // 4. Course
   await page.waitForSelector("#ucourse", { visible: true, timeout: 5000 }).catch(() => {});
   await page.click("#ucourse");
-  await waitMs(300);
+  await waitMs(200);
   await page.$eval("#ucourse", (el, name) => {
     el.value = name;
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }, courseName);
-  await waitMs(300);
+  await waitMs(200);
   try {
     await page.waitForSelector(".suggestion", { visible: true, timeout: 5000 });
     const first = await page.$(".suggestion");
     if (first) await first.click();
   } catch {}
-  await waitMs(1500);
+  await waitMs(1000);
 
   // 5. Tee
   let teeOpts = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 5; i++) {
     teeOpts = await page.evaluate(() =>
       Array.from(document.querySelectorAll('select[name="tees"] option'))
         .map(o => ({ v: o.value, t: (o.textContent || "").trim() }))
         .filter(o => o.v !== "")
     );
     if (teeOpts.length) break;
-    await waitMs(400);
+    await waitMs(300);
   }
   const teeMatch = teeOpts.find(o =>
     o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase())
   ) || teeOpts[0];
   if (teeMatch?.v) await selectOpt('select[name="tees"]', teeMatch.v);
 
-  // 6. Round type
+  // Preview mode — screenshot after date/course/tee so user can verify those fields.
+  // Per-hole data is already visible in the app scorecard, so we skip filling it here.
+  if (preview) {
+    await waitMs(400);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await waitMs(200);
+    const shot = await page.screenshot({ encoding: "base64", fullPage: false });
+    return Response.json({ ok: true, preview: true, screenshot: "data:image/png;base64," + shot });
+  }
+
+  // 6. Round type (submit only)
   const is9 = holes.length <= 9;
   const isBack = is9 && holes[0]?.hole > 9;
   if (is9) {
     for (let i = 0; i < 3; i++) {
       await selectOpt('select[name="round"]', isBack ? "B9" : "F9");
-      await waitMs(800);
+      await waitMs(600);
       const cur = await page.$eval('select[name="round"]', el => el.value).catch(() => "");
       if (cur !== "18") break;
     }
-    await waitMs(2000);
+    await waitMs(1200);
   }
 
-  // 7. Scores + tee accuracy
+  // 7. Scores + tee accuracy (submit only)
   const teeAccMap = { "Hit":"H", "Left":"L", "Right":"R", "Short":"S", "Long":"P" };
   for (const h of holes) {
     const n = h.hole;
@@ -140,21 +150,13 @@ export default async function({ page, context }) {
     }
   }
 
-  // 8. Practice round
+  // 8. Practice round (submit only)
   if (practiceRound) {
     const checked = await page.$eval("#practice_score", el => el.checked).catch(() => false);
     if (!checked) await page.click("#practice_score").catch(() => {});
   }
 
-  // 9a. Preview mode — take a screenshot and return it for review
-  if (preview) {
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await waitMs(400);
-    const shot = await page.screenshot({ encoding: "base64", fullPage: false });
-    return Response.json({ ok: true, preview: true, screenshot: "data:image/png;base64," + shot });
-  }
-
-  // 9b. Submit mode — click Submit and wait for confirmation
+  // 9. Submit
   await page.evaluate(() => {
     const el = Array.from(document.querySelectorAll("a,button")).find(e => (e.textContent || "").includes("Submit"));
     if (el) el.click();
