@@ -73,6 +73,7 @@ type Props = {
   label?: string;
   value: GreensideState;
   onChange: (next: GreensideState) => void;
+  aimOnly?: boolean;
 };
 
 // F=bottom(180°), B=top(0°), R=right(90°), L=left(270°). arcPath subtracts 90° internally.
@@ -153,7 +154,7 @@ const AIM_DIR_LABELS: Record<string, string> = {
   F: 'Front', FL: 'Front L', L: 'Left', BL: 'Back L',
 };
 
-export default function GreensideSelector({ label = 'Greenside', value, onChange }: Props) {
+export default function GreensideSelector({ label = 'Greenside', value, onChange, aimOnly = false }: Props) {
   const handleOuter = (key: string) => {
     const cur = value[key as keyof GreensideState] as CellValue;
     onChange({ ...value, [key]: ((cur + 1) % 3) as CellValue });
@@ -188,6 +189,7 @@ export default function GreensideSelector({ label = 'Greenside', value, onChange
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
         {/* ── DIAL 1: Hazard position ring ── */}
+        {!aimOnly && (
         <div>
           <div style={{ fontSize: 10, color: '#999', fontStyle: 'italic', marginBottom: 4 }}>
             Tap to cycle: rough · extra green · bunker
@@ -216,6 +218,7 @@ export default function GreensideSelector({ label = 'Greenside', value, onChange
           </div>
           <div style={{ textAlign: 'center', fontSize: 9, color: '#999', fontStyle: 'italic' }}>↓ Short</div>
         </div>
+        )}
 
         {/* ── DIAL 2: Aim ring + context ring ── */}
         <div>
@@ -288,6 +291,7 @@ export default function GreensideSelector({ label = 'Greenside', value, onChange
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
+        {!aimOnly && (
         <div>
           <div style={{ fontSize: 10, fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Surrounding</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#666', marginBottom: 2 }}>
@@ -299,6 +303,7 @@ export default function GreensideSelector({ label = 'Greenside', value, onChange
             Bunker
           </div>
         </div>
+        )}
         <div>
           <div style={{ fontSize: 10, fontWeight: 600, color: '#999', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Aim</div>
           {[

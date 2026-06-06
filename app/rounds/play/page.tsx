@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { loadCourses, getClubDistances } from "@/lib/storage";
 import type { ClubDistances } from "@/lib/planTypes";
 import { CourseRecord } from "@/lib/types";
+import GreensideSelector, { type GreensideState, type AimValue, flatToGreenside } from "@/app/components/GreensideSelector";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
 type RoundHole = {
@@ -21,6 +22,8 @@ type RoundHole = {
   scoring_opp: 0 | 0.5 | 1 | "";
   diff_max: 2 | 3 | "";
   opportunity: string;
+  aim_dir: string;
+  aim_level: 0 | 1 | 2;
 };
 
 const CLUBS = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
@@ -46,6 +49,7 @@ function blankHole(h: any): RoundHole {
     fairway_bunker:"", greenside_bunker:"", gir:false, grints:false,
     preferred_club_override:"", plan_club:"", tee_land:"",
     scoring_opp:"", diff_max:"", opportunity:"",
+    aim_dir: (h.aim_dir as string) || "", aim_level: ((h.aim_level as 0|1|2) || 0),
   };
 }
 function pct(n: number) { return `${Math.round(n*100)}%`; }
@@ -892,7 +896,7 @@ function scoreBg(score: number|"", par: number): string {
                   </tr>
                   <tr>
                     <td style={{ ...lc }}>Aim</td>
-                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const ch2=selectedCourse?.holes.find((x:any)=>x.hole===h.hole); const aimDir=((ch2 as any)?.aim_dir)??""; const aimLevel=((ch2 as any)?.aim_level)??0; const noAim=!aimDir||aimLevel===0; const aimBg=noAim?"transparent":aimLevel===1?"#f5c842":"#e03c2d"; const aimColor=noAim?"var(--muted)":aimLevel===1?"#000":"#fff"; return (
+                    {ph.map((h,i)=>{ const ai=roundHoles.indexOf(h); const aimDir=h.aim_dir??""; const aimLevel=h.aim_level??0; const noAim=!aimDir||aimLevel===0; const aimBg=noAim?"transparent":aimLevel===1?"#f5c842":"#e03c2d"; const aimColor=noAim?"var(--muted)":aimLevel===1?"#000":"#fff"; return (
                       <td key={i} onClick={()=>goToHole(ai)} style={{ padding:"2px 3px", textAlign:"center", cursor:"pointer", borderLeft:"1px solid var(--line)", background:cBg(ai,"var(--paper)") }}>
                         <div style={{ background:aimBg, color:aimColor, borderRadius:999, minWidth:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:10, margin:"0 auto" }}>{noAim?"⛳":aimDir}</div>
                       </td>
@@ -1320,6 +1324,31 @@ function scoreBg(score: number|"", par: number): string {
                 })()}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Aim */}
+        {currentHole && (
+          <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12, order:2 }}>
+            {(() => {
+              const ch2 = selectedCourse?.holes.find((x: any) => x.hole === currentHole.hole) ?? {};
+              const gs: GreensideState = {
+                ...flatToGreenside(ch2),
+                aim_dir:   currentHole.aim_dir   ?? "",
+                aim_level: (currentHole.aim_level ?? 0) as AimValue,
+              };
+              return (
+                <GreensideSelector
+                  label="Aim"
+                  value={gs}
+                  onChange={(next) => {
+                    updateHoleFieldTracked("aim_dir"   as keyof RoundHole, next.aim_dir);
+                    updateHoleFieldTracked("aim_level" as keyof RoundHole, next.aim_level);
+                  }}
+                  aimOnly
+                />
+              );
+            })()}
           </div>
         )}
 
