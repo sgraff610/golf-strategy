@@ -8,6 +8,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ReferenceLine, ResponsiveContainer,
   ComposedChart, ScatterChart, Scatter,
+  BarChart, Bar, Cell,
 } from "recharts";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
@@ -471,7 +472,8 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
   const [scatterHoles, setScatterHoles] = useState<"both" | "9" | "18">("both");
 
   const courses = Array.from(new Map(summaries.map(s => [s.courseId, s.courseName])).entries());
-  const filtered = courseFilter ? summaries.filter(s => s.courseId === courseFilter) : summaries;
+  const filtered = (courseFilter ? summaries.filter(s => s.courseId === courseFilter) : summaries)
+    .slice().sort((a, b) => a.date.localeCompare(b.date));
 
   const getVal = (s: RoundSummary): number =>
     primaryMetric === "diff" ? (s.diff ?? NaN) : primaryMetric === "score" ? s.score : s.toPar;
@@ -479,6 +481,14 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
   const rolling5 = filtered.map((_, i) => {
     if (i < 4) return null;
     const vals = filtered.slice(i - 4, i + 1).map(getVal).filter(v => !isNaN(v));
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  });
+
+  const rolling5overlay = filtered.map((_, i) => {
+    if (overlayMetric === "none" || i < 4) return null;
+    const vals = filtered.slice(i - 4, i + 1)
+      .map(r => r[overlayMetric] as number)
+      .filter(v => v != null && !isNaN(v));
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   });
 
@@ -490,7 +500,7 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
   const last10 = filtered.slice(-10);
 
   const chartData = filtered.map((s, i) => ({
-    name: s.date.slice(5),
+    name: s.date,          // full date as categorical key — prevents MM-DD collisions across years
     date: s.date,
     courseName: s.courseName,
     score: s.score,
@@ -499,7 +509,16 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
     primary: getVal(s),
     overlay: overlayMetric !== "none" ? (s[overlayMetric] as number) : undefined,
     rolling: rolling5[i],
+    overlayRolling: overlayMetric !== "none" ? rolling5overlay[i] : undefined,
   }));
+
+  // Year-boundary markers: first data point of each new year (skip the very first)
+  const yearStarts = chartData.reduce<{ name: string; year: string }[]>((acc, d, i) => {
+    if (i === 0) return acc;
+    if (d.date.slice(0, 4) !== chartData[i - 1].date.slice(0, 4))
+      acc.push({ name: d.name, year: d.date.slice(0, 4) });
+    return acc;
+  }, []);
 
   const scatterBase = scatterHoles === "9" ? filtered.filter(s => s.totalHoles <= 9)
     : scatterHoles === "18" ? filtered.filter(s => s.totalHoles >= 18)
@@ -523,7 +542,6 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
 
   const primaryColor = "#0f6e56";
   const overlayColor = "#c8a84b";
-  const rollingColor = "#6baed6";
 
   const btnStyle = (active: boolean, color = primaryColor): React.CSSProperties => ({
     padding: "3px 10px", borderRadius: 12, fontSize: 11, fontWeight: 500,
@@ -568,8 +586,13 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
           </p>
         )}
         {payload.find((p: any) => p.dataKey === "rolling")?.value != null && (
-          <p style={{ margin: "1px 0", color: rollingColor }}>
+          <p style={{ margin: "1px 0", color: primaryColor }}>
             5-rnd avg: {payload.find((p: any) => p.dataKey === "rolling")?.value.toFixed(1)}
+          </p>
+        )}
+        {payload.find((p: any) => p.dataKey === "overlayRolling")?.value != null && (
+          <p style={{ margin: "1px 0", color: overlayColor }}>
+            5-rnd avg ({metricLabel(overlayMetric)}): {payload.find((p: any) => p.dataKey === "overlayRolling")?.value.toFixed(1)}
           </p>
         )}
       </div>
@@ -636,19 +659,53 @@ function TrendsView({ summaries }: { summaries: RoundSummary[] }) {
             </button>
           ))}
         </div>
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={chartData} margin={{ top: 4, right: overlayMetric !== "none" ? 40 : 8, bottom: 0, left: -20 }}>
+        <ResponsiveContainer width="100%" height={290}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: overlayMetric !== "none" ? 40 : 8, bottom: 8, left: -20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e8" />
-            <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#999" }} />
+            <XAxis dataKey="name" height={36} tick={(props: any) => {
+              const { x, y, payload } = props;
+              const idx = chartData.findIndex(d => d.name === payload.value);
+              const isYearStart = idx === 0 ||
+                (idx > 0 && chartData[idx].date.slice(0, 4) !== chartData[idx - 1].date.slice(0, 4));
+              return (
+                <g transform={`translate(${x},${y})`}>
+                  <text x={0} y={0} dy={11} textAnchor="middle" fill="#999" fontSize={9}>
+                    {payload.value.slice(5)}
+                  </text>
+                  {isYearStart && (
+                    <text x={0} y={0} dy={22} textAnchor="middle" fill="#555" fontSize={8} fontWeight={700}>
+                      {payload.value.slice(0, 4)}
+                    </text>
+                  )}
+                </g>
+              );
+            }} />
             <YAxis yAxisId="left" tick={{ fontSize: 9, fill: primaryColor }} />
-            {overlayMetric !== "none" && <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: overlayColor }} />}
+            {overlayMetric !== "none" && (
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: overlayColor }}
+                domain={overlayMetric === "avgPutts" ? [1.0, 2.5] : ["auto", "auto"]} />
+            )}
             <Tooltip content={<TrendTooltip />} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
             <ReferenceLine yAxisId="left" y={0} stroke="#ddd" strokeDasharray="4 2" />
-            <Line yAxisId="left" type="monotone" dataKey="primary" name={metricLabel(primaryMetric)} stroke={primaryColor} dot={{ r: 2 }} strokeWidth={1.5} connectNulls />
-            <Line yAxisId="left" type="monotone" dataKey="rolling" name="5-rnd avg" stroke={rollingColor} dot={false} strokeWidth={2} strokeDasharray="5 3" connectNulls />
+            {yearStarts.map(({ name, year }) => (
+              <ReferenceLine key={year} yAxisId="left" x={name} stroke="#ccc" />
+            ))}
+            {/* Dots only — no connecting line */}
+            <Line yAxisId="left" type="monotone" dataKey="primary" name={metricLabel(primaryMetric)}
+              stroke={primaryColor} strokeWidth={0} dot={{ r: 2, fill: primaryColor, stroke: primaryColor }}
+              activeDot={{ r: 4 }} connectNulls legendType="none" />
+            {/* 5-round rolling average — solid line, same color as dots */}
+            <Line yAxisId="left" type="monotone" dataKey="rolling" name="5-rnd avg"
+              stroke={primaryColor} dot={false} strokeWidth={2} connectNulls />
             {overlayMetric !== "none" && (
-              <Line yAxisId="right" type="monotone" dataKey="overlay" name={metricLabel(overlayMetric)} stroke={overlayColor} dot={{ r: 2 }} strokeWidth={1.5} connectNulls />
+              <Line yAxisId="right" type="monotone" dataKey="overlay" name={metricLabel(overlayMetric)}
+                stroke={overlayColor} strokeWidth={0} dot={{ r: 2, fill: overlayColor, stroke: overlayColor }}
+                activeDot={{ r: 4 }} connectNulls legendType="none" />
+            )}
+            {overlayMetric !== "none" && (
+              <Line yAxisId="right" type="monotone" dataKey="overlayRolling" name={`5-rnd avg (${metricLabel(overlayMetric)})`}
+                stroke={overlayColor} dot={false} strokeWidth={2} connectNulls />
             )}
           </ComposedChart>
         </ResponsiveContainer>
@@ -1021,6 +1078,298 @@ function writeLocalCache(c: LocalCache) {
   try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(c)); } catch {}
 }
 
+// ─── Putting Insights tab ─────────────────────────────────────────────────────
+
+const DIST_ORDER = ["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"];
+// Fallback expected putts used only for distances where the player has fewer than 5 samples.
+// Based on mid-amateur (~12 HCP) research (Dave Pelz amateur putting data).
+const FALLBACK_EXPECTED: Record<string,number> = {
+  "Gimme":1.00,"3ft":1.07,"5ft":1.28,"7ft":1.52,"10ft":1.75,
+  "15ft":1.90,"20ft":1.97,"30ft":2.05,"40ft":2.12,"50ft":2.18,"50+":2.23,
+};
+
+// Grade based on total strokes gained for the round vs amateur-level expectations.
+// A+ = finished 2+ strokes better than expected; F = 2+ strokes worse.
+function puttGrade(sg: number): { letter: string; color: string; bg: string } {
+  if (sg >= 3.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (sg >= 1.5)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (sg >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (sg >= -1.5) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (sg >= -3.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                  { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+
+function PuttingInsights({ allHoles, roundSummaries }: {
+  allHoles: EnrichedHole[];
+  roundSummaries: RoundSummary[];
+}) {
+  const isMobile = useIsMobile();
+
+  // ── Personal baseline: avg putts per distance from player's own history ──────
+  const personalBaseline = React.useMemo(() => {
+    const MIN_SAMPLES = 5;
+    const result: Record<string, number> = { ...FALLBACK_EXPECTED };
+    for (const dist of DIST_ORDER) {
+      const hs = allHoles.filter(h => h.first_putt_distance === dist && h.putts > 0);
+      if (hs.length >= MIN_SAMPLES) {
+        result[dist] = Math.round(hs.reduce((s, h) => s + h.putts, 0) / hs.length * 100) / 100;
+      }
+    }
+    return result;
+  }, [allHoles]);
+
+  // ── Distance distribution ────────────────────────────────────────────────────
+  const distData = React.useMemo(() => {
+    return DIST_ORDER.map(dist => {
+      const hs = allHoles.filter(h => h.first_putt_distance === dist && h.putts > 0);
+      if (hs.length < 2) return null;
+      const n1 = hs.filter(h => h.putts === 1).length;
+      const n2 = hs.filter(h => h.putts === 2).length;
+      const n3 = hs.filter(h => h.putts >= 3).length;
+      const avg = hs.reduce((s,h) => s + h.putts, 0) / hs.length;
+      return {
+        dist,
+        count: hs.length,
+        "1 Putt": Math.round(n1 / hs.length * 100),
+        "2 Putt": Math.round(n2 / hs.length * 100),
+        "3+ Putt": Math.round(n3 / hs.length * 100),
+        avg: Math.round(avg * 100) / 100,
+        expected: personalBaseline[dist] ?? 2,
+      };
+    }).filter(Boolean) as any[];
+  }, [allHoles]);
+
+  // ── Round-by-round SG putting ────────────────────────────────────────────────
+  const roundPuttData = React.useMemo(() => {
+    const byRound: Record<number, EnrichedHole[]> = {};
+    for (const h of allHoles) {
+      if (!byRound[h.roundIndex]) byRound[h.roundIndex] = [];
+      byRound[h.roundIndex].push(h);
+    }
+    const rows = Object.entries(byRound).map(([idxStr, hs]) => {
+      const idx = Number(idxStr);
+      const summary = roundSummaries.find(s => s.idx === idx);
+      const withDist = hs.filter(h => h.first_putt_distance && personalBaseline[h.first_putt_distance] != null && h.putts > 0);
+      if (withDist.length < 3) return null;
+      const exp = withDist.reduce((s,h) => s + personalBaseline[h.first_putt_distance], 0);
+      const act = withDist.reduce((s,h) => s + h.putts, 0);
+      const sg = Math.round((exp - act) * 10) / 10;
+      const sgPerHole = withDist.length > 0 ? sg / withDist.length : 0;
+      const totalPutts = hs.reduce((s,h) => s + (h.putts || 0), 0);
+      return {
+        idx, date: summary?.date ?? "", name: summary?.date ?? "",
+        courseName: summary?.courseName ?? "",
+        sg, sgPerHole: Math.round(sgPerHole * 100) / 100,
+        withDist: withDist.length, totalHoles: hs.length,
+        avgPutts: hs.length > 0 ? Math.round(totalPutts / hs.length * 100) / 100 : 0,
+        ...puttGrade(sg),
+      };
+    }).filter(Boolean).sort((a: any, b: any) => (a.date > b.date ? 1 : -1)) as any[];
+
+    // Rolling 5-round average
+    return (rows as any[]).map((r,i) => {
+      const window = (rows as any[]).slice(Math.max(0, i-4), i+1).filter((x: any) => x.sg != null);
+      const roll = window.length ? Math.round(window.reduce((s: number, x: any) => s + x.sg, 0) / window.length * 10) / 10 : null;
+      return { ...r, rollingAvg: roll };
+    });
+  }, [allHoles, roundSummaries, personalBaseline]);
+
+  // ── Trend summary ────────────────────────────────────────────────────────────
+  const trendSummary = React.useMemo(() => {
+    if (roundPuttData.length < 4) return null;
+    const recent = (roundPuttData as any[]).slice(-5);
+    const prior  = (roundPuttData as any[]).slice(-10, -5);
+    if (!prior.length) return null;
+    const avgRecent = recent.reduce((s: number, r: any) => s + r.sg, 0) / recent.length;
+    const avgPrior  = prior.reduce((s: number, r: any) => s + r.sg, 0) / prior.length;
+    const delta = Math.round((avgRecent - avgPrior) * 10) / 10;
+    return { avgRecent: Math.round(avgRecent * 10) / 10, avgPrior: Math.round(avgPrior * 10) / 10, delta };
+  }, [roundPuttData]);
+
+  if (allHoles.length === 0) return <p style={{ color:"var(--muted)", fontStyle:"italic" }}>No hole data yet.</p>;
+
+  const gradeRows = [
+    { letter:"A+", desc:"3+ strokes better than your avg",    bg:"#0f6e56", color:"#fff" },
+    { letter:"A",  desc:"1.5–3 strokes better than your avg", bg:"#27ae60", color:"#fff" },
+    { letter:"B",  desc:"0–1.5 strokes better than your avg", bg:"#2980b9", color:"#fff" },
+    { letter:"C",  desc:"0–1.5 strokes worse (at your avg)",  bg:"#f5c842", color:"#333" },
+    { letter:"D",  desc:"1.5–3 strokes worse than your avg",  bg:"#e67e22", color:"#fff" },
+    { letter:"F",  desc:"3+ strokes worse than your avg",     bg:"#c0392b", color:"#fff" },
+  ];
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+
+      {/* ── Section 1: Make rates by distance ──────────────────────────────── */}
+      <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"20px 22px", marginBottom:24 }}>
+        <div style={{ marginBottom:4 }}>
+          <span style={{ fontSize:14, fontWeight:700, color:"var(--ink)" }}>Make Rates by First Putt Distance</span>
+        </div>
+        <p style={{ fontSize:12, color:"var(--muted)", margin:"0 0 18px" }}>
+          How often you 1-putt, 2-putt, or 3+-putt from each distance. Avg putts shown above each bar.
+        </p>
+
+        {distData.length === 0 ? (
+          <p style={{ color:"var(--muted)", fontStyle:"italic", fontSize:13 }}>Need more rounds with first putt distance logged.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={distData as any} margin={{ top:20, right:8, bottom:0, left:-20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+              <XAxis dataKey="dist" tick={{ fontSize:11, fill:"var(--muted)" }} />
+              <YAxis tickFormatter={(v: number) => `${v}%`} domain={[0,100]} tick={{ fontSize:10, fill:"var(--muted)" }} />
+              <Tooltip
+                formatter={(value: any, name: any, props: any) => {
+                  const d = props?.payload;
+                  if (name === "3+ Putt" && d) return [`${value}% · avg ${d.avg} putts (n=${d.count})`, name];
+                  return [`${value}%`, name];
+                }}
+                contentStyle={{ fontSize:12, borderRadius:8, border:"1px solid var(--line)" }}
+              />
+              <Legend wrapperStyle={{ fontSize:11 }} />
+              {/* Custom label: avg putts above bar */}
+              <Bar dataKey="1 Putt"  stackId="a" fill="#0f6e56" radius={[0,0,0,0]} />
+              <Bar dataKey="2 Putt"  stackId="a" fill="#8995a3" />
+              <Bar dataKey="3+ Putt" stackId="a" fill="#c94a2a" radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Sample sizes + your personal avg */}
+        {distData.length > 0 && (
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:12 }}>
+            {(distData as any[]).map((d: any) => (
+              <span key={d.dist} style={{ fontSize:10, color:"var(--muted-2)", background:"var(--paper-alt)", borderRadius:999, padding:"2px 8px" }}>
+                {d.dist}: avg {d.avg} ({d.count} holes)
+              </span>
+            ))}
+          </div>
+        )}
+        <p style={{ fontSize:11, color:"var(--muted-2)", margin:"8px 0 0", fontStyle:"italic" }}>
+          Your personal averages above are used as the baseline for grading. Distances with fewer than 5 samples use a 12-HCP research benchmark instead.
+        </p>
+      </div>
+
+      {/* ── Section 2: Round-by-round putting grade ────────────────────────── */}
+      <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"20px 22px", marginBottom:24 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4, flexWrap:"wrap", gap:8 }}>
+          <span style={{ fontSize:14, fontWeight:700, color:"var(--ink)" }}>Putting Grade by Round</span>
+          {trendSummary && (
+            <span style={{ fontSize:12, fontWeight:600, color: trendSummary.delta >= 0 ? "var(--green)" : "var(--bad)" }}>
+              {trendSummary.delta >= 0 ? "▲" : "▼"} {Math.abs(trendSummary.delta)} putts/round vs prior 5
+            </span>
+          )}
+        </div>
+        <p style={{ fontSize:12, color:"var(--muted)", margin:"0 0 18px" }}>
+          Strokes gained vs your own historical average putts from each distance. C = putted exactly as you normally do. A+ = 2+ strokes better than your norm. Line = 5-round average.
+        </p>
+
+        {roundPuttData.length < 2 ? (
+          <p style={{ color:"var(--muted)", fontStyle:"italic", fontSize:13 }}>Need more rounds with first putt distance data.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <ComposedChart data={roundPuttData as any} margin={{ top:8, right:8, bottom:0, left:-20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+              <XAxis dataKey="name" height={36} tick={(props: any) => {
+                const { x, y, payload } = props;
+                const d: string = payload.value ?? "";
+                const idx = (roundPuttData as any[]).findIndex((r: any) => r.name === d);
+                const isYearStart = idx === 0 ||
+                  (idx > 0 && d.slice(0, 4) !== ((roundPuttData as any[])[idx - 1]?.name ?? "").slice(0, 4));
+                return (
+                  <g transform={`translate(${x},${y})`}>
+                    <text x={0} y={0} dy={11} textAnchor="middle" fill="var(--muted)" fontSize={10}>
+                      {d ? `${d.slice(5,7)}/${d.slice(8)}` : ""}
+                    </text>
+                    {isYearStart && (
+                      <text x={0} y={0} dy={22} textAnchor="middle" fill="#555" fontSize={8} fontWeight={700}>
+                        {d.slice(0, 4)}
+                      </text>
+                    )}
+                  </g>
+                );
+              }} />
+              <YAxis tickFormatter={(v: number) => (v >= 0 ? `+${v}` : `${v}`)} tick={{ fontSize:10, fill:"var(--muted)" }} />
+              <ReferenceLine y={0} stroke="var(--muted)" strokeDasharray="4 2" />
+              <Tooltip
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  const g = puttGrade(d.sg);
+                  return (
+                    <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:8, padding:"10px 14px", fontSize:12 }}>
+                      <div style={{ fontWeight:700, marginBottom:4 }}>{d.date} · {d.courseName}</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                        <span style={{ background:g.bg, color:g.color, borderRadius:6, padding:"2px 8px", fontWeight:700, fontSize:13 }}>{g.letter}</span>
+                        <span style={{ color: d.sg >= 0 ? "var(--green)" : "var(--bad)", fontWeight:700 }}>
+                          {d.sg >= 0 ? "+" : ""}{d.sg} strokes vs expected
+                        </span>
+                      </div>
+                      <div style={{ color:"var(--muted)" }}>{d.withDist}/{d.totalHoles} holes with distance logged · avg {d.avgPutts} putts/hole</div>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="sg" name="SG Putts" radius={[4,4,0,0]}>
+                {(roundPuttData as any[]).map((r: any, i: number) => (
+                  <Cell key={i} fill={r.bg} fillOpacity={0.9} />
+                ))}
+              </Bar>
+              <Line dataKey="rollingAvg" type="monotone" stroke="#f29450" strokeWidth={2.5} dot={false} name="5-rnd avg" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Grade legend */}
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:16 }}>
+          {gradeRows.map(g => (
+            <div key={g.letter} style={{ display:"flex", alignItems:"center", gap:5 }}>
+              <span style={{ background:g.bg, color:g.color, borderRadius:6, padding:"2px 7px", fontSize:11, fontWeight:700 }}>{g.letter}</span>
+              <span style={{ fontSize:10, color:"var(--muted-2)" }}>{g.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Section 3: Round table ──────────────────────────────────────────── */}
+      {roundPuttData.length > 0 && (
+        <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"20px 22px" }}>
+          <span style={{ fontSize:14, fontWeight:700, color:"var(--ink)", display:"block", marginBottom:14 }}>Round Log</span>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ borderCollapse:"collapse", width:"100%", fontSize:12 }}>
+              <thead>
+                <tr style={{ borderBottom:"2px solid var(--line)" }}>
+                  {["Date","Course","Grade","SG Putts","Avg Putts","Holes w/ Dist"].map(h => (
+                    <th key={h} style={{ padding:"6px 10px", textAlign:"left", fontSize:10, fontWeight:700, color:"var(--muted-2)", textTransform:"uppercase", letterSpacing:1, whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {([...(roundPuttData as any[])].reverse()).map((r: any, i: number) => {
+                  const g = puttGrade(r.sg);
+                  return (
+                    <tr key={i} style={{ borderBottom:"1px solid var(--line-soft)" }}>
+                      <td style={{ padding:"7px 10px", color:"var(--muted)", whiteSpace:"nowrap" }}>{r.date}</td>
+                      <td style={{ padding:"7px 10px", color:"var(--ink-soft)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.courseName}</td>
+                      <td style={{ padding:"7px 10px" }}>
+                        <span style={{ background:g.bg, color:g.color, borderRadius:6, padding:"2px 8px", fontWeight:700, fontSize:12 }}>{g.letter}</span>
+                      </td>
+                      <td style={{ padding:"7px 10px", fontWeight:700, color: r.sg >= 0 ? "var(--green)" : "var(--bad)" }}>
+                        {r.sg >= 0 ? "+" : ""}{r.sg}
+                      </td>
+                      <td style={{ padding:"7px 10px", color:"var(--ink-soft)" }}>{r.avgPutts}</td>
+                      <td style={{ padding:"7px 10px", color:"var(--muted)" }}>{r.withDist}/{r.totalHoles}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RoundsInsights() {
   const isMobile = useIsMobile();
   const [allHoles, setAllHoles] = useState<EnrichedHole[]>([]);
@@ -1033,7 +1382,7 @@ export default function RoundsInsights() {
   const [useLastN, setUseLastN] = useState(false);
   const [lastN, setLastN] = useState(10);
   const [lastNInput, setLastNInput] = useState("10");
-  const [tab, setTab] = useState<"briefing" | "trends" | "factors">("briefing");
+  const [tab, setTab] = useState<"briefing" | "trends" | "factors" | "putting">("briefing");
   const [coachingInsights, setCoachingInsights] = useState<CoachingInsights | null>(null);
   const [heavyReady, setHeavyReady] = useState(false);
 
@@ -1424,6 +1773,7 @@ export default function RoundsInsights() {
           { id: "briefing" as const, label: "The Briefing" },
           { id: "trends" as const, label: "Performance Trend" },
           { id: "factors" as const, label: "Factor Correlations" },
+          { id: "putting" as const, label: "Putting" },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             flex: 1, background: "none", border: "none",
@@ -1803,6 +2153,10 @@ export default function RoundsInsights() {
         </div>
           </div>
         )}
+      </div>
+
+      <div style={{ display: tab === "putting" ? "block" : "none" }}>
+        <PuttingInsights allHoles={allHoles} roundSummaries={roundSummaries} />
       </div>
     </main>
     </div>
