@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import FocusBoard from "./coach/FocusBoard";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
 import { useIsMobile } from "@/app/hooks/useIsMobile";
@@ -1382,7 +1383,7 @@ export default function RoundsInsights() {
   const [useLastN, setUseLastN] = useState(false);
   const [lastN, setLastN] = useState(10);
   const [lastNInput, setLastNInput] = useState("10");
-  const [tab, setTab] = useState<"briefing" | "trends" | "factors" | "putting">("briefing");
+  const [tab, setTab] = useState<"coach" | "trends" | "factors" | "putting">("coach");
   const [coachingInsights, setCoachingInsights] = useState<CoachingInsights | null>(null);
   const [heavyReady, setHeavyReady] = useState(false);
 
@@ -1749,7 +1750,7 @@ export default function RoundsInsights() {
 
   return (
     <div style={COACH_ROOT}>
-    <main style={{ maxWidth: 900, width: "100%", margin: "0 auto", padding: isMobile ? "0 16px 80px" : "0 24px 80px", boxSizing: "border-box" }}>
+    <main style={{ maxWidth: tab === "coach" ? 1280 : 900, width: "100%", margin: "0 auto", padding: isMobile ? "0 16px 80px" : "0 24px 80px", boxSizing: "border-box" }}>
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 0 16px" }}>
@@ -1768,26 +1769,26 @@ export default function RoundsInsights() {
       </div>
 
       {/* Tab bar — matches clubhouse exactly */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 24, gap: 0 }}>
+      <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 24, gap: 0, overflowX: "auto" }}>
         {([
-          { id: "briefing" as const, label: "The Briefing" },
+          { id: "coach" as const, label: "Coach" },
           { id: "trends" as const, label: "Performance Trend" },
           { id: "factors" as const, label: "Factor Correlations" },
           { id: "putting" as const, label: "Putting" },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            flex: 1, background: "none", border: "none",
-            borderBottom: tab === t.id ? "2px solid var(--green-deep)" : "2px solid transparent",
-            padding: "10px 4px", marginBottom: -1, cursor: "pointer",
-            fontSize: 13, fontWeight: 600,
-            color: tab === t.id ? "var(--green-deep)" : "var(--muted)",
+            flex: "none", background: "none", border: "none",
+            borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
+            padding: "10px 14px", marginBottom: -1, cursor: "pointer",
+            fontSize: 14, fontWeight: tab === t.id ? 700 : 500,
+            color: tab === t.id ? "var(--ink)" : "var(--ink-mute)",
             whiteSpace: "nowrap" as const,
           }}>{t.label}</button>
         ))}
       </div>
 
-      <div style={{ display: tab === "briefing" ? "block" : "none" }}>
-        <CoachBriefing insights={coachingInsights} totalRounds={totalRounds} heavyReady={heavyReady} allHoles={allHoles} onNavigate={setTab} />
+      <div style={{ display: tab === "coach" ? "block" : "none" }}>
+        <FocusBoard />
       </div>
 
       <div style={{ display: tab === "trends" ? "block" : "none" }}>
