@@ -1072,6 +1072,7 @@ interface LocalCache {
   summaries: RoundSummary[];
   availableYears: number[];
   coachingInsights: CoachingInsights | null;
+  handicapIndex?: number | null;
 }
 function readLocalCache(): LocalCache | null {
   try { const r = localStorage.getItem(LOCAL_CACHE_KEY); return r ? JSON.parse(r) : null; } catch { return null; }
@@ -1412,6 +1413,7 @@ export default function RoundsInsights() {
         setRoundSummaries(local.summaries);
         setAvailableYears(local.availableYears);
         setTotalRounds(local.roundCount);
+        if (local.handicapIndex != null) setHandicapIndex(local.handicapIndex);
         setLoading(false);
         setHeavyReady(true);
       }
@@ -1584,7 +1586,7 @@ export default function RoundsInsights() {
         supabase.from("player_data").upsert({ id: "singleton", coaching_insights: ci });
       }
 
-      writeLocalCache({ roundCount, latestDate, scoreChecksum, allHoles: enriched, summaries: summaries_, availableYears: Array.from(years).sort((a,b) => b-a), coachingInsights: freshInsights });
+      writeLocalCache({ roundCount, latestDate, scoreChecksum, allHoles: enriched, summaries: summaries_, availableYears: Array.from(years).sort((a,b) => b-a), coachingInsights: freshInsights, handicapIndex: computeHandicapIndex(hcapDiffs) });
 
       setLoading(false);
       setHeavyReady(true);
