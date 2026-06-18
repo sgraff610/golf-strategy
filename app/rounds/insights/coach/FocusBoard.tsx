@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { PLAYER, COACH, LEAKS, STRENGTHS, CATS, fmt, type Cat } from "./leaks";
+import { PLAYER, COACH, LEAKS, STRENGTHS, CATS, fmt, type Leak, type Strength, type Cat } from "./leaks";
 import { Bars, CatTag, ImpactPill, GoalOption, FixCard, ProgressBar } from "./CoachPrimitives";
 import { useIsMobile } from "@/app/hooks/useIsMobile";
 
@@ -15,9 +15,19 @@ const defaultLeakState = (): LeakState => ({
   expanded: false, goalType: null, picks: new Set<number>(), committed: false,
 });
 
-export default function FocusBoard() {
+interface FocusBoardProps {
+  leaks?: Leak[];
+  strengths?: Strength[];
+  player?: { handicap: number; rounds: number; trend30d: number };
+}
+
+export default function FocusBoard({ leaks: leaksProp, strengths: strengthsProp, player: playerProp }: FocusBoardProps) {
   const isMobile = useIsMobile();
   const [plan, setPlan] = useState<Record<string, LeakState>>({});
+
+  const leaks = leaksProp ?? LEAKS;
+  const strengths = strengthsProp ?? STRENGTHS;
+  const player = playerProp ?? PLAYER;
 
   const stOf = (id: string): LeakState => plan[id] ?? defaultLeakState();
   const set = (id: string, patch: Partial<LeakState>) =>
@@ -26,7 +36,7 @@ export default function FocusBoard() {
       return { ...p, [id]: { ...cur, ...patch } };
     });
 
-  const committed = LEAKS.filter(l => stOf(l.id).committed);
+  const committed = leaks.filter(l => stOf(l.id).committed);
   const projTotal = committed.reduce((sum, l) => {
     const st = stOf(l.id);
     return sum + l.fixes.reduce((s, f, i) => s + (st.picks.has(i) ? f.proj : 0), 0);
@@ -54,11 +64,16 @@ export default function FocusBoard() {
             fontFamily: "var(--font-display)", fontStyle: "italic",
             fontSize: 76, fontWeight: 600, lineHeight: 0.9,
             letterSpacing: -3, marginTop: 6,
-          }}>{PLAYER.handicap}</div>
+          }}>{player.handicap}</div>
           <div style={{
             fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700,
-            color: "#f0c989", marginTop: 10,
-          }}>▼ {Math.abs(PLAYER.trend30d).toFixed(1)} · last 30 days</div>
+            color: player.trend30d <= 0 ? "#f0c989" : "#f09090", marginTop: 10,
+          }}>
+            {player.trend30d <= 0 ? "▼" : "▲"} {Math.abs(player.trend30d).toFixed(1)} strokes · last 5 vs prior 5
+          </div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#8da898", marginTop: 4 }}>
+            {player.rounds} rounds tracked
+          </div>
         </div>
 
         <div style={{
@@ -86,9 +101,9 @@ export default function FocusBoard() {
 
         {/* LEAK CARDS */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={MONO10}>Top 5 leaks · ranked by impact</div>
+          <div style={MONO10}>Top {leaks.length} leak{leaks.length !== 1 ? "s" : ""} · ranked by impact</div>
 
-          {LEAKS.map(l => {
+          {leaks.map(l => {
             const st = stOf(l.id);
             const open = st.expanded || st.committed;
             return (
@@ -182,7 +197,7 @@ export default function FocusBoard() {
                       />
                     </div>
 
-                    {/* Step 2: Plays (only after goal is chosen) */}
+                    {/* Step 2: Plays (only after goal chosen) */}
                     {st.goalType && (
                       <>
                         <div style={STEP_HEAD}>
@@ -275,7 +290,7 @@ export default function FocusBoard() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 18 }}>
                   {committed.map(l => {
                     const st = stOf(l.id);
-                    const g = st.goalType === "frequency" ? l.goals.frequency : l.goals.impact!;
+                    const g = st.goalType === "frequency" ? l.goals.frequency : l.goals.impact;
                     return (
                       <div key={l.id} style={{ borderTop: "1px solid #2a323f", paddingTop: 12 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
@@ -284,9 +299,7 @@ export default function FocusBoard() {
                             fontFamily: "var(--font-mono)", fontSize: 11,
                             fontWeight: 700, color: "var(--accent)", flexShrink: 0,
                           }}>
-                            {st.goalType === "frequency"
-                              ? `${fmt(g.current, g.unit)}→${fmt(g.target, g.unit)}`
-                              : `${g.current.toFixed(2)}→${g.target.toFixed(2)}`}
+                            {fmt(g.current, g.unit)}→{fmt(g.target, g.unit)}
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: "#8a93a0", marginTop: 3 }}>
@@ -313,34 +326,40 @@ export default function FocusBoard() {
           }}>
             <div style={{ ...MONO10, color: "var(--green-deep)", marginBottom: 6 }}>What&rsquo;s working</div>
 
-            {CATS.map((cat: Cat) => {
-              const items = STRENGTHS.filter(s => s.cat === cat);
-              if (!items.length) return null;
-              return (
-                <div key={cat} style={{ marginTop: 14 }}>
-                  <div style={{
-                    fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 1.2,
-                    textTransform: "uppercase", color: "var(--green)", fontWeight: 700,
-                    paddingBottom: 7, marginBottom: 10,
-                    borderBottom: "1px solid rgba(8,70,52,0.13)",
-                  }}>{cat}</div>
-                  {items.map(s => (
-                    <div key={s.metric} style={{
-                      display: "flex", gap: 12, alignItems: "center", marginBottom: 11,
-                    }}>
-                      <span className="tnum" style={{
-                        fontFamily: "var(--font-display)", fontSize: 21, fontWeight: 600,
-                        color: "var(--green-deep)", width: 56, flexShrink: 0, textAlign: "right",
-                      }}>{s.value}</span>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green-deep)" }}>{s.metric}</div>
-                        <div style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 2, lineHeight: 1.35 }}>{s.note}</div>
+            {strengths.length === 0 ? (
+              <div style={{ fontSize: 12, color: "var(--ink-mute)", fontStyle: "italic", marginTop: 8 }}>
+                Keep logging rounds — strengths emerge with more data.
+              </div>
+            ) : (
+              CATS.map((cat: Cat) => {
+                const items = strengths.filter(s => s.cat === cat);
+                if (!items.length) return null;
+                return (
+                  <div key={cat} style={{ marginTop: 14 }}>
+                    <div style={{
+                      fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: 1.2,
+                      textTransform: "uppercase", color: "var(--green)", fontWeight: 700,
+                      paddingBottom: 7, marginBottom: 10,
+                      borderBottom: "1px solid rgba(8,70,52,0.13)",
+                    }}>{cat}</div>
+                    {items.map(s => (
+                      <div key={s.metric} style={{
+                        display: "flex", gap: 12, alignItems: "center", marginBottom: 11,
+                      }}>
+                        <span className="tnum" style={{
+                          fontFamily: "var(--font-display)", fontSize: 21, fontWeight: 600,
+                          color: "var(--green-deep)", width: 56, flexShrink: 0, textAlign: "right",
+                        }}>{s.value}</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green-deep)" }}>{s.metric}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 2, lineHeight: 1.35 }}>{s.note}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
+                    ))}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

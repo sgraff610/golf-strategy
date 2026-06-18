@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import FocusBoard from "./coach/FocusBoard";
+import type { Leak as FBLeak, Strength as FBStrength } from "./coach/leaks";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
 import { useIsMobile } from "@/app/hooks/useIsMobile";
@@ -1573,6 +1574,168 @@ export default function RoundsInsights() {
   const filteredAvg = calcAvg(filtered);
   const impact = filtered.length > 0 ? filteredAvg - baseline : NaN;
 
+  // ── Coach Focus Board: compute real leaks/strengths from hole data ──────────
+  const focusBoardData = React.useMemo((): {
+    leaks: FBLeak[]; strengths: FBStrength[];
+    player: { handicap: number; rounds: number; trend30d: number };
+  } | null => {
+    if (allHoles.length < 10) return null;
+    const base = allHoles.reduce((s,h) => s+(h.score-h.par), 0) / allHoles.length;
+    const impOf = (hs: EnrichedHole[]) => hs.length < 3 ? NaN : hs.reduce((s,h) => s+(h.score-h.par),0)/hs.length - base;
+    const r2 = (v: number) => Math.round(v*100)/100;
+    const safeImp = (hs: EnrichedHole[]) => { const v=impOf(hs); return r2(isNaN(v)?0:v); };
+    const freqOf  = (hs: EnrichedHole[], pool: EnrichedHole[]) => pool.length>0 ? Math.round(hs.length/pool.length*100) : 0;
+
+    // Key slices
+    const drv  = allHoles.filter(h=>h.par>=4&&h.tee_accuracy!=="");
+    const dHit = drv.filter(h=>h.tee_accuracy==="Hit"),  dL=drv.filter(h=>h.tee_accuracy==="Left"),
+          dR   = drv.filter(h=>h.tee_accuracy==="Right"), dS=drv.filter(h=>h.tee_accuracy==="Short");
+    const apr   = allHoles.filter(h=>h.appr_accuracy!=="");
+    const aHit  = apr.filter(h=>h.appr_accuracy==="Hit"),  aS=apr.filter(h=>h.appr_accuracy==="Short"),
+          aLng  = apr.filter(h=>h.appr_accuracy==="Long"),  aLft=apr.filter(h=>h.appr_accuracy==="Left"),
+          aRt   = apr.filter(h=>h.appr_accuracy==="Right");
+    const gY=allHoles.filter(h=>h.gir), gN=allHoles.filter(h=>!h.gir);
+    const p1=allHoles.filter(h=>h.putts===1), p2=allHoles.filter(h=>h.putts===2), p3=allHoles.filter(h=>h.putts>=3);
+    const gsb=allHoles.filter(h=>h.greenside_bunker>0);
+    const tc=allHoles.filter(h=>(Number(h.chips)||0)+(Number(h.greenside_bunker)||0)>=2);
+    const par3h=allHoles.filter(h=>h.par===3), par5h=allHoles.filter(h=>h.par===5);
+    const par3miss=par3h.filter(h=>!h.gir);
+
+    type Cat = "Tee"|"Approach"|"Short game"|"Putting";
+    type PatSpec = {
+      id:string; cat:Cat; label:string; freqLabel:string;
+      hs:EnrichedHole[]; pool:EnrichedHole[];
+      chartSrc:{x:string;hs:EnrichedHole[];hi?:boolean}[];
+      fix1:[string,string,string]; fix2:[string,string,string];
+    };
+
+    const PATS: PatSpec[] = [
+      { id:"drive-right", cat:"Tee", label:"Drive right misses", freqLabel:"par-4/5 drives miss right",
+        hs:dR, pool:drv, chartSrc:[{x:"Hit",hs:dHit},{x:"Left",hs:dL},{x:"Right",hs:dR,hi:true}],
+        fix1:["Club swap","Try a fairway wood off right-trouble tees","Higher-lofted clubs cut right miss-rate by 15-20pp while losing minimal distance"],
+        fix2:["Setup","Tee up on the right side of the box","Angles your swing path left of the trouble — same mechanics, better outcome"] },
+      { id:"drive-left", cat:"Tee", label:"Drive left misses", freqLabel:"par-4/5 drives miss left",
+        hs:dL, pool:drv, chartSrc:[{x:"Hit",hs:dHit},{x:"Left",hs:dL,hi:true},{x:"Right",hs:dR}],
+        fix1:["Aim","Aim center or right — compensate for your miss pattern","Playing the miss is faster than changing your swing shape"],
+        fix2:["Ball pos","Move ball back half an inch in your stance","Ball too far forward promotes pull-draws for most right-handed players"] },
+      { id:"drive-short", cat:"Tee", label:"Short drives", freqLabel:"par-4/5 drives land short",
+        hs:dS, pool:drv, chartSrc:[{x:"Hit",hs:dHit},{x:"Short",hs:dS,hi:true},{x:"Left",hs:dL}],
+        fix1:["Launch","Tee it higher and attack the ball on the upswing","An upward angle of attack adds 15-20y without any extra swing speed"],
+        fix2:["Speed","Don't ease off at impact — keep accelerating through the ball","Deceleration causes most short drives, not lack of power"] },
+      { id:"appr-short", cat:"Approach", label:"Approach shots short", freqLabel:"approaches finish short of green",
+        hs:aS, pool:apr, chartSrc:[{x:"On",hs:aHit},{x:"Short",hs:aS,hi:true},{x:"Long",hs:aLng}],
+        fix1:["Club up","Take one more club on every approach — no exceptions","The #1 pattern in amateur golf: underclubbing on approach shots"],
+        fix2:["Commit","Full swing with the right club beats a hard swing with the wrong one","A tentative 3/4 swing still loses yardage even with the correct club"] },
+      { id:"appr-long", cat:"Approach", label:"Approach shots long", freqLabel:"approaches fly the green",
+        hs:aLng, pool:apr, chartSrc:[{x:"On",hs:aHit},{x:"Short",hs:aS},{x:"Long",hs:aLng,hi:true}],
+        fix1:["Club down","Club down and use the front-of-green yardage on back pins","Back-pin + full swing = long miss; front number eliminates it"],
+        fix2:["Gapping","Re-check your carry numbers — they may have crept up 3-5y","Adrenaline and conditions add distance without you feeling it"] },
+      { id:"appr-left", cat:"Approach", label:"Approach shots left", freqLabel:"approaches miss left of green",
+        hs:aLft, pool:apr, chartSrc:[{x:"On",hs:aHit},{x:"Left",hs:aLft,hi:true},{x:"Right",hs:aRt}],
+        fix1:["Alignment","Check alignment before every shot — most left misses are setup, not swing","Feet, hips, and shoulders all parallel to target line"],
+        fix2:["Finish","Hold your finish toward the target — don't let the face close early","If your finish stalls left, you stopped rotating through impact"] },
+      { id:"appr-right", cat:"Approach", label:"Approach shots right", freqLabel:"approaches miss right of green",
+        hs:aRt, pool:apr, chartSrc:[{x:"On",hs:aHit},{x:"Left",hs:aLft},{x:"Right",hs:aRt,hi:true}],
+        fix1:["Rotate","Stay through the shot — rotate fully to the target","Right pushes happen when the body stops and the hands flip right"],
+        fix2:["Aim","Aim 5-10ft left of the flag to play your miss","Aim correction is the fastest win for a consistent push pattern"] },
+      { id:"non-gir", cat:"Approach", label:"Missing greens (GIR)", freqLabel:"holes miss the green in regulation",
+        hs:gN, pool:allHoles, chartSrc:[{x:"GIR",hs:gY},{x:"Non-GIR",hs:gN,hi:true}],
+        fix1:["Club up","Take more club and aim center — most greens are missed short","GIR percentage is the strongest predictor of scoring improvement"],
+        fix2:["Target","Aim for the largest part of the green, not the flag","Center of green rarely three-putts — miss short of pin = easy par chance"] },
+      { id:"putt-3", cat:"Putting", label:"Three-putts", freqLabel:"holes result in 3 or more putts",
+        hs:p3, pool:allHoles, chartSrc:[{x:"1-putt",hs:p1},{x:"2-putt",hs:p2},{x:"3+-putt",hs:p3,hi:true}],
+        fix1:["Speed","Lag to a 3-foot circle — pure speed control drill","3-putts are almost always speed problems, not line problems"],
+        fix2:["Past","Roll the first putt past the hole — never leave it short","Putts left short three-putt at 3× the rate of putts past the hole"] },
+      { id:"gs-bunker", cat:"Short game", label:"Greenside bunkers", freqLabel:"holes include a greenside bunker shot",
+        hs:gsb, pool:allHoles, chartSrc:[{x:"Bunker",hs:gsb,hi:true},{x:"GS rough",hs:tc.filter(h=>h.greenside_bunker===0)},{x:"GIR",hs:gY}],
+        fix1:["Strategy","Miss approach to the fat side — avoid short-siding yourself","Short-side misses into bunkers cost ~0.7 more strokes than long-side"],
+        fix2:["Technique","Open face, aim 2 inches behind the ball, accelerate through","Deceleration in the sand is the most common cause of thin/fat bunker shots"] },
+      { id:"two-chip", cat:"Short game", label:"Multiple chip / scramble shots", freqLabel:"holes need 2+ short-game shots",
+        hs:tc, pool:allHoles, chartSrc:[{x:"1 chip",hs:allHoles.filter(h=>(Number(h.chips)||0)+(Number(h.greenside_bunker)||0)===1)},{x:"2+ chips",hs:tc,hi:true},{x:"GIR",hs:gY}],
+        fix1:["Landing","Pick an exact landing zone before you chip — not just a target line","Visualizing where the ball lands first cuts chip variability by ~40%"],
+        fix2:["Club","Use a less-lofted club for bump-and-run when the path allows","A 7-iron chip is more forgiving than a pitching wedge around the green"] },
+      { id:"gir", cat:"Approach", label:"Greens in regulation", freqLabel:"holes hit green in regulation",
+        hs:gY, pool:allHoles, chartSrc:[{x:"GIR",hs:gY,hi:true},{x:"Non-GIR",hs:gN}],
+        fix1:["Protect","Keep doing what's working — this is a measurable strength","GIR holes produce your best scoring; protect the conditions that create them"],
+        fix2:["Extend","Identify which tee shots set up your GIR holes — repeat those patterns","Pattern recognition converts good rounds into great rounds"] },
+      { id:"putt-1", cat:"Putting", label:"1-putt holes", freqLabel:"holes end in a 1-putt",
+        hs:p1, pool:allHoles, chartSrc:[{x:"1-putt",hs:p1,hi:true},{x:"2-putt",hs:p2},{x:"3+-putt",hs:p3}],
+        fix1:["Routine","Keep your short-putt routine dialed in — protect this strength","Consistency on inside 6ft is a top-5 trait of low-handicap players"],
+        fix2:["Extend","Work on lag putting from 20-30ft to create more 1-putt looks","Better speed control on long putts is the fastest route to more 1-putts"] },
+      { id:"par3", cat:"Tee", label:"Par 3 tee shots", freqLabel:"par-3 tee shots miss the green",
+        hs:par3miss, pool:par3h, chartSrc:[{x:"GIR",hs:par3h.filter(h=>h.gir)},{x:"Miss",hs:par3miss,hi:true}],
+        fix1:["Club up","Take one more club on every par 3 — no exceptions","Par-3 misses are almost universally short — this one change moves the needle most"],
+        fix2:["Aim center","Target center of green on par 3s, not the flag","Pin-hunting on par 3s costs 0.4+ strokes vs center-of-green targets"] },
+      { id:"par5", cat:"Approach", label:"Par 5 scoring", freqLabel:"par-5 holes score bogey or worse",
+        hs:par5h.filter(h=>h.score>h.par), pool:par5h,
+        chartSrc:[{x:"Eagle/Birdie",hs:par5h.filter(h=>h.score<=h.par)},{x:"Par",hs:par5h.filter(h=>h.score===h.par)},{x:"Bogey+",hs:par5h.filter(h=>h.score>h.par),hi:true}],
+        fix1:["Layup","Lay up to your favourite approach yardage — don't force the green","A blow-up on a par 5 costs 1-2 strokes and wipes out 3 good holes"],
+        fix2:["3rd shot","Leave yourself a full-lofted wedge for shot 3","A full wedge is easier to control than a half or three-quarter wedge"] },
+    ];
+
+    type Computed = { p:PatSpec; impact:number; freqPct:number; count:number };
+    const computed: Computed[] = PATS.map(p => {
+      const imp = impOf(p.hs);
+      if (isNaN(imp) || p.hs.length < 3) return null;
+      return { p, impact:r2(imp), freqPct:freqOf(p.hs, p.pool), count:p.hs.length };
+    }).filter((x): x is Computed => x !== null);
+
+    // Top 5 leaks (positive impact = costs strokes), top strengths (negative)
+    const leakCands = computed.filter(c=>c.impact>0.05).sort((a,b)=>b.impact-a.impact).slice(0,5);
+    const strCands  = computed.filter(c=>c.impact<-0.05).sort((a,b)=>a.impact-b.impact);
+
+    const leaks: FBLeak[] = leakCands.map((c, idx) => {
+      const { p, impact, freqPct, count } = c;
+      const freqTarget = Math.max(5, Math.round(freqPct * 0.55));
+      const impTarget  = r2(Math.max(0.05, impact * 0.45));
+      return {
+        id:p.id, rank:idx+1, cat:p.cat, label:p.label, impact, holes:count, freqPct,
+        freqLabel:p.freqLabel,
+        diagnosis:`${freqPct}% of relevant holes show this pattern — costing ${impact} strokes/round above your baseline (${count} holes tracked).`,
+        chart:p.chartSrc.map(cd=>({ x:cd.x, v:safeImp(cd.hs), hi:!!cd.hi })),
+        goals:{
+          frequency:{ metric:`${p.label} rate`, current:freqPct, target:freqTarget, unit:"%" as const, note:"Reduce how often this pattern occurs." },
+          impact:   { metric:"Strokes lost / round", current:impact, target:impTarget, unit:"" as const,  note:"Reduce the damage when it does happen." },
+        },
+        fixes:[
+          { tag:p.fix1[0], title:p.fix1[1], body:p.fix1[2], stat:`Current cost: +${impact}/rd across ${count} holes.`, proj:r2(impact*0.4), recommended:true },
+          { tag:p.fix2[0], title:p.fix2[1], body:p.fix2[2], stat:`Frequency target: ${freqTarget}% (from ${freqPct}%).`, proj:r2(impact*0.2) },
+        ],
+      };
+    });
+
+    const seenCats = new Set<string>();
+    const strengths: FBStrength[] = [];
+    for (const c of strCands) {
+      if (seenCats.has(c.p.cat) || c.count < 3) continue;
+      seenCats.add(c.p.cat);
+      strengths.push({
+        cat:c.p.cat, metric:c.p.label,
+        value:`−${Math.abs(c.impact).toFixed(2)}`,
+        note:`Saves ${Math.abs(c.impact).toFixed(2)} strokes vs your baseline (${c.count} holes).`,
+      });
+      if (strengths.length >= 4) break;
+    }
+
+    // Handicap: average best 40% of differentials
+    const diffs = roundSummaries.map(s=>s.diff).filter((d): d is number => d!==null).sort((a,b)=>a-b);
+    const take  = Math.max(1, Math.round(diffs.length * 0.4));
+    const hcap  = diffs.length >= 3
+      ? r2(diffs.slice(0, take).reduce((s,d)=>s+d, 0) / take)
+      : null;
+
+    // Trend: last 5 rounds vs prior 5
+    const rec = roundSummaries.slice(-5), pri = roundSummaries.slice(-10, -5);
+    const trend30d = rec.length > 0 && pri.length > 0
+      ? r2(rec.reduce((s,r)=>s+r.toPar,0)/rec.length - pri.reduce((s,r)=>s+r.toPar,0)/pri.length)
+      : 0;
+
+    return {
+      leaks, strengths,
+      player:{ handicap: hcap ?? 12.0, rounds: roundSummaries.length, trend30d },
+    };
+  }, [allHoles, roundSummaries]);
+
   const anyActive =
     filters.driveAcc.size > 0 || filters.apprAcc.size > 0 ||
     filters.drivingClubs.size > 0 || filters.apprClubs.size > 0 ||
@@ -1788,7 +1951,11 @@ export default function RoundsInsights() {
       </div>
 
       <div style={{ display: tab === "coach" ? "block" : "none" }}>
-        <FocusBoard />
+        <FocusBoard
+          leaks={focusBoardData?.leaks}
+          strengths={focusBoardData?.strengths}
+          player={focusBoardData?.player}
+        />
       </div>
 
       <div style={{ display: tab === "trends" ? "block" : "none" }}>
