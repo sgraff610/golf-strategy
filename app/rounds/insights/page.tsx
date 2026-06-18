@@ -1372,6 +1372,17 @@ function PuttingInsights({ allHoles, roundSummaries }: {
   );
 }
 
+// Same USGA formula as clubhouse/page.tsx
+function computeHandicapIndex(diffs: number[]): number | null {
+  const last20 = diffs.slice(-20);
+  if (last20.length < 3) return null;
+  const sorted = [...last20].sort((a, b) => a - b);
+  const count = last20.length <= 6 ? 1 : last20.length <= 8 ? 2 : last20.length <= 11 ? 3
+    : last20.length <= 14 ? 4 : last20.length <= 16 ? 5 : last20.length <= 18 ? 6
+    : last20.length === 19 ? 7 : 8;
+  return Math.floor(sorted.slice(0, count).reduce((s, d) => s + d, 0) / count * 10) / 10;
+}
+
 export default function RoundsInsights() {
   const isMobile = useIsMobile();
   const [allHoles, setAllHoles] = useState<EnrichedHole[]>([]);
@@ -1387,6 +1398,7 @@ export default function RoundsInsights() {
   const [tab, setTab] = useState<"coach" | "trends" | "factors" | "putting">("coach");
   const [coachingInsights, setCoachingInsights] = useState<CoachingInsights | null>(null);
   const [heavyReady, setHeavyReady] = useState(false);
+  const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -1503,6 +1515,16 @@ export default function RoundsInsights() {
           });
         }
       }
+      // Compute handicap using the same USGA formula as the Clubhouse page,
+      // preferring the score_differential field already stored on the round.
+      const hcapDiffs = rounds.map(r => {
+        const sd = r.score_differential;
+        if (sd != null) return (r.holes_played ?? 18) <= 9 ? sd * 2 : sd;
+        const d = summaries_.find(s => s.date === (r.date ?? ""))?.diff;
+        return d ?? null;
+      }).filter((d): d is number => d !== null);
+      setHandicapIndex(computeHandicapIndex(hcapDiffs));
+
       setAvailableYears(Array.from(years).sort((a,b) => b-a));
       setAllHoles(enriched);
       setRoundSummaries(summaries_);
@@ -1719,13 +1741,6 @@ export default function RoundsInsights() {
       if (strengths.length >= 4) break;
     }
 
-    // Handicap: average best 40% of differentials
-    const diffs = roundSummaries.map(s=>s.diff).filter((d): d is number => d!==null).sort((a,b)=>a-b);
-    const take  = Math.max(1, Math.round(diffs.length * 0.4));
-    const hcap  = diffs.length >= 3
-      ? r2(diffs.slice(0, take).reduce((s,d)=>s+d, 0) / take)
-      : null;
-
     // Trend: last 5 rounds vs prior 5
     const rec = roundSummaries.slice(-5), pri = roundSummaries.slice(-10, -5);
     const trend30d = rec.length > 0 && pri.length > 0
@@ -1734,9 +1749,9 @@ export default function RoundsInsights() {
 
     return {
       leaks, strengths,
-      player:{ handicap: hcap ?? 12.0, rounds: roundSummaries.length, trend30d },
+      player:{ handicap: handicapIndex ?? 0, rounds: roundSummaries.length, trend30d },
     };
-  }, [allHoles, roundSummaries]);
+  }, [allHoles, roundSummaries, handicapIndex]);
 
   const anyActive =
     filters.driveAcc.size > 0 || filters.apprAcc.size > 0 ||
