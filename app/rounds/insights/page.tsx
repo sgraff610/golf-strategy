@@ -1404,8 +1404,10 @@ export default function RoundsInsights() {
         setHeavyReady(true);
       }
 
-      // 2. Always fetch fresh data — cache is stale-while-revalidate only
-      const { data: rounds } = await supabase.from("rounds").select("*").order("date", { ascending: true });
+      // 2. Always fetch fresh data — stale-while-revalidate. Exclude future rounds so
+      //    the handicap computation and leak analysis don't include unplayed plan rounds.
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: rounds } = await supabase.from("rounds").select("*").order("date", { ascending: true }).lte("date", today);
       if (!rounds) { setLoading(false); return; }
       const roundCount = rounds.length;
       const latestDate = rounds.length > 0 ? rounds[rounds.length - 1].date ?? null : null;
