@@ -15,7 +15,7 @@ type SubmitPayload = {
 // Runs inside Browserless — receives session cookies from the HTTP login, skips login entirely.
 const AUTOMATION_CODE = `
 export default async function({ page, context }) {
-  const { cookies, date, courseName, tee, holes, practiceRound, preview } = context;
+  const { cookies, date, courseName, tee, holes, practiceRound, dryRun } = context;
 
   async function waitMs(ms) { await new Promise(r => setTimeout(r, ms)); }
 
@@ -131,7 +131,7 @@ export default async function({ page, context }) {
   }
 
   // Preview — screenshot after all fields are filled so you can see the exact form state
-  if (preview) {
+  if (dryRun) {
     const shot = await page.screenshot({ encoding: "base64", fullPage: true });
     return Response.json({ ok: true, preview: true, screenshot: "data:image/png;base64," + shot });
   }
@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
   // We send whitespace heartbeats every 4 s while Browserless works, then write the JSON
   // result and close. The client calls res.text() and trims before JSON.parse().
   const enc = new TextEncoder();
-  const context = { cookies, date, courseName, tee, holes, practiceRound, preview };
+  const context = { cookies, date, courseName, tee, holes, practiceRound, dryRun: preview };
 
   const stream = new ReadableStream({
     async start(controller) {
