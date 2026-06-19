@@ -12,10 +12,15 @@ type SubmitPayload = {
   preview?: boolean;
 };
 
-// Runs inside Browserless — receives session cookies from the HTTP login, skips login entirely.
-const AUTOMATION_CODE = `
-export default async function({ page, context }) {
-  const { cookies, date, courseName, tee, holes, practiceRound, dryRun } = context;
+// ─── Shared setup steps (inlined into both code strings below) ───────────────
+// Both SUBMIT_CODE and PREVIEW_CODE share the same login/navigate/course/tee/score
+// logic. They differ only in the final action: submit vs screenshot.
+// We use two separate code strings so NO boolean flag is needed in the context —
+// Browserless reserves boolean context keys (preview, dryRun, etc.) and returns
+// 400 "Unexpected string" when they are true.
+
+const SHARED_BODY = `
+  const { cookies, date, courseName, tee, holes, practiceRound } = context;
 
   async function waitMs(ms) { await new Promise(r => setTimeout(r, ms)); }
 
@@ -35,7 +40,7 @@ export default async function({ page, context }) {
     return Response.json({ ok: false, error: "Session expired — please try again." });
   }
 
-  // Date — instant evaluate, no waiting
+  // Date
   const [yyyy, mm, dd] = date.split("-");
   await page.evaluate((y, m, d) => {
     function setSelect(name, val) {
@@ -47,20 +52,19 @@ export default async function({ page, context }) {
     setSelect("year", y); setSelect("month", m); setSelect("date", d);
   }, yyyy, mm, dd);
 
-  // Course — type to trigger autocomplete with real key events
+  // Course autocomplete
   await page.waitForSelector("#ucourse", { timeout: 5000 }).catch(() => {});
   await page.click("#ucourse").catch(() => {});
   await page.type("#ucourse", courseName.slice(0, 12), { delay: 60 });
   await waitMs(3000);
 
-  // Try several possible autocomplete suggestion selectors
   const suggestionSels = [".suggestion", ".ui-menu-item", ".ui-autocomplete li", "[class*='suggestion']", "[class*='autocomplete'] li"];
   for (const sel of suggestionSels) {
     const el = await page.$(sel).catch(() => null);
     if (el) { await el.click().catch(() => {}); break; }
   }
 
-  // Tees — 3s fixed wait, then verify course was actually selected
+  // Tees
   await waitMs(3000);
   const teeOpts = await page.evaluate(() =>
     Array.from(document.querySelectorAll('select[name="tees"] option'))
@@ -69,7 +73,7 @@ export default async function({ page, context }) {
   ).catch(() => []);
 
   if (teeOpts.length === 0) {
-    return Response.json({ ok: false, error: "Course not found in TheGrint — the autocomplete did not match \"" + courseName + "\". Open TheGrint directly to confirm the exact course name." });
+    return Response.json({ ok: false, error: "Course not found in TheGrint — the autocomplete did not match \\"" + courseName + "\\". Open TheGrint directly to confirm the exact course name." });
   }
 
   const teeMatch = teeOpts.find(o =>
@@ -85,7 +89,7 @@ export default async function({ page, context }) {
     await waitMs(400);
   }
 
-  // Scores + tee accuracy
+  // Fill scores + tee accuracy
   const teeAccMap = { "Hit":"H", "Left":"L", "Right":"R", "Short":"S", "Long":"P" };
   const hs = holes.map(h => ({ ...h, ta: teeAccMap[h.tee_accuracy] || "" }));
   await page.evaluate((holes) => {
@@ -99,7 +103,7 @@ export default async function({ page, context }) {
     for (const h of holes) {
       const n = h.hole;
       if (h.score) setVal('input[name="scH' + n + '"]', String(h.score));
-      if (h.putts) setVal('input[name="ptH' + n + '"]', String(h.putts));
+      if (h.putts)  setVal('input[name="ptH' + n + '"]', String(h.putts));
       if (h.penalties) setVal('input[name="pH' + n + '"]', h.penalties);
       if (h.ta) {
         const fh = document.querySelector('input[name="fH' + n + '"]');
@@ -129,12 +133,12 @@ export default async function({ page, context }) {
   if (missing.length > 0) {
     return Response.json({ ok: false, error: "Score fields not filled for hole(s): " + missing.join(", ") + ". The form may not have loaded correctly — please try again." });
   }
+`;
 
-  // Preview — screenshot after all fields are filled so you can see the exact form state
-  if (dryRun) {
-    const shot = await page.screenshot({ encoding: "base64", fullPage: true });
-    return Response.json({ ok: true, preview: true, screenshot: "data:image/png;base64," + shot });
-  }
+// Submit path — clicks the submit button after filling scores.
+const SUBMIT_CODE = `
+export default async function({ page, context }) {
+${SHARED_BODY}
 
   // Practice round
   if (practiceRound) {
@@ -162,6 +166,16 @@ export default async function({ page, context }) {
       ? "Score submitted and saved to TheGrint. Tee: " + teeLabel
       : "Score submitted — verify it appeared in your score history. Tee: " + teeLabel,
   });
+}
+`;
+
+// Preview path — fills scores identically but takes a full-page screenshot instead of submitting.
+const PREVIEW_CODE = `
+export default async function({ page, context }) {
+${SHARED_BODY}
+
+  const shot = await page.screenshot({ encoding: "base64", fullPage: true });
+  return Response.json({ ok: true, previewShot: "data:image/png;base64," + shot });
 }
 `;
 
@@ -200,7 +214,7 @@ export async function POST(req: NextRequest) {
   if (!token)
     return NextResponse.json({ ok: false, error: "Auto-submit is not configured. Set BROWSERLESS_TOKEN in your Vercel environment variables." }, { status: 503 });
 
-  // Step 1: Login via direct HTTP — fast, no browser needed
+  // Step 1: Login via direct HTTP
   let cookies: ReturnType<typeof parseCookies> = [];
   try {
     const loginRes = await fetch("https://thegrint.com/login", {
@@ -228,11 +242,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: `Login request failed: ${err?.message || err}` }, { status: 500 });
   }
 
-  // Step 2: Stream the response so iOS Safari doesn't kill a silent long-running fetch.
-  // We send whitespace heartbeats every 4 s while Browserless works, then write the JSON
-  // result and close. The client calls res.text() and trims before JSON.parse().
+  // Step 2: Stream response with heartbeats so iOS doesn't kill the connection.
   const enc = new TextEncoder();
-  const context = { cookies, date, courseName, tee, holes, practiceRound, dryRun: preview };
+  // No boolean flags in context — Browserless reserves them and returns 400 when true.
+  const context = { cookies, date, courseName, tee, holes, practiceRound };
+  const automationCode = preview ? PREVIEW_CODE : SUBMIT_CODE;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -247,7 +261,7 @@ export async function POST(req: NextRequest) {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: AUTOMATION_CODE, context }),
+            body: JSON.stringify({ code: automationCode, context }),
             signal: AbortSignal.timeout(65000),
           }
         );
@@ -270,7 +284,8 @@ export async function POST(req: NextRequest) {
           }
           const pd = (result?.data && typeof result.data === "object") ? result.data : result;
           if (pd?.ok === true) {
-            jsonOut = { ok: true, message: pd.message || "Submitted.", preview: pd.preview, screenshot: pd.screenshot };
+            // preview response uses previewShot key; submit uses message
+            jsonOut = { ok: true, message: pd.message || "Submitted.", preview: !!pd.previewShot, screenshot: pd.previewShot };
           } else {
             const errMsg = pd?.error || pd?.message || JSON.stringify(result).slice(0, 200);
             jsonOut = { ok: false, error: errMsg || "Unknown error from Browserless" };
