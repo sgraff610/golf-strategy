@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type HoleEntry = {
   hole: number; par: number; yards: number; stroke_index: number;
@@ -12,60 +12,30 @@ type SubmitPayload = {
   preview?: boolean;
 };
 
-// This code runs inside Browserless's remote browser (Puppeteer API)
+// Runs inside Browserless — receives session cookies from the HTTP login, skips login entirely.
 const AUTOMATION_CODE = `
 export default async function({ page, context }) {
-  const { email, password, date, courseName, tee, holes, practiceRound, preview } = context;
+  const { cookies, date, courseName, tee, holes, practiceRound, preview } = context;
 
-  async function waitMs(ms) {
-    await new Promise(r => setTimeout(r, ms));
-  }
+  async function waitMs(ms) { await new Promise(r => setTimeout(r, ms)); }
 
-  async function fill(sel, val) {
-    await page.$eval(sel, (el, v) => {
-      el.value = v;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, val);
-  }
+  // Block heavy resources — page loads 3-4x faster
+  await page.setRequestInterception(true);
+  page.on('request', req => {
+    const t = req.resourceType();
+    if (t === 'image' || t === 'stylesheet' || t === 'font' || t === 'media') req.abort();
+    else req.continue();
+  });
 
-  async function selectOpt(sel, val) {
-    await page.select(sel, val).catch(() => {});
-  }
+  if (cookies && cookies.length) await page.setCookie(...cookies);
 
-  // 1. Navigate
-  await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 20000 });
+  await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 15000 });
 
-  // 2. Login if redirected
   if (page.url().includes("passthru")) {
-    try {
-      await page.waitForSelector("#usernameLogin", { visible: true, timeout: 6000 });
-    } catch {
-      await page.evaluate(() => {
-        ["usernameLogin","pwdLogin","submit-form-login"].forEach(id => {
-          let node = document.getElementById(id);
-          while (node && node !== document.body) {
-            node.style.cssText += ";display:block!important;visibility:visible!important;opacity:1!important;";
-            node = node.parentElement;
-          }
-        });
-      });
-      await waitMs(200);
-    }
-    await fill("#usernameLogin", email);
-    await fill("#pwdLogin", password);
-    await page.click("#submit-form-login");
-    await waitMs(1800);
-
-    if (page.url().includes("passthru")) {
-      return Response.json({ ok: false, error: "Login failed — check your TheGrint username and password." });
-    }
-
-    await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 15000 });
-    await waitMs(600);
+    return Response.json({ ok: false, error: "Session expired — please try again." });
   }
 
-  // 3. Date
+  // Date — instant evaluate, no waiting
   const [yyyy, mm, dd] = date.split("-");
   await page.evaluate((y, m, d) => {
     function setSelect(name, val) {
@@ -74,116 +44,148 @@ export default async function({ page, context }) {
       el.value = val;
       el.dispatchEvent(new Event("change", { bubbles: true }));
     }
-    setSelect("year", y);
-    setSelect("month", m);
-    setSelect("date", d);
+    setSelect("year", y); setSelect("month", m); setSelect("date", d);
   }, yyyy, mm, dd);
-  await waitMs(300);
 
-  // 4. Course
-  await page.waitForSelector("#ucourse", { visible: true, timeout: 5000 }).catch(() => {});
-  await page.click("#ucourse");
-  await waitMs(200);
-  await page.$eval("#ucourse", (el, name) => {
-    el.value = name;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  }, courseName);
-  await waitMs(200);
-  try {
-    await page.waitForSelector(".suggestion", { visible: true, timeout: 5000 });
-    const first = await page.$(".suggestion");
-    if (first) await first.click();
-  } catch {}
-  await waitMs(1000);
+  // Course — type to trigger autocomplete with real key events
+  await page.waitForSelector("#ucourse", { timeout: 5000 }).catch(() => {});
+  await page.click("#ucourse").catch(() => {});
+  await page.type("#ucourse", courseName.slice(0, 12), { delay: 60 });
+  await waitMs(3000);
 
-  // 5. Tee
-  let teeOpts = [];
-  for (let i = 0; i < 5; i++) {
-    teeOpts = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('select[name="tees"] option'))
-        .map(o => ({ v: o.value, t: (o.textContent || "").trim() }))
-        .filter(o => o.v !== "")
-    );
-    if (teeOpts.length) break;
-    await waitMs(300);
+  // Try several possible autocomplete suggestion selectors
+  const suggestionSels = [".suggestion", ".ui-menu-item", ".ui-autocomplete li", "[class*='suggestion']", "[class*='autocomplete'] li"];
+  for (const sel of suggestionSels) {
+    const el = await page.$(sel).catch(() => null);
+    if (el) { await el.click().catch(() => {}); break; }
   }
-  const teeMatch = teeOpts.find(o =>
-    o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase())
-  ) || teeOpts[0];
-  if (teeMatch?.v) await selectOpt('select[name="tees"]', teeMatch.v);
 
-  // Preview mode — screenshot after date/course/tee so user can verify those fields.
-  // Per-hole data is already visible in the app scorecard, so we skip filling it here.
-  if (preview) {
+  // Tees — 3s fixed wait, then verify course was actually selected
+  await waitMs(3000);
+  const teeOpts = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('select[name="tees"] option'))
+      .map(o => ({ v: o.value, t: (o.textContent || "").trim() }))
+      .filter(o => o.v !== "")
+  ).catch(() => []);
+
+  if (teeOpts.length === 0) {
+    return Response.json({ ok: false, error: "Course not found in TheGrint — the autocomplete did not match \"" + courseName + "\". Open TheGrint directly to confirm the exact course name." });
+  }
+
+  const teeMatch = teeOpts.find(o =>
+    tee && (o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase()))
+  ) || teeOpts[0];
+  if (teeMatch && teeMatch.v) await page.select('select[name="tees"]', teeMatch.v).catch(() => {});
+
+  // Round type
+  const is9 = holes.length <= 9;
+  const isBack = is9 && holes[0] && holes[0].hole > 9;
+  if (is9) {
+    await page.select('select[name="round"]', isBack ? "B9" : "F9").catch(() => {});
     await waitMs(400);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await waitMs(200);
-    const shot = await page.screenshot({ encoding: "base64", fullPage: false });
+  }
+
+  // Scores + tee accuracy
+  const teeAccMap = { "Hit":"H", "Left":"L", "Right":"R", "Short":"S", "Long":"P" };
+  const hs = holes.map(h => ({ ...h, ta: teeAccMap[h.tee_accuracy] || "" }));
+  await page.evaluate((holes) => {
+    function setVal(sel, val) {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.value = val;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    for (const h of holes) {
+      const n = h.hole;
+      if (h.score) setVal('input[name="scH' + n + '"]', String(h.score));
+      if (h.putts) setVal('input[name="ptH' + n + '"]', String(h.putts));
+      if (h.penalties) setVal('input[name="pH' + n + '"]', h.penalties);
+      if (h.ta) {
+        const fh = document.querySelector('input[name="fH' + n + '"]');
+        const tx = fh && fh.previousElementSibling;
+        if (tx) {
+          const code = h.ta.charCodeAt(0);
+          ["keydown", "keypress", "keyup"].forEach(type => {
+            tx.dispatchEvent(new KeyboardEvent(type, { key: h.ta, charCode: code, keyCode: code, which: code, bubbles: true, cancelable: true }));
+          });
+        }
+      }
+    }
+  }, hs);
+
+  // Verify scores filled
+  const missing = await page.evaluate((holeNums) => {
+    var bad = [];
+    for (var i = 0; i < holeNums.length; i++) {
+      var n = holeNums[i];
+      var el = document.querySelector('input[name="scH' + n + '"]');
+      var val = el ? el.value.trim() : "";
+      if (!val || val === "0") bad.push(n);
+    }
+    return bad;
+  }, holes.map(h => h.hole));
+
+  if (missing.length > 0) {
+    return Response.json({ ok: false, error: "Score fields not filled for hole(s): " + missing.join(", ") + ". The form may not have loaded correctly — please try again." });
+  }
+
+  // Preview — screenshot after all fields are filled so you can see the exact form state
+  if (preview) {
+    const shot = await page.screenshot({ encoding: "base64", fullPage: true });
     return Response.json({ ok: true, preview: true, screenshot: "data:image/png;base64," + shot });
   }
 
-  // 6. Round type (submit only)
-  const is9 = holes.length <= 9;
-  const isBack = is9 && holes[0]?.hole > 9;
-  if (is9) {
-    for (let i = 0; i < 3; i++) {
-      await selectOpt('select[name="round"]', isBack ? "B9" : "F9");
-      await waitMs(600);
-      const cur = await page.$eval('select[name="round"]', el => el.value).catch(() => "");
-      if (cur !== "18") break;
-    }
-    await waitMs(1200);
-  }
-
-  // 7. Scores + tee accuracy (submit only)
-  const teeAccMap = { "Hit":"H", "Left":"L", "Right":"R", "Short":"S", "Long":"P" };
-  for (const h of holes) {
-    const n = h.hole;
-    if (h.score) await fill('input[name="scH' + n + '"]', String(h.score)).catch(() => {});
-    if (h.putts) await fill('input[name="ptH' + n + '"]', String(h.putts)).catch(() => {});
-    if (h.penalties) await fill('input[name="pH' + n + '"]', h.penalties).catch(() => {});
-    const ta = teeAccMap[h.tee_accuracy];
-    if (ta) {
-      await page.$eval('input[name="fH' + n + '"]', (fh, key) => {
-        const tx = fh.previousElementSibling;
-        if (!tx) return;
-        const code = key.charCodeAt(0);
-        ['keydown', 'keypress', 'keyup'].forEach(type => {
-          tx.dispatchEvent(new KeyboardEvent(type, { key, charCode: code, keyCode: code, which: code, bubbles: true, cancelable: true }));
-        });
-      }, ta).catch(() => {});
-      await waitMs(300);
-    }
-  }
-
-  // 8. Practice round (submit only)
+  // Practice round
   if (practiceRound) {
     const checked = await page.$eval("#practice_score", el => el.checked).catch(() => false);
     if (!checked) await page.click("#practice_score").catch(() => {});
   }
 
-  // 9. Submit
+  // Submit
   await page.evaluate(() => {
     const el = Array.from(document.querySelectorAll("a,button")).find(e => (e.textContent || "").includes("Submit"));
     if (el) el.click();
   });
-  await waitMs(1500);
+  await waitMs(600);
   await page.evaluate(() => {
     const el = Array.from(document.querySelectorAll("a")).find(e => (e.textContent || "").includes("Not now"));
     if (el) el.click();
   });
-  await waitMs(3000);
+  await waitMs(800);
 
   const finalUrl = page.url();
+  const teeLabel = (teeMatch && teeMatch.t) || tee || "unknown tee";
   return Response.json({
     ok: true,
     message: !finalUrl.includes("add_full_score")
-      ? "Score submitted and saved to TheGrint."
-      : "Score submitted to TheGrint — verify it appeared in your score history.",
+      ? "Score submitted and saved to TheGrint. Tee: " + teeLabel
+      : "Score submitted — verify it appeared in your score history. Tee: " + teeLabel,
   });
 }
 `;
+
+function parseCookies(headers: Headers): { name: string; value: string; domain: string; path: string }[] {
+  const raw: string[] = (headers as any).getSetCookie?.() ?? [];
+  if (!raw.length) {
+    const single = headers.get("set-cookie");
+    if (single) raw.push(single);
+  }
+  return raw.map(line => {
+    const parts = line.split(";").map(s => s.trim());
+    const [nameVal] = parts;
+    const [name, ...rest] = nameVal.split("=");
+    const value = rest.join("=");
+    const pathPart = parts.find(p => p.toLowerCase().startsWith("path="));
+    const domainPart = parts.find(p => p.toLowerCase().startsWith("domain="));
+    return {
+      name: name.trim(),
+      value,
+      domain: domainPart ? domainPart.split("=")[1].trim() : "thegrint.com",
+      path: pathPart ? pathPart.split("=")[1].trim() : "/",
+    };
+  }).filter(c => c.name);
+}
 
 export async function POST(req: NextRequest) {
   let payload: SubmitPayload;
@@ -195,35 +197,94 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Missing credentials" }, { status: 400 });
 
   const token = process.env.BROWSERLESS_TOKEN;
-  if (!token) {
-    return NextResponse.json({
-      ok: false,
-      error: "Auto-submit is not configured. Set BROWSERLESS_TOKEN in your Vercel environment variables. Get a free token at browserless.io.",
-    }, { status: 503 });
-  }
+  if (!token)
+    return NextResponse.json({ ok: false, error: "Auto-submit is not configured. Set BROWSERLESS_TOKEN in your Vercel environment variables." }, { status: 503 });
 
+  // Step 1: Login via direct HTTP — fast, no browser needed
+  let cookies: ReturnType<typeof parseCookies> = [];
   try {
-    const res = await fetch(
-      `https://production-sfo.browserless.io/function?token=${token}&timeout=55000`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: AUTOMATION_CODE,
-          context: { email, password, date, courseName, tee, holes, practiceRound, preview },
-        }),
-        signal: AbortSignal.timeout(58000),
-      }
-    );
+    const loginRes = await fetch("https://thegrint.com/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        "Referer": "https://thegrint.com/",
+        "Origin": "https://thegrint.com",
+      },
+      body: new URLSearchParams({ username: email, password, redirect: "" }).toString(),
+      redirect: "manual",
+    });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => res.statusText);
-      return NextResponse.json({ ok: false, error: `Browserless error ${res.status}: ${text}` }, { status: 500 });
+    const location = loginRes.headers.get("location") ?? "";
+    if (loginRes.status !== 302 || location.includes("passthru") || location.includes("login")) {
+      return NextResponse.json({ ok: false, error: "Login failed — check your TheGrint username and password." });
     }
 
-    const result = await res.json();
-    return NextResponse.json(result);
-  } catch (err) {
-    return NextResponse.json({ ok: false, error: `Automation failed: ${err}` }, { status: 500 });
+    cookies = parseCookies(loginRes.headers);
+    if (!cookies.length) {
+      return NextResponse.json({ ok: false, error: "Login succeeded but no session cookies returned." });
+    }
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: `Login request failed: ${err?.message || err}` }, { status: 500 });
   }
+
+  // Step 2: Stream the response so iOS Safari doesn't kill a silent long-running fetch.
+  // We send whitespace heartbeats every 4 s while Browserless works, then write the JSON
+  // result and close. The client calls res.text() and trims before JSON.parse().
+  const enc = new TextEncoder();
+  const context = { cookies, date, courseName, tee, holes, practiceRound, preview };
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const hb = setInterval(() => {
+        try { controller.enqueue(enc.encode(" ")); } catch {}
+      }, 4000);
+
+      let jsonOut: object;
+      try {
+        const bRes = await fetch(
+          `https://production-sfo.browserless.io/function?token=${token}&timeout=60000`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: AUTOMATION_CODE, context }),
+            signal: AbortSignal.timeout(65000),
+          }
+        );
+
+        if (!bRes.ok) {
+          const txt = await bRes.text().catch(() => bRes.statusText);
+          const isNavErr = txt.toLowerCase().includes("navigation") || txt.toLowerCase().includes("newrit");
+          jsonOut = { ok: false, error: isNavErr
+            ? "TheGrint rejected the submission — the course likely wasn't found via autocomplete. Open TheGrint and confirm the exact course name, then try again."
+            : `Browserless error ${bRes.status}: ${txt.slice(0, 200)}` };
+        } else {
+          const raw = await bRes.text();
+          let result: any;
+          try { result = JSON.parse(raw); } catch {
+            jsonOut = { ok: false, error: `Browserless non-JSON: ${raw.slice(0, 200)}` };
+            clearInterval(hb);
+            controller.enqueue(enc.encode(JSON.stringify(jsonOut)));
+            controller.close();
+            return;
+          }
+          const pd = (result?.data && typeof result.data === "object") ? result.data : result;
+          if (pd?.ok === true) {
+            jsonOut = { ok: true, message: pd.message || "Submitted.", preview: pd.preview, screenshot: pd.screenshot };
+          } else {
+            const errMsg = pd?.error || pd?.message || JSON.stringify(result).slice(0, 200);
+            jsonOut = { ok: false, error: errMsg || "Unknown error from Browserless" };
+          }
+        }
+      } catch (err: any) {
+        jsonOut = { ok: false, error: `Automation failed: ${err?.message || err}` };
+      }
+
+      clearInterval(hb);
+      controller.enqueue(enc.encode(JSON.stringify(jsonOut)));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }

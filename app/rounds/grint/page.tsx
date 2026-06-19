@@ -59,10 +59,17 @@ function GrintContent() {
 
   const [practiceRound, setPracticeRound] = useState(false);
   const [scriptCopied, setScriptCopied] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("grint_email") ?? "" : ""
+  );
+  const [password, setPassword] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("grint_password") ?? "" : ""
+  );
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roundId) { setLoading(false); return; }
@@ -182,12 +189,50 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
           practiceRound,
         }),
       });
-      const data = await res.json();
+      const text = (await res.text()).trim();
+      console.log("[grint] raw response:", text);
+      let data: any;
+      try { data = JSON.parse(text); }
+      catch { data = { ok: false, error: `Server returned non-JSON (${res.status}): ${text.slice(0, 200)}` }; }
       setSubmitResult(data);
     } catch (e) {
       setSubmitResult({ ok: false, error: String(e) });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function previewForm() {
+    if (!round) return;
+    setPreviewing(true);
+    setPreviewImage(null);
+    setPreviewError(null);
+    try {
+      const res = await fetch("/api/grint/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email, password,
+          date: round.date,
+          courseName: round.course_name,
+          tee: course?.tee_box || "",
+          holes: holesData,
+          practiceRound,
+          preview: true,
+        }),
+      });
+      const text = (await res.text()).trim();
+      let data: any;
+      try { data = JSON.parse(text); } catch { data = { ok: false, error: text.slice(0, 200) }; }
+      if (data.screenshot) {
+        setPreviewImage(data.screenshot);
+      } else {
+        setPreviewError(data.error || "No screenshot returned");
+      }
+    } catch (e) {
+      setPreviewError(String(e));
+    } finally {
+      setPreviewing(false);
     }
   }
 
@@ -448,7 +493,7 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
             type="email"
             placeholder="TheGrint email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={e => { setEmail(e.target.value); localStorage.setItem("grint_email", e.target.value); }}
             style={{
               width: "100%", padding: "10px 12px", borderRadius: 8, marginBottom: 10,
               border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)",
@@ -459,7 +504,7 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
             type="password"
             placeholder="TheGrint password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={e => { setPassword(e.target.value); localStorage.setItem("grint_password", e.target.value); }}
             style={{
               width: "100%", padding: "10px 12px", borderRadius: 8, marginBottom: 16,
               border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink)",
@@ -496,17 +541,31 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
 
           <button
             onClick={submitToGrint}
-            disabled={submitting || !email || !password || holesData.some(h => h.score === 0)}
+            disabled={submitting || previewing || !email || !password || holesData.some(h => h.score === 0)}
             style={{
               width: "100%", padding: "11px", borderRadius: "var(--r-pill)", border: "none",
               background: submitting ? "var(--line)" : (!email || !password || holesData.some(h => h.score === 0)) ? "var(--line)" : "var(--green)",
               color: (!email || !password || submitting || holesData.some(h => h.score === 0)) ? "var(--ink-mute)" : "#fff",
               fontSize: 14, fontWeight: 600,
-              cursor: (submitting || !email || !password || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
+              cursor: (submitting || previewing || !email || !password || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
               transition: "background 0.2s",
             }}
           >
             {submitting ? "Submitting…" : "Submit to TheGrint"}
+          </button>
+
+          <button
+            onClick={previewForm}
+            disabled={previewing || submitting || !email || !password || holesData.some(h => h.score === 0)}
+            style={{
+              width: "100%", marginTop: 8, padding: "9px", borderRadius: "var(--r-pill)",
+              border: "1px solid var(--line)", background: "transparent",
+              color: (previewing || !email || !password) ? "var(--ink-mute)" : "var(--ink-soft)",
+              fontSize: 13, fontWeight: 500,
+              cursor: (previewing || submitting || !email || !password || holesData.some(h => h.score === 0)) ? "not-allowed" : "pointer",
+            }}
+          >
+            {previewing ? "Loading preview…" : "Preview form before submitting"}
           </button>
 
           {submitResult && (
@@ -516,7 +575,38 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
               border: `1px solid ${submitResult.ok ? "#81c784" : "#e57373"}`,
               color: submitResult.ok ? "#1b5e20" : "#b71c1c",
             }}>
-              {submitResult.ok ? `✓ ${submitResult.message}` : `✗ ${submitResult.error}`}
+              {submitResult.ok ? `✓ ${submitResult.message}` : `✗ ${submitResult.error || "Submission failed — unknown error. Check your credentials and try again."}`}
+            </div>
+          )}
+
+          {previewError && (
+            <div style={{
+              marginTop: 10, padding: "10px 12px", borderRadius: 8, fontSize: 13,
+              background: "#fdecea", border: "1px solid #e57373", color: "#b71c1c",
+            }}>
+              ✗ Preview failed: {previewError}
+            </div>
+          )}
+
+          {previewImage && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-soft)" }}>
+                  TheGrint form — filled but not submitted
+                </span>
+                <button
+                  onClick={() => setPreviewImage(null)}
+                  style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--ink-mute)", lineHeight: 1 }}
+                >×</button>
+              </div>
+              <img
+                src={previewImage}
+                alt="TheGrint form preview"
+                style={{ width: "100%", borderRadius: 8, border: "1px solid var(--line)", display: "block" }}
+              />
+              <p style={{ fontSize: 11, color: "var(--ink-mute)", marginTop: 6, lineHeight: 1.4 }}>
+                If any score fields look empty or the course/tee is wrong, that&apos;s where the 408 is coming from. Share this screenshot if you need help diagnosing.
+              </p>
             </div>
           )}
 
