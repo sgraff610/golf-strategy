@@ -138,44 +138,52 @@ const SHARED_BODY = `
 // Submit path — clicks the submit button after filling scores.
 const SUBMIT_CODE = `
 export default async function({ page, context }) {
+  try {
 ${SHARED_BODY}
 
-  // Practice round
-  if (practiceRound) {
-    const checked = await page.$eval("#practice_score", el => el.checked).catch(() => false);
-    if (!checked) await page.click("#practice_score").catch(() => {});
+    // Practice round
+    if (practiceRound) {
+      const checked = await page.$eval("#practice_score", el => el.checked).catch(() => false);
+      if (!checked) await page.click("#practice_score").catch(() => {});
+    }
+
+    // Submit
+    await page.evaluate(() => {
+      const el = Array.from(document.querySelectorAll("a,button")).find(e => (e.textContent || "").includes("Submit"));
+      if (el) el.click();
+    });
+    await waitMs(600);
+    await page.evaluate(() => {
+      const el = Array.from(document.querySelectorAll("a")).find(e => (e.textContent || "").includes("Not now"));
+      if (el) el.click();
+    });
+    await waitMs(800);
+
+    const finalUrl = page.url();
+    const teeLabel = (teeMatch && teeMatch.t) || tee || "unknown tee";
+    return Response.json({
+      ok: true,
+      message: !finalUrl.includes("add_full_score")
+        ? "Score submitted and saved to TheGrint. Tee: " + teeLabel
+        : "Score submitted — verify it appeared in your score history. Tee: " + teeLabel,
+    });
+  } catch (err) {
+    return Response.json({ ok: false, error: "Submit error: " + String(err) });
   }
-
-  // Submit
-  await page.evaluate(() => {
-    const el = Array.from(document.querySelectorAll("a,button")).find(e => (e.textContent || "").includes("Submit"));
-    if (el) el.click();
-  });
-  await waitMs(600);
-  await page.evaluate(() => {
-    const el = Array.from(document.querySelectorAll("a")).find(e => (e.textContent || "").includes("Not now"));
-    if (el) el.click();
-  });
-  await waitMs(800);
-
-  const finalUrl = page.url();
-  const teeLabel = (teeMatch && teeMatch.t) || tee || "unknown tee";
-  return Response.json({
-    ok: true,
-    message: !finalUrl.includes("add_full_score")
-      ? "Score submitted and saved to TheGrint. Tee: " + teeLabel
-      : "Score submitted — verify it appeared in your score history. Tee: " + teeLabel,
-  });
 }
 `;
 
-// Preview path — fills scores identically but takes a full-page screenshot instead of submitting.
+// Preview path — fills scores identically but takes a screenshot instead of submitting.
 const PREVIEW_CODE = `
 export default async function({ page, context }) {
+  try {
 ${SHARED_BODY}
 
-  const shot = await page.screenshot({ encoding: "base64", fullPage: true });
-  return Response.json({ ok: true, previewShot: "data:image/png;base64," + shot });
+    const shot = await page.screenshot({ encoding: "base64" });
+    return Response.json({ ok: true, previewShot: "data:image/png;base64," + shot });
+  } catch (err) {
+    return Response.json({ ok: false, error: "Preview error: " + String(err) });
+  }
 }
 `;
 
