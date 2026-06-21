@@ -4,7 +4,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { getClubDistances, loadCourses } from "@/lib/storage";
+import { getClubDistances, getClubDistancesSync, saveClubDistances, loadCourses } from "@/lib/storage";
+import type { ClubDistances } from "@/lib/planTypes";
 import type { CourseRecord } from "@/lib/types";
 
 // ─── Club dial config ──────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ function analyze(
   favs: string,
   wish: string,
   facts: RoundFacts,
+  activeKeys?: Set<string>,
 ): Analysis {
   const wins: Win[]     = [];
   const costs: Cost[]   = [];
@@ -263,7 +265,7 @@ function analyze(
     patterns.push({ body: `Heel/hosel contact noted — usually means you're standing too close or your weight is falling onto your toes through impact. Check address distance and stay centered.` });
   }
 
-  const coldKeys = (Object.keys(dials) as DialKey[]).filter(k => dials[k] < 35);
+  const coldKeys = (Object.keys(dials) as DialKey[]).filter(k => dials[k] < 35 && (!activeKeys || activeKeys.has(k)));
   for (const k of coldKeys) {
     const covered =
       (k === "Putter" && costs.some(c => c.title === "Putting")) ||
@@ -707,6 +709,8 @@ function Notes({ label, value, onChange, rows = 3, placeholder }: {
 
 // ─── Stage 1 ──────────────────────────────────────────────────────────────────
 
+const WOODS_IN_BAG = ["Driver", "3W", "5W", "7W"] as const;
+
 function StageInput({
   rounds, roundId, onRoundId,
   dials, onDial,
@@ -715,6 +719,7 @@ function StageInput({
   wish, onWish,
   groupNotes, onGroupNote,
   activeDialClubs,
+  bagDistances, onToggleBag,
   onSubmit,
 }: {
   rounds: RoundRow[];
@@ -728,6 +733,8 @@ function StageInput({
   groupNotes: Record<string, string>;
   onGroupNote: (k: string, v: string) => void;
   activeDialClubs: readonly { key: string; label: string }[];
+  bagDistances: ClubDistances;
+  onToggleBag: (club: string) => void;
   onSubmit: () => void;
 }) {
   const round = rounds.find(r => r.id === roundId);
@@ -793,6 +800,33 @@ function StageInput({
             </div>
           );
         })()}
+      </div>
+
+      {/* Woods in bag */}
+      <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "16px 24px", marginBottom: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "var(--muted-2)", marginBottom: 10 }}>Woods in the bag today</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {WOODS_IN_BAG.map(club => {
+            const inBag = bagDistances[club]?.inBag !== false;
+            return (
+              <button
+                key={club}
+                onClick={() => onToggleBag(club)}
+                style={{
+                  padding: "5px 14px", borderRadius: 999, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", border: `1px solid ${inBag ? "var(--green)" : "var(--line)"}`,
+                  background: inBag ? "var(--green-soft)" : "var(--paper-alt)",
+                  color: inBag ? "var(--green)" : "var(--muted-2)",
+                }}
+              >
+                {inBag ? "✓ " : ""}{club}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--muted-2)", marginTop: 8 }}>
+          Tap to add or remove. Changes sync to the Bag tab in Clubhouse.
+        </div>
       </div>
 
       {/* Club-feel dials */}
@@ -1056,11 +1090,18 @@ export default function RecapPage() {
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [bagDistances, setBagDistances] = useState<Record<string, { inBag?: boolean }>>({});
+  const [bagDistances, setBagDistances] = useState<ClubDistances>(() => getClubDistancesSync());
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { getClubDistances().then(setBagDistances); }, []);
+
+  async function toggleBagClub(club: string) {
+    const current = bagDistances[club]?.inBag !== false;
+    const updated = { ...bagDistances, [club]: { ...bagDistances[club], inBag: !current } };
+    setBagDistances(updated);
+    await saveClubDistances(updated);
+  }
 
   const activeDialClubs = useMemo(() => {
     if (!bagDistances || Object.keys(bagDistances).length === 0) return DIAL_CLUBS;
@@ -1125,9 +1166,10 @@ export default function RecapPage() {
   }, [roundId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const facts  = useMemo(() => round ? computeRoundFacts(round) : null, [round]);
+  const activeKeys = useMemo(() => new Set(activeDialClubs.map(c => c.key)), [activeDialClubs]);
   const analysis = useMemo(
-    () => facts ? analyze(dials, groupNotes, overall, favs, wish, facts) : null,
-    [facts, dials, groupNotes, overall, favs, wish],
+    () => facts ? analyze(dials, groupNotes, overall, favs, wish, facts, activeKeys) : null,
+    [facts, dials, groupNotes, overall, favs, wish, activeKeys],
   );
 
   function handleSubmit() {
@@ -1201,6 +1243,8 @@ export default function RecapPage() {
             groupNotes={groupNotes}
             onGroupNote={(k, v) => setGroupNotes(n => ({ ...n, [k]: v }))}
             activeDialClubs={activeDialClubs}
+            bagDistances={bagDistances}
+            onToggleBag={toggleBagClub}
             onSubmit={handleSubmit}
           />
         )}

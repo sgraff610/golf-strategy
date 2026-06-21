@@ -19,7 +19,7 @@ import type {
   OpportunityType,
 } from "@/lib/planTypes";
 import { supabase } from "@/lib/supabase";
-import { loadCourses, getCourse, getClubDistances, getClubForm, saveClubForm } from "@/lib/storage";
+import { loadCourses, getCourse, getClubDistances, getClubDistancesSync, saveClubDistances, getClubForm, saveClubForm } from "@/lib/storage";
 import { FORM_CLUBS, QUESTIONS } from "./questions";
 import { FormRanger } from "./FormRanger";
 import { PlanHoleCard } from "./PlanHoleCard";
@@ -273,7 +273,7 @@ export default function PlanPage() {
   const [loading, setLoading] = useState(false);
   const [holesMode, setHolesMode] = useState<HolesMode>("all");
   const [overrides, setOverrides] = useState<Record<number, { pref?: string; aim?: import("@/lib/planTypes").HoleStrategy["aim"]; aim_dir?: string; aim_level?: 0 | 1 | 2 }>>({});
-  const [clubDistances, setClubDistances] = useState<ClubDistances | undefined>(undefined);
+  const [clubDistances, setClubDistances] = useState<ClubDistances>(() => getClubDistancesSync());
   const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
   const [planEnrichedMap, setPlanEnrichedMap] = useState<Record<number, PlanEnrichedHole[]>>({});
   const [planEnrichedReady, setPlanEnrichedReady] = useState(false);
@@ -298,7 +298,7 @@ export default function PlanPage() {
         ).map((r: any) => ({ id: r.id, course_id: r.course_id, course_name: r.course_name, date: r.date }));
         setOpenRounds(open);
       });
-    getClubDistances().then(setClubDistances);
+    getClubDistances().then(d => setClubDistances(d));
     // Load most recent recap dials as form defaults; fall back to saved form
     Promise.all([
       getClubForm(),
@@ -699,6 +699,12 @@ export default function PlanPage() {
                   recapHistory={recapHistory}
                   roundDate={roundDate}
                   teeTime={teeTime}
+                  clubDistances={clubDistances}
+                  onBagChange={async (club, inBag) => {
+                    const updated = { ...clubDistances, [club]: { ...clubDistances[club], inBag } };
+                    setClubDistances(updated);
+                    await saveClubDistances(updated);
+                  }}
                   onNext={() => setStage("review")}
                 />
               )}
@@ -1386,7 +1392,7 @@ function computeMoisture(
   return { score, wetReason };
 }
 
-function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, defaultGoalDiff, course, allCourseRounds, onSaveForm, recapHistory, roundDate, teeTime, onNext }: {
+function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, defaultGoalDiff, course, allCourseRounds, onSaveForm, recapHistory, roundDate, teeTime, clubDistances, onBagChange, onNext }: {
   answers: PlanAnswers; setAnswers: (a: PlanAnswers) => void;
   form: PlayerForm; setForm: (f: PlayerForm) => void;
   defaultGoalScore: number;
@@ -1397,6 +1403,8 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
   recapHistory: Record<string, any>[];
   roundDate: string;
   teeTime: string;
+  clubDistances: ClubDistances;
+  onBagChange: (club: string, inBag: boolean) => void;
   onNext: () => void;
 }) {
   const isMobile = useIsMobile();
@@ -1604,7 +1612,12 @@ function StageQuestions({ answers, setAnswers, form, setForm, defaultGoalScore, 
 
       {q.kind === "form" && (
         <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "28px 30px" }}>
-          <FormRanger values={form} setValues={setForm} />
+          <FormRanger
+            values={form}
+            setValues={setForm}
+            clubDistances={clubDistances}
+            onBagChange={onBagChange}
+          />
         </div>
       )}
 
