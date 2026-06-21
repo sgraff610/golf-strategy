@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { PLAYER, COACH, LEAKS, STRENGTHS, CATS, fmt, type Leak, type Strength, type Cat } from "./leaks";
+import { PLAYER, LEAKS, STRENGTHS, CATS, fmt, type Leak, type Strength, type Cat } from "./leaks";
 import { Bars, CatTag, ImpactPill, GoalOption, FixCard, ProgressBar } from "./CoachPrimitives";
 import { useIsMobile } from "@/app/hooks/useIsMobile";
 
@@ -44,53 +44,6 @@ export default function FocusBoard({ leaks: leaksProp, strengths: strengthsProp,
 
   return (
     <div style={{ fontFamily: "var(--font-ui)", color: "var(--ink)" }}>
-
-      {/* HERO */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "300px 1fr",
-        gap: 20, marginBottom: 24,
-      }}>
-        <div style={{
-          background: "linear-gradient(160deg,#0c4f3a 0%,#084634 100%)",
-          color: "var(--paper)", borderRadius: 18, padding: "20px 24px",
-          boxShadow: "var(--shadow-hero)",
-        }}>
-          <div style={{
-            fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.4,
-            textTransform: "uppercase", color: "var(--accent)", fontWeight: 700,
-          }}>USGA Handicap</div>
-          <div className="tnum" style={{
-            fontFamily: "var(--font-display)", fontStyle: "italic",
-            fontSize: 76, fontWeight: 600, lineHeight: 0.9,
-            letterSpacing: -3, marginTop: 6,
-          }}>{player.handicap}</div>
-          <div style={{
-            fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700,
-            color: player.trend30d <= 0 ? "#f0c989" : "#f09090", marginTop: 10,
-          }}>
-            {player.trend30d <= 0 ? "▼" : "▲"} {Math.abs(player.trend30d).toFixed(1)} strokes · last 5 vs prior 5
-          </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#8da898", marginTop: 4 }}>
-            {player.rounds} rounds tracked
-          </div>
-        </div>
-
-        <div style={{
-          background: "var(--paper)", border: "1px solid var(--line)",
-          borderRadius: 18, padding: "24px 28px",
-          display: "flex", flexDirection: "column", justifyContent: "center",
-        }}>
-          <div style={{
-            fontFamily: "var(--font-display)", fontStyle: "italic",
-            fontSize: isMobile ? 20 : 26, fontWeight: 500, lineHeight: 1.3,
-          }}>&ldquo;{COACH.line}&rdquo;</div>
-          <div style={{
-            fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: 0.5,
-            color: "var(--ink-mute)", marginTop: 12, fontWeight: 600,
-          }}>— {COACH.name}, {COACH.title}</div>
-        </div>
-      </div>
 
       {/* MAIN GRID */}
       <div style={{
@@ -176,7 +129,6 @@ export default function FocusBoard({ leaks: leaksProp, strengths: strengthsProp,
                       background: "var(--green-soft)", borderLeft: "3px solid var(--green)",
                       borderRadius: "0 10px 10px 0", padding: "10px 14px",
                     }}>
-                      <span style={{ fontWeight: 700, color: "var(--green-deep)" }}>{COACH.name}: </span>
                       {l.diagnosis}
                     </div>
 
@@ -267,6 +219,32 @@ export default function FocusBoard({ leaks: leaksProp, strengths: strengthsProp,
           display: "flex", flexDirection: "column", gap: 14,
           position: isMobile ? "static" : "sticky", top: 20,
         }}>
+          {/* HANDICAP */}
+          <div style={{
+            background: "linear-gradient(160deg,#0c4f3a 0%,#084634 100%)",
+            color: "var(--paper)", borderRadius: 18, padding: "20px 24px",
+            boxShadow: "var(--shadow-hero)",
+          }}>
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: 1.4,
+              textTransform: "uppercase", color: "var(--accent)", fontWeight: 700,
+            }}>USGA Handicap</div>
+            <div className="tnum" style={{
+              fontFamily: "var(--font-display)", fontStyle: "italic",
+              fontSize: 72, fontWeight: 600, lineHeight: 0.9,
+              letterSpacing: -3, marginTop: 6,
+            }}>{player.handicap}</div>
+            <div style={{
+              fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700,
+              color: player.trend30d <= 0 ? "#f0c989" : "#f09090", marginTop: 10,
+            }}>
+              {player.trend30d <= 0 ? "▼" : "▲"} {Math.abs(player.trend30d).toFixed(1)} strokes · last 5 vs prior 5
+            </div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "#8da898", marginTop: 4 }}>
+              {player.rounds} rounds tracked
+            </div>
+          </div>
+
           {/* GAME PLAN */}
           <div style={{
             background: "var(--ink)", color: "var(--paper)",
