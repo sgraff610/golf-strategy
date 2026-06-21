@@ -30,4 +30,4 @@ export const topMiss = (d: Disp): [string, number] =>
     .sort((a, b) => b[1] - a[1])[0];
 
 export const sgTone  = (sg: number) => (sg >= 0.1 ? "good" : sg <= -0.1 ? "bad" : "mid");
-export const sgColor = (sg: number) => (sgTone(sg) === "good" ? "var(--green)" : sgTone(sg) === "bad" ? "var(--accent-deep)" : "var(--ink-mute)");
+export const sgColor = (sg: number) => (sgTone(sg) === "good" ? "var(--green)" : sgTone(sg) === "bad" ? "var(--accent-deep)" : "var(--ink-soft)");

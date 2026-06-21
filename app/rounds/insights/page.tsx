@@ -1955,9 +1955,9 @@ export default function RoundsInsights() {
       <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 24, gap: 0, overflowX: "auto" }}>
         {([
           { id: "coach" as const, label: "Coach" },
-          { id: "clubs" as const, label: "Irons & Wedges" },
           { id: "trends" as const, label: "Performance Trend" },
           { id: "factors" as const, label: "Factor Correlations" },
+          { id: "clubs" as const, label: "Irons & Wedges" },
           { id: "putting" as const, label: "Putting" },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -1980,7 +1980,15 @@ export default function RoundsInsights() {
       </div>
 
       <div style={{ display: tab === "clubs" ? "block" : "none" }}>
-        <IronsWedges />
+        <IronsWedges
+          holes={allHoles}
+          totalRounds={totalRounds}
+          onShowFactors={(club) => {
+            setFilters(f => ({ ...f, apprClubs: new Set([club]), impactDir: "all" }));
+            setFactorTypeFilter("");
+            setTab("factors");
+          }}
+        />
       </div>
 
       <div style={{ display: tab === "trends" ? "block" : "none" }}>
