@@ -161,6 +161,31 @@ function CourseHero({ tone, imageUrl, big = false, imagePosition, onSavePosition
   );
 }
 
+// ─── Image encoding — fetch remote URL → local base64 JPEG (permanent) ──────
+
+async function encodeImage(url: string): Promise<string> {
+  if (url.startsWith('data:')) return url; // already encoded
+  // Fetch as blob to sidestep CORS on canvas taint
+  const blob = await fetch(url).then(r => r.blob());
+  return new Promise((resolve, reject) => {
+    const objUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const MAX_W = 1400;
+      const scale = Math.min(1, MAX_W / img.naturalWidth);
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(objUrl);
+      resolve(canvas.toDataURL('image/jpeg', 0.84));
+    };
+    img.onerror = reject;
+    img.src = objUrl;
+  });
+}
+
 // ─── Wikipedia image search (client-side, CORS-open) ──────────────────────────
 
 async function searchCourseImages(courseName: string): Promise<string[]> {
@@ -200,6 +225,8 @@ function PhotoPicker({ courseName, current, onSave }: {
   const [results, setResults] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState(current ?? '');
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
   async function handleSearch() {
@@ -212,8 +239,18 @@ function PhotoPicker({ courseName, current, onSave }: {
 
   async function handleSave(url: string | null) {
     setSaving(true);
-    await onSave(url);
-    setSaving(false);
+    setSaved(false);
+    setSaveError(null);
+    try {
+      const encoded = url ? await encodeImage(url) : null;
+      await onSave(encoded);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e: any) {
+      setSaveError('Could not fetch image — try pasting a different URL.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -272,9 +309,9 @@ function PhotoPicker({ courseName, current, onSave }: {
         <button
           onClick={() => handleSave(urlInput.trim() || null)}
           disabled={saving}
-          style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, background: 'var(--green)', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          style={{ padding: '8px 14px', fontSize: 12, fontWeight: 600, background: saved ? 'var(--good)' : 'var(--green)', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save'}
         </button>
         {current && (
           <button
@@ -285,6 +322,12 @@ function PhotoPicker({ courseName, current, onSave }: {
           </button>
         )}
       </div>
+
+      {saveError && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#b71c1c', background: '#fdecea', border: '1px solid #e57373', borderRadius: 6, padding: '6px 10px' }}>
+          ⚠ {saveError}
+        </div>
+      )}
 
       {/* Preview */}
       {urlInput && (
