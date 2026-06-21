@@ -919,7 +919,7 @@ function EditCourseInner() {
       <div style={{ marginBottom:16 }}>
         <a href="/courses" style={{ fontSize:13, color:"#0f6e56" }}>← Back to courses</a>
       </div>
-      <h1 style={{ fontSize:20, fontWeight:600, marginBottom:20, color:"#d0d0d0" }}>Edit course</h1>
+      <h1 style={{ fontSize:20, fontWeight:600, marginBottom:20, color:"#084634" }}>Edit course</h1>
 
       {/* Course details */}
       <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:28, padding:20, background:"#f6f6f6", borderRadius:12 }}>
@@ -1005,13 +1005,13 @@ function EditCourseInner() {
           <select style={selectStyle} value={hole.dogleg_direction??""} onChange={e => updateHole("dogleg_direction", e.target.value===""?null:e.target.value as DoglegDirection)} disabled={hole.par===3}>
             {DOGLEG_OPTIONS.map(o => <option key={String(o.value)} value={o.value??""}>{o.label}</option>)}
           </select>
-          {hole.par===3 && <p style={{ fontSize:12, color:"rgba(255,255,255,0.5)", margin:"4px 0 0" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"#888", margin:"4px 0 0" }}>Disabled for par 3</p>}
         </div>
 
         {/* Tee Shot Hazards — 2 columns */}
         <div>
           <span style={SECTION}>Tee Shot Hazards</span>
-          {hole.par===3 && <p style={{ fontSize:12, color:"rgba(255,255,255,0.5)", margin:"4px 0 8px" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"#888", margin:"4px 0 8px" }}>Disabled for par 3</p>}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, opacity:hole.par===3?0.3:1 }}>
             {TEE_CHECKBOXES.map(({ key, label }) => (
               <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#084634", cursor:hole.par===3?"not-allowed":"pointer" }}>

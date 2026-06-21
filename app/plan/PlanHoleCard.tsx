@@ -5,6 +5,7 @@ import type { HoleData } from "@/lib/types";
 import type { HoleStrategy, PlanEnrichedHole, ClubDistances, ScoringOpp, OpportunityType } from "@/lib/planTypes";
 import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
 import type { HoleClubStat, HoleHistEntry } from "./page";
+import GreensideSelector, { flatToGreenside, type GreensideState, type AimValue } from "@/app/components/GreensideSelector";
 
 type Props = {
   hole: HoleData;
@@ -24,6 +25,9 @@ type Props = {
   onScoringOppChange?: (v: ScoringOpp) => void;
   onDiffMaxChange?: (v: 2 | 3) => void;
   onOpportunityChange?: (v: OpportunityType) => void;
+  aimDir?: string;
+  aimLevel?: 0 | 1 | 2;
+  onGreensideAimChange?: (dir: string, level: 0 | 1 | 2) => void;
 };
 
 function hazardList(h: HoleData): string[] {
@@ -756,7 +760,7 @@ const OPP_COLORS: Record<OpportunityType, { bg: string; fg: string; label: strin
 };
 const OPP_ORDER: OpportunityType[] = ["birdie", "go-for-it", "caution", "danger"];
 
-export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, holeHistory, enriched, clubDistances, onClubChange, onAimChange, scoringOpp = 0, diffMax = 2, opportunity = "birdie", onScoringOppChange, onDiffMaxChange, onOpportunityChange }: Props) {
+export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, clubStats, holeHistory, enriched, clubDistances, onClubChange, onAimChange, scoringOpp = 0, diffMax = 2, opportunity = "birdie", onScoringOppChange, onDiffMaxChange, onOpportunityChange, aimDir = "", aimLevel = 0, onGreensideAimChange }: Props) {
   const parColor = hole.par === 3 ? "var(--accent)" : hole.par === 5 ? "var(--green)" : "var(--ink-soft)";
   const hazards = hazardList(hole);
   const risk = hazards.length >= 2 ? "high" : hazards.length === 1 ? "med" : "low";
@@ -882,6 +886,18 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
         </div>
       </div>
 
+      {/* Always-visible tee aim row */}
+      <div onClick={e => e.stopPropagation()} style={{
+        borderTop: "1px solid var(--line)", padding: "10px 16px",
+        background: "var(--paper-alt)",
+      }}>
+        <AimDial
+          value={strategy.aim as AimPos}
+          onChange={(aim) => onAimChange?.(aim)}
+          hole={hole}
+        />
+      </div>
+
       {/* Expanded detail */}
       {expanded && (
         <div style={{ borderTop: "1px dashed var(--line)", padding: "18px 16px", background: "var(--paper-alt)" }}>
@@ -903,17 +919,22 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                     onChange={onClubChange}
                   />
                   <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexShrink: 0 }}>
-                    <div style={{ minWidth: 160 }}>
-                      <AimDial
-                        value={strategy.aim as AimPos}
-                        onChange={(aim) => onAimChange?.(aim)}
-                        hole={hole}
-                      />
-                    </div>
                     <ApproachAccuracyRadial
                       enriched={enriched}
                       selectedClub={strategy.pref}
                     />
+                    <div style={{ minWidth: 220 }}>
+                      <GreensideSelector
+                        label="Approach Aim"
+                        value={{
+                          ...flatToGreenside(hole as unknown as Record<string, boolean | number | string | null | undefined>),
+                          aim_dir: aimDir,
+                          aim_level: aimLevel as AimValue,
+                        }}
+                        onChange={(next: GreensideState) => onGreensideAimChange?.(next.aim_dir, next.aim_level)}
+                        aimOnly
+                      />
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -926,11 +947,6 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                     onAimChange={onAimChange}
                   />
                   <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 160, flexShrink: 0 }}>
-                    <AimDial
-                      value={strategy.aim as AimPos}
-                      onChange={(aim) => onAimChange?.(aim)}
-                      hole={hole}
-                    />
                     {strategy.remaining > 0 && (
                       <div style={{ padding: "10px 14px", background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8 }}>
                         <div style={{ fontSize: 9, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 600, marginBottom: 4 }}>Leaves to green</div>
@@ -939,6 +955,16 @@ export function PlanHoleCard({ hole, strategy, expanded, onToggle, highlight, cl
                         </div>
                       </div>
                     )}
+                    <GreensideSelector
+                      label="Approach Aim"
+                      value={{
+                        ...flatToGreenside(hole as unknown as Record<string, boolean | number | string | null | undefined>),
+                        aim_dir: aimDir,
+                        aim_level: aimLevel as AimValue,
+                      }}
+                      onChange={(next: GreensideState) => onGreensideAimChange?.(next.aim_dir, next.aim_level)}
+                      aimOnly
+                    />
                   </div>
                 </div>
               )}

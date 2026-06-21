@@ -117,8 +117,8 @@ const yardStyle = (isCurrent: boolean): React.CSSProperties => ({ ...c, color: "
   return (
     <main style={{ maxWidth:940, margin:"40px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
       <div style={{ marginBottom:20 }}>
-        <h1 style={{ fontSize:22, fontWeight:700, color:"#d0d0d0", margin:"0 0 4px" }}>{savedCourse.name}</h1>
-        <p style={{ fontSize:14, color:"white", margin:0 }}>
+        <h1 style={{ fontSize:22, fontWeight:700, color:"#084634", margin:"0 0 4px" }}>{savedCourse.name}</h1>
+        <p style={{ fontSize:14, color:"#333", margin:0 }}>
           {savedCourse.city}, {savedCourse.state}
           {savedCourse.rating && savedCourse.slope ? ` · Rating ${savedCourse.rating} / Slope ${savedCourse.slope}`
             : savedCourse.rating ? ` · Rating ${savedCourse.rating}`
@@ -377,8 +377,8 @@ const isScan = searchParams.get("scan") === "1";
 
   if (step === "info") return (
     <main style={{ maxWidth:480, margin:"60px auto", fontFamily:"sans-serif", padding:"0 24px" }}>
-      <h1 style={{ fontSize:24, fontWeight:600, marginBottom:8, color:"#d0d0d0" }}>Add a course</h1>
-      <p style={{ color:"white", marginBottom:32 }}>Enter the course details to get started.</p>
+      <h1 style={{ fontSize:24, fontWeight:600, marginBottom:8, color:"#084634" }}>Add a course</h1>
+      <p style={{ color:"#333", marginBottom:32 }}>Enter the course details to get started.</p>
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <div><label style={LABEL}>Course name</label><input style={inputStyle} value={courseName} onChange={e => setCourseName(e.target.value)} placeholder="e.g. Augusta National Golf Club" /></div>
         <div><label style={LABEL}>Tee box</label><input style={inputStyle} value={teeBox} onChange={e => setTeeBox(e.target.value)} placeholder="e.g. Blue, White, Red" /></div>
@@ -407,7 +407,7 @@ const isScan = searchParams.get("scan") === "1";
         <button style={navBtn(currentHole===0)} onClick={goToPrevHole} disabled={currentHole===0}>← Prev</button>
         <div style={{ textAlign:"center", flex:1 }}>
           <div style={HOLE_NAME}>{courseName} — Hole {hole.hole}</div>
-          <div style={{ fontSize:13, color:"white", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
+          <div style={{ fontSize:13, color:"#084634", marginTop:2 }}>{currentHole+1} of {holes.length}</div>
 <a href={`/add-course/scan?holeNum=${hole.hole}`} style={{ fontSize:12, color:"#0f6e56", textDecoration:"underline", display:"block", marginTop:4 }}>
             Scan with AI →
           </a>
@@ -434,7 +434,7 @@ const isScan = searchParams.get("scan") === "1";
         <div>
           <button onClick={()=>setHoleNotesOpen(o=>!o)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"4px 0"}}>
             <span style={{fontSize:11,fontWeight:600,color:"#0f6e56",textTransform:"uppercase",letterSpacing:1}}>Hole Notes {hole.hole_notes?"✓":""}</span>
-            <span style={{fontSize:13,color:"white"}}>{holeNotesOpen?"▲":"▼"}</span>
+            <span style={{fontSize:13,color:"#0f6e56"}}>{holeNotesOpen?"▲":"▼"}</span>
           </button>
           {holeNotesOpen&&(
             <textarea
@@ -451,16 +451,16 @@ const isScan = searchParams.get("scan") === "1";
           <select style={selectStyle} value={hole.dogleg_direction??""} onChange={e => updateHole("dogleg_direction", e.target.value===""?null:e.target.value as DoglegDirection)} disabled={hole.par===3}>
             {DOGLEG_OPTIONS.map(o => <option key={String(o.value)} value={o.value??""}>{o.label}</option>)}
           </select>
-          {hole.par===3 && <p style={{ fontSize:12, color:"rgba(255,255,255,0.5)", margin:"4px 0 0" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"#888", margin:"4px 0 0" }}>Disabled for par 3</p>}
         </div>
 
         {/* Tee Shot Hazards */}
         <div>
           <span style={SECTION}>Tee Shot Hazards</span>
-          {hole.par===3 && <p style={{ fontSize:12, color:"#bbb", margin:"4px 0 8px" }}>Disabled for par 3</p>}
+          {hole.par===3 && <p style={{ fontSize:12, color:"#666", margin:"4px 0 8px" }}>Disabled for par 3</p>}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, opacity:hole.par===3?0.3:1 }}>
             {TEE_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:hole.par===3?"not-allowed":"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#1a1a1a", cursor:hole.par===3?"not-allowed":"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => hole.par!==3&&toggleCheck(key)} disabled={hole.par===3} />
                 {label}
               </label>
@@ -473,7 +473,7 @@ const isScan = searchParams.get("scan") === "1";
           <span style={SECTION}>Approach Hazards</span>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:16 }}>
             {APPROACH_CHECKBOXES.map(({ key, label }) => (
-              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"white", cursor:"pointer" }}>
+              <label key={key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:14, color:"#1a1a1a", cursor:"pointer" }}>
                 <input type="checkbox" checked={!!hole[key]} onChange={() => toggleCheck(key)} />
                 {label}
               </label>

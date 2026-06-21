@@ -4,6 +4,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getClubDistances, loadCourses } from "@/lib/storage";
+import type { CourseRecord } from "@/lib/types";
 
 // ─── Club dial config ──────────────────────────────────────────────────────────
 
@@ -42,6 +44,8 @@ type RoundRow = {
   date: string;
   holes: any[];
   holes_played: number;
+  course_id?: string;
+  tee_box?: string;
   recap?: SavedRecap | null;
 };
 
@@ -284,6 +288,198 @@ function analyze(
   };
 }
 
+// ─── Scorecard (mirrors edit page) ───────────────────────────────────────────
+
+function scoreColor(score: number, par: number): string {
+  const d = score - par;
+  if (d <= -2) return "#1a6fd4";
+  if (d === -1) return "var(--good)";
+  if (d === 0)  return "var(--ink)";
+  if (d === 1)  return "var(--accent)";
+  return "var(--bad)";
+}
+
+function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions }: {
+  roundHoles: any[];
+  courseName: string;
+  teeBox: string;
+  date: string;
+  allVersions: CourseRecord[];
+}) {
+  const [showCalc, setShowCalc] = useState(false);
+  const is18 = roundHoles.length === 18;
+  const sortedTees = [...allVersions].sort((a, b) =>
+    b.holes.reduce((s: number, h: any) => s + (h.yards || 0), 0) -
+    a.holes.reduce((s: number, h: any) => s + (h.yards || 0), 0)
+  );
+
+  type Col =
+    | { type: "hole"; rh: any }
+    | { type: "spacer"; label: string; parSum: number; scoreSum: number; yardsMap: Record<string, number> };
+
+  const makeSpacerYards = (sliceHoles: any[]) => {
+    const nums = new Set(sliceHoles.map(h => h.hole));
+    return Object.fromEntries(sortedTees.map(t => [
+      t.tee_box,
+      t.holes.filter((h: any) => nums.has(h.hole)).reduce((s: number, h: any) => s + (h.yards || 0), 0),
+    ]));
+  };
+
+  const cols: Col[] = [];
+  if (is18) {
+    roundHoles.slice(0, 9).forEach(h => cols.push({ type: "hole", rh: h }));
+    cols.push({ type: "spacer", label: "Out", parSum: roundHoles.slice(0, 9).reduce((s, h) => s + h.par, 0), scoreSum: roundHoles.slice(0, 9).reduce((s, h) => s + (Number(h.score) || 0), 0), yardsMap: makeSpacerYards(roundHoles.slice(0, 9)) });
+    roundHoles.slice(9).forEach(h => cols.push({ type: "hole", rh: h }));
+    cols.push({ type: "spacer", label: "In",  parSum: roundHoles.slice(9).reduce((s, h) => s + h.par, 0), scoreSum: roundHoles.slice(9).reduce((s, h) => s + (Number(h.score) || 0), 0), yardsMap: makeSpacerYards(roundHoles.slice(9)) });
+  } else {
+    roundHoles.forEach(h => cols.push({ type: "hole", rh: h }));
+  }
+  cols.push({ type: "spacer", label: "Total", parSum: roundHoles.reduce((s, h) => s + h.par, 0), scoreSum: roundHoles.reduce((s, h) => s + (Number(h.score) || 0), 0), yardsMap: makeSpacerYards(roundHoles) });
+
+  const totalScore = roundHoles.reduce((s, h) => s + (Number(h.score) || 0), 0);
+  const totalPar   = roundHoles.reduce((s, h) => s + h.par, 0);
+  const toPar      = totalScore - totalPar;
+
+  const c:   React.CSSProperties = { padding: "5px 3px", textAlign: "center", fontSize: 11, borderRight: "1px solid var(--line)", whiteSpace: "nowrap" };
+  const hdr: React.CSSProperties = { ...c, background: "var(--green)", color: "white", fontWeight: 600 };
+  const lbl: React.CSSProperties = { ...c, background: "var(--paper-alt)", fontWeight: 600, color: "var(--ink-soft)", textAlign: "left", paddingLeft: 8, minWidth: 72, fontSize: 10 };
+  const sp:  React.CSSProperties = { ...c, background: "var(--green-soft)", fontWeight: 700, color: "var(--green-deep)" };
+
+  const CALC_DIST: Record<string, number> = { Driver: 230, "3W": 210, "5W": 195, "7W": 180, "4i": 185, "5i": 175, "6i": 165, "7i": 155, "8i": 145, "9i": 130, PW: 120, SW: 100, LW: 80 };
+  const courseHoles: any[] = allVersions[0]?.holes ?? [];
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ marginBottom: 14 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--font-display)", fontStyle: "italic", color: "var(--ink)", margin: "0 0 2px" }}>{courseName}</h2>
+        <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>{teeBox} tees · {date}</p>
+        <p style={{ fontSize: 22, fontWeight: 600, fontFamily: "var(--font-display)", fontStyle: "italic", color: toPar > 0 ? "var(--bad)" : toPar < 0 ? "var(--good)" : "var(--ink)", margin: "6px 0 0" }}>
+          {totalScore} <span style={{ fontSize: 15, fontStyle: "normal", fontFamily: "var(--font-ui)", color: "var(--muted)" }}>({toPar === 0 ? "E" : toPar > 0 ? `+${toPar}` : toPar})</span>
+        </p>
+      </div>
+
+      <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid var(--line)", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", marginBottom: 12 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "auto" }}>
+          <tbody>
+            <tr>
+              <td style={lbl}>Hole</td>
+              {cols.map((col, ci) => col.type === "hole" ? <td key={ci} style={hdr}>{col.rh.hole}</td> : <td key={ci} style={sp}>{col.label}</td>)}
+            </tr>
+            <tr>
+              <td style={lbl}>Index</td>
+              {cols.map((col, ci) => col.type === "hole" ? <td key={ci} style={{ ...c, background: "#fafafa", color: "#555" }}>{col.rh.stroke_index}</td> : <td key={ci} style={{ ...c, background: "#e8f5f0" }}></td>)}
+            </tr>
+            <tr>
+              <td style={lbl}>Par</td>
+              {cols.map((col, ci) => col.type === "hole" ? <td key={ci} style={{ ...c, fontWeight: 600 }}>{col.rh.par}</td> : <td key={ci} style={sp}>{col.parSum}</td>)}
+            </tr>
+            {sortedTees.map((tee, ti) => (
+              <tr key={tee.id} style={{ background: ti % 2 === 0 ? "#f5f5f5" : "#f9f9f9" }}>
+                <td style={{ ...lbl, background: ti % 2 === 0 ? "#f5f5f5" : "#f9f9f9" }}>
+                  <span style={{ fontSize: 10, color: "var(--green)", fontWeight: 600 }}>{tee.tee_box}</span>
+                </td>
+                {cols.map((col, ci) => {
+                  if (col.type === "hole") { const th = tee.holes.find((h: any) => h.hole === col.rh.hole); return <td key={ci} style={c}>{th?.yards || "—"}</td>; }
+                  return <td key={ci} style={{ ...sp, fontSize: 12 }}>{col.yardsMap[tee.tee_box] || "—"}</td>;
+                })}
+              </tr>
+            ))}
+            <tr style={{ borderTop: "2px solid var(--green)" }}>
+              <td style={{ ...lbl, background: "var(--green-soft)" }}>Score</td>
+              {cols.map((col, ci) => col.type === "hole"
+                ? <td key={ci} style={{ ...c, fontWeight: 700, color: col.rh.score !== "" ? scoreColor(Number(col.rh.score), col.rh.par) : "#aaa" }}>{col.rh.score !== "" ? col.rh.score : "—"}</td>
+                : <td key={ci} style={sp}>{col.scoreSum || "—"}</td>)}
+            </tr>
+            <tr>
+              <td style={lbl}>Driv Club</td>
+              {cols.map((col, ci) => col.type === "hole" ? <td key={ci} style={c}>{col.rh.club || "—"}</td> : <td key={ci} style={{ ...c, background: "#f5f5f5" }}></td>)}
+            </tr>
+            <tr style={{ background: "#f9f9f9" }}>
+              <td style={{ ...lbl, background: "#f9f9f9" }}>Driv Acc</td>
+              {cols.map((col, ci) => col.type === "hole"
+                ? <td key={ci} style={{ ...c, background: "#f9f9f9", color: col.rh.tee_accuracy === "Hit" ? "#27ae60" : col.rh.tee_accuracy ? "#c0392b" : "#aaa" }}>{col.rh.tee_accuracy || "—"}</td>
+                : <td key={ci} style={{ ...c, background: "#e8f5f0" }}></td>)}
+            </tr>
+            <tr>
+              <td style={lbl}>Appr Club</td>
+              {cols.map((col, ci) => col.type === "hole" ? <td key={ci} style={c}>{col.rh.appr_distance || "—"}</td> : <td key={ci} style={{ ...c, background: "#f5f5f5" }}></td>)}
+            </tr>
+            <tr style={{ background: "#f9f9f9" }}>
+              <td style={{ ...lbl, background: "#f9f9f9" }}>Appr Acc</td>
+              {cols.map((col, ci) => col.type === "hole"
+                ? <td key={ci} style={{ ...c, background: "#f9f9f9", color: col.rh.appr_accuracy === "Hit" ? "#27ae60" : col.rh.appr_accuracy ? "#c0392b" : "#aaa" }}>{col.rh.appr_accuracy || "—"}</td>
+                : <td key={ci} style={{ ...c, background: "#e8f5f0" }}></td>)}
+            </tr>
+            <tr>
+              <td style={lbl}>Chips</td>
+              {cols.map((col, ci) => col.type === "hole" ? <td key={ci} style={c}>{col.rh.chips !== "" ? col.rh.chips : "—"}</td> : <td key={ci} style={{ ...c, background: "#f5f5f5" }}></td>)}
+            </tr>
+            <tr style={{ background: "#f9f9f9" }}>
+              <td style={{ ...lbl, background: "#f9f9f9" }}>Putts</td>
+              {cols.map((col, ci) => col.type === "hole"
+                ? <td key={ci} style={{ ...c, background: "#f9f9f9" }}>{col.rh.putts !== "" ? col.rh.putts : "—"}</td>
+                : <td key={ci} style={sp}>{col.type === "spacer" ? roundHoles.filter(h => is18 ? (col.label === "Out" ? h.hole <= 9 : col.label === "In" ? h.hole > 9 : true) : true).reduce((s, h) => s + (Number(h.putts) || 0), 0) || "—" : "—"}</td>)}
+            </tr>
+            <tr>
+              <td style={lbl}>1st Putt</td>
+              {cols.map((col, ci) => col.type === "hole" ? <td key={ci} style={c}>{col.rh.first_putt_distance || "—"}</td> : <td key={ci} style={{ ...c, background: "#f5f5f5" }}></td>)}
+            </tr>
+            {showCalc && <>
+              <tr>
+                <td colSpan={cols.length + 1} style={{ padding: "4px 8px", background: "var(--green-soft)", fontSize: 9, fontWeight: 700, color: "var(--green-deep)", textTransform: "uppercase", letterSpacing: 1, borderTop: "2px solid var(--green)" }}>Calculations</td>
+              </tr>
+              <tr>
+                <td style={lbl}>Est Rem</td>
+                {cols.map((col, ci) => {
+                  if (col.type === "spacer") return <td key={ci} style={{ ...c, background: "#f5f5f5" }}></td>;
+                  const rem = col.rh.par >= 4 && col.rh.club && CALC_DIST[col.rh.club] ? Math.max(0, col.rh.yards - CALC_DIST[col.rh.club]) : null;
+                  return <td key={ci} style={{ ...c, color: "var(--green)", fontWeight: rem !== null ? 600 : 400 }}>{rem !== null ? rem : "—"}</td>;
+                })}
+              </tr>
+              <tr style={{ background: "#f9f9f9" }}>
+                <td style={{ ...lbl, background: "#f9f9f9" }}>Water</td>
+                {cols.map((col, ci) => {
+                  if (col.type === "spacer") return <td key={ci} style={{ ...c, background: "#e8f5f0" }}></td>;
+                  const ch = courseHoles.find((h: any) => h.hole === col.rh.hole);
+                  const penalties = (Number(col.rh.water_penalty) || 0) + (Number(col.rh.drop_or_out) || 0);
+                  const v = ch && penalties && col.rh.tee_accuracy && col.rh.tee_accuracy !== "Hit" &&
+                    ((col.rh.tee_accuracy === "Left" && ch.tee_water_out_left) || (col.rh.tee_accuracy === "Right" && ch.tee_water_out_right)) ? 100 : 0;
+                  return <td key={ci} style={{ ...c, background: "#f9f9f9", color: v > 0 ? "#e67e22" : "#aaa", fontWeight: v > 0 ? 700 : 400 }}>{v > 0 ? `${v}%` : "—"}</td>;
+                })}
+              </tr>
+              <tr>
+                <td style={lbl}>Trees</td>
+                {cols.map((col, ci) => {
+                  if (col.type === "spacer") return <td key={ci} style={{ ...c, background: "#f5f5f5" }}></td>;
+                  const ch = courseHoles.find((h: any) => h.hole === col.rh.hole);
+                  const v = ch && Number(col.rh.tree_haz) && col.rh.tee_accuracy && col.rh.tee_accuracy !== "Hit" &&
+                    ((col.rh.tee_accuracy === "Left" && ch.tee_tree_hazard_left) || (col.rh.tee_accuracy === "Right" && ch.tee_tree_hazard_right)) ? 75 : 0;
+                  return <td key={ci} style={{ ...c, color: v > 0 ? "#27ae60" : "#aaa", fontWeight: v > 0 ? 700 : 400 }}>{v > 0 ? `${v}%` : "—"}</td>;
+                })}
+              </tr>
+              <tr style={{ background: "#f9f9f9" }}>
+                <td style={{ ...lbl, background: "#f9f9f9" }}>Bkr</td>
+                {cols.map((col, ci) => {
+                  if (col.type === "spacer") return <td key={ci} style={{ ...c, background: "#e8f5f0" }}></td>;
+                  const ch = courseHoles.find((h: any) => h.hole === col.rh.hole);
+                  const v = ch && Number(col.rh.fairway_bunker) && col.rh.tee_accuracy && col.rh.tee_accuracy !== "Hit" &&
+                    ((col.rh.tee_accuracy === "Left" && ch.tee_bunkers_left) || (col.rh.tee_accuracy === "Right" && ch.tee_bunkers_right)) ? 100 : 0;
+                  return <td key={ci} style={{ ...c, background: "#f9f9f9", color: v > 0 ? "#c8a84b" : "#aaa", fontWeight: v > 0 ? 700 : 400 }}>{v > 0 ? `${v}%` : "—"}</td>;
+                })}
+              </tr>
+            </>}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <button onClick={() => setShowCalc(v => !v)} style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, borderRadius: 8, border: "1.5px solid var(--green)", background: showCalc ? "var(--green)" : "transparent", color: showCalc ? "white" : "var(--green)", cursor: "pointer" }}>
+          {showCalc ? "Hide Calculations" : "Include Calculations"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const TOKENS = `
@@ -390,57 +586,90 @@ function Stepper({ stage, onBack }: { stage: "input" | "analysis"; onBack: () =>
   );
 }
 
-// ─── Dial row ─────────────────────────────────────────────────────────────────
+// ─── Dial row — 8-segment control, 2 per tier ────────────────────────────────
+
+const TIER_STYLE = {
+  cold:    { fg: "var(--cold)",  bg: "var(--cold-bg)",    bd: "var(--cold)",  label: "❄ Cold" },
+  neutral: { fg: "var(--muted)", bg: "var(--paper-alt)",  bd: "var(--line)",  label: "~ OK" },
+  solid:   { fg: "var(--green)", bg: "var(--green-soft)", bd: "var(--green)", label: "✓ Solid" },
+  hot:     { fg: "var(--flag)",  bg: "#f6e4d6",           bd: "var(--bad)",   label: "🔥 Hot" },
+} as const;
+
+// 8 segments: 2 cold, 2 ok, 2 solid, 2 hot
+const SEGMENTS = [
+  { value: 10, tier: "cold"    as const },
+  { value: 24, tier: "cold"    as const },
+  { value: 37, tier: "neutral" as const },
+  { value: 48, tier: "neutral" as const },
+  { value: 58, tier: "solid"   as const },
+  { value: 68, tier: "solid"   as const },
+  { value: 79, tier: "hot"     as const },
+  { value: 91, tier: "hot"     as const },
+];
+
+function nearestSegment(v: number) {
+  return SEGMENTS.reduce((best, s) =>
+    Math.abs(s.value - v) < Math.abs(best.value - v) ? s : best
+  );
+}
 
 function DialRow({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  const active = nearestSegment(value);
+  const ts = TIER_STYLE[active.tier];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "100px 1fr 130px", alignItems: "center", gap: 16 }}>
-      <div style={{ fontWeight: 600, fontSize: 13 }}>{label}</div>
-
-      {/* Track */}
-      <div style={{ position: "relative", height: 44 }}>
-        <div style={{
-          position: "absolute", top: 16, left: 0, right: 0, height: 6, borderRadius: 3,
-          background: "var(--paper-alt)", border: "1px solid var(--line)",
-        }} />
-        <div style={{
-          position: "absolute", top: 16, left: 0, height: 6, borderRadius: 3,
-          width: `${value}%`,
-          background: "linear-gradient(90deg, var(--cold) 0%, var(--sand) 40%, var(--green) 80%)",
-          border: "1px solid var(--line)",
-        }} />
-        <input
-          type="range" min={0} max={100} value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          style={{ position: "absolute", inset: 0, width: "100%", opacity: 0, cursor: "pointer", height: "100%" }}
-        />
-        {/* Thumb */}
-        <div style={{
-          position: "absolute", top: 10, left: `calc(${value}% - 9px)`,
-          width: 18, height: 18, borderRadius: "50%",
-          background: "var(--paper)", border: "2px solid var(--ink)",
-          boxShadow: "0 2px 6px rgba(0,0,0,.1)", pointerEvents: "none",
-        }} />
-        {/* Scale labels */}
-        <div style={{
-          position: "absolute", top: 30, left: 0, right: 0,
-          display: "flex", justifyContent: "space-between",
-          fontSize: 9, color: "var(--muted-2)", letterSpacing: 1, textTransform: "uppercase",
-        }}>
-          <span>cold</span><span>neutral</span><span>hot</span>
-        </div>
+    <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", alignItems: "center", gap: 10 }}>
+      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink-soft)" }}>{label}</div>
+      <div style={{ display: "flex", gap: 3 }}>
+        {SEGMENTS.map((seg, i) => {
+          const isActive = seg.value === active.value;
+          const st = TIER_STYLE[seg.tier];
+          // small gap between tier groups
+          const gapLeft = i > 0 && seg.tier !== SEGMENTS[i - 1].tier;
+          return (
+            <button
+              key={i}
+              onClick={() => onChange(seg.value)}
+              style={{
+                flex: 1,
+                marginLeft: gapLeft ? 5 : 0,
+                padding: "12px 0",
+                borderRadius: 7,
+                border: `2px solid ${isActive ? st.bd : "var(--line)"}`,
+                background: isActive ? st.bg : "var(--paper-alt)",
+                cursor: "pointer",
+                transition: "all .1s ease",
+                position: "relative",
+              }}
+              aria-label={`${label} ${seg.tier} ${i % 2 === 0 ? "low" : "high"}`}
+            >
+              {isActive && (
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex",
+                  alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 700, color: st.fg, lineHeight: 1,
+                }}>
+                  {seg.tier === "cold" ? "❄" : seg.tier === "neutral" ? "~" : seg.tier === "solid" ? "✓" : "🔥"}
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
-
-      {/* Heat label */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-        <span style={{
-          display: "inline-block", padding: "3px 9px", borderRadius: 999,
-          fontSize: 11, fontWeight: 700, letterSpacing: 0.2,
-          color: heatFg(value), background: heatBg(value), border: `1px solid ${heatBd(value)}`,
-        }}>
-          {heatLabel(value)}
-        </span>
-        <span style={{ fontSize: 10, color: "var(--muted-2)", fontFamily: "var(--font-mono)", minWidth: 24, textAlign: "right" }}>{value}</span>
+      <div />
+      <div style={{ display: "flex", gap: 3, marginTop: 2 }}>
+        {SEGMENTS.map((seg, i) => {
+          const gapLeft = i > 0 && seg.tier !== SEGMENTS[i - 1].tier;
+          const isFirstOfTier = i === 0 || seg.tier !== SEGMENTS[i - 1].tier;
+          return (
+            <div key={i} style={{
+              flex: 1, marginLeft: gapLeft ? 5 : 0,
+              fontSize: 9, color: "var(--muted-2)", textAlign: "center",
+              fontWeight: 600, letterSpacing: 0.5, textTransform: "uppercase",
+            }}>
+              {isFirstOfTier ? TIER_STYLE[seg.tier].label : ""}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -485,6 +714,7 @@ function StageInput({
   favs, onFavs,
   wish, onWish,
   groupNotes, onGroupNote,
+  activeDialClubs,
   onSubmit,
 }: {
   rounds: RoundRow[];
@@ -497,6 +727,7 @@ function StageInput({
   wish: string;    onWish:    (v: string) => void;
   groupNotes: Record<string, string>;
   onGroupNote: (k: string, v: string) => void;
+  activeDialClubs: readonly { key: string; label: string }[];
   onSubmit: () => void;
 }) {
   const round = rounds.find(r => r.id === roundId);
@@ -569,8 +800,8 @@ function StageInput({
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>How'd the clubs feel?</div>
         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 22 }}>Rate each group — this shapes the analysis.</div>
         <div style={{ display: "grid", gap: 20 }}>
-          {DIAL_CLUBS.map(({ key, label }) => (
-            <DialRow key={key} label={label} value={dials[key]} onChange={v => onDial(key, v)} />
+          {activeDialClubs.map(({ key, label }) => (
+            <DialRow key={key} label={label} value={dials[key as DialKey]} onChange={v => onDial(key as DialKey, v)} />
           ))}
         </div>
       </div>
@@ -581,7 +812,7 @@ function StageInput({
         <div style={{ display: "grid", gap: 16 }}>
           <Notes label="Overall notes" value={overall} onChange={onOverall} rows={4}
             placeholder="How did it feel overall? Anything stick out?" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
             <Notes label="Favorite shots" value={favs} onChange={onFavs} rows={2}
               placeholder="What would you love to bottle up?" />
             <Notes label="Wish I had them back" value={wish} onChange={onWish} rows={2}
@@ -594,9 +825,9 @@ function StageInput({
       <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "20px 24px", marginBottom: 32 }}>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Notes by club group</div>
         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>Anything specific about how each group was behaving?</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          {DIAL_CLUBS.map(({ key, label }) => {
-            const v = dials[key];
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+          {activeDialClubs.map(({ key, label }) => {
+            const v = dials[key as DialKey];
             return (
               <div key={key}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -825,7 +1056,17 @@ export default function RecapPage() {
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [bagDistances, setBagDistances] = useState<Record<string, { inBag?: boolean }>>({});
+  const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const topRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { getClubDistances().then(setBagDistances); }, []);
+
+  const activeDialClubs = useMemo(() => {
+    if (!bagDistances || Object.keys(bagDistances).length === 0) return DIAL_CLUBS;
+    const WOODS = new Set(["Driver", "3W", "5W", "7W"]);
+    return DIAL_CLUBS.filter(c => !WOODS.has(c.key) || bagDistances[c.key]?.inBag !== false);
+  }, [bagDistances]);
 
   useEffect(() => {
     const urlId = typeof window !== "undefined"
@@ -835,13 +1076,13 @@ export default function RecapPage() {
       // Try fetching with recap column; fall back if the column doesn't exist yet
       let { data, error } = await supabase
         .from("rounds")
-        .select("id, course_name, date, holes, holes_played, recap")
+        .select("id, course_name, date, holes, holes_played, course_id, tee_box, recap")
         .order("date", { ascending: false })
         .limit(200);
       if (error || !data) {
         const fallback = await supabase
           .from("rounds")
-          .select("id, course_name, date, holes, holes_played")
+          .select("id, course_name, date, holes, holes_played, course_id, tee_box")
           .order("date", { ascending: false })
           .limit(200);
         data = fallback.data as any;
@@ -859,6 +1100,13 @@ export default function RecapPage() {
 
   // Pre-populate from saved recap whenever the selected round changes
   useEffect(() => {
+    // Load all tee versions for the scorecard
+    if (round?.course_name) {
+      loadCourses().then(all => setAllTeeVersions(all.filter(c => c.name === round.course_name)));
+    } else {
+      setAllTeeVersions([]);
+    }
+
     const saved = round?.recap;
     if (saved) {
       setDials({ ...DEFAULT_DIALS, ...saved.dials } as Dials);
@@ -916,7 +1164,7 @@ export default function RecapPage() {
         <div ref={topRef} />
 
         {/* Title */}
-        <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "var(--muted-2)", marginBottom: 6 }}>
             Post-round
           </div>
@@ -924,6 +1172,19 @@ export default function RecapPage() {
             Recap
           </div>
         </div>
+
+        {/* Scorecard — always visible on both stages */}
+        {round && round.holes?.length > 0 && (
+          <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "20px 20px 8px", marginBottom: 24 }}>
+            <RoundScorecard
+              roundHoles={round.holes}
+              courseName={round.course_name}
+              teeBox={round.tee_box ?? ""}
+              date={round.date}
+              allVersions={allTeeVersions}
+            />
+          </div>
+        )}
 
         <Stepper stage={stage} onBack={() => setStage("input")} />
 
@@ -939,6 +1200,7 @@ export default function RecapPage() {
             wish={wish}       onWish={setWish}
             groupNotes={groupNotes}
             onGroupNote={(k, v) => setGroupNotes(n => ({ ...n, [k]: v }))}
+            activeDialClubs={activeDialClubs}
             onSubmit={handleSubmit}
           />
         )}
