@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { getClubDistances, saveClubDistances } from "@/lib/storage";
+import { getClubDistances, getClubDistancesSync, saveClubDistances } from "@/lib/storage";
 import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
 import type { ClubDistances } from "@/lib/planTypes";
 import { Pencil, Trash2 } from "lucide-react";
@@ -183,8 +183,8 @@ export default function ClubhousePage() {
   const [courseInfoMap, setCourseInfoMap] = useState<Record<string, CourseInfo>>({});
   const [profile, setProfile] = useState({ strengths: "", weaknesses: "" });
   const [changeLog, setChangeLog] = useState<string[]>([]);
-  const [clubDistances, setClubDistances] = useState<ClubDistances>(DEFAULT_CLUB_DISTANCES);
-  const [distDraft, setDistDraft] = useState<ClubDistances>(DEFAULT_CLUB_DISTANCES);
+  const [clubDistances, setClubDistances] = useState<ClubDistances>(() => getClubDistancesSync());
+  const [distDraft, setDistDraft] = useState<ClubDistances>(() => getClubDistancesSync());
   const [recapRounds, setRecapRounds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -199,6 +199,7 @@ export default function ClubhousePage() {
   const [distEditing, setDistEditing] = useState(false);
   const [distSaving, setDistSaving] = useState(false);
   const [distSaved, setDistSaved] = useState(false);
+  const [distSaveError, setDistSaveError] = useState<string | null>(null);
   const [newItem, setNewItem] = useState("");
   const [newClubName, setNewClubName] = useState("");
   const [newClubMin, setNewClubMin] = useState("");
@@ -260,9 +261,31 @@ export default function ClubhousePage() {
 
   async function saveDistances() {
     setDistSaving(true);
-    await saveClubDistances(distDraft);
-    setClubDistances(distDraft); setDistEditing(false); setDistSaving(false); setDistSaved(true);
-    setTimeout(() => setDistSaved(false), 2000);
+    setDistSaveError(null);
+    try {
+      await saveClubDistances(distDraft);
+      setClubDistances(distDraft);
+      setDistEditing(false);
+      setDistSaved(true);
+      setTimeout(() => setDistSaved(false), 2000);
+    } catch (e: any) {
+      setDistSaveError(e?.message || "Save failed — changes stored locally and will retry on next save.");
+    } finally {
+      setDistSaving(false);
+    }
+  }
+
+  async function toggleInBag(club: string) {
+    const current = clubDistances[club]?.inBag !== false;
+    const updated = { ...clubDistances, [club]: { ...clubDistances[club], inBag: !current } };
+    setClubDistances(updated);
+    setDistDraft(updated);
+    setDistSaveError(null);
+    try {
+      await saveClubDistances(updated);
+    } catch (e: any) {
+      setDistSaveError(e?.message || "Save failed — change stored locally.");
+    }
   }
 
   async function saveChangeLog(updated: string[]) {
@@ -278,6 +301,12 @@ export default function ClubhousePage() {
   }
 
   // ── Computed ──────────────────────────────────────────────────────────────────
+
+  const byAvgDist = (a: [string, { min: number; max: number }], b: [string, { min: number; max: number }]) =>
+    ((b[1].min + b[1].max) / 2) - ((a[1].min + a[1].max) / 2);
+  const bagSource = distEditing ? distDraft : clubDistances;
+  const inBagEntries = Object.entries(bagSource).filter(([, v]) => v.inBag !== false).sort(byAvgDist);
+  const reserveEntries = Object.entries(bagSource).filter(([, v]) => v.inBag === false).sort(byAvgDist);
 
   const roundsAsc = [...rounds].sort((a, b) => a.date.localeCompare(b.date));
   const roundsDesc = [...rounds].sort((a, b) => b.date.localeCompare(a.date));
@@ -513,9 +542,9 @@ export default function ClubhousePage() {
             { label: "Putts / 18",  v: [stats5, stats20, statsAll].map(s => fmtPuts(s?.avgPuttsPer18)) },
             { label: "Fairways",    v: [stats5, stats20, statsAll].map(s => fmtPct(s?.drivingPct)) },
             { label: "GIR",         v: [stats5, stats20, statsAll].map(s => fmtPct(s?.girPct)) },
-            { label: "1st putt",        v: [stats5, stats20, statsAll].map(s => fmtFt(s?.avgPuttAfterChip)) },
-            { label: "3-Putts / 18",    v: [stats5, stats20, statsAll].map(s => fmtSge(s?.threePuttPer18)) },
-            { label: "GS Extra Shots/18", v: [stats5, stats20, statsAll].map(s => fmtSge(s?.gsExtraShotsPer18)) },
+            { label: "1st putt after chip", v: [stats5, stats20, statsAll].map(s => fmtFt(s?.avgPuttAfterChip)) },
+            { label: "3-Putts / 18",        v: [stats5, stats20, statsAll].map(s => fmtSge(s?.threePuttPer18)) },
+            { label: "GS Extra Shots / 18", v: [stats5, stats20, statsAll].map(s => fmtSge(s?.gsExtraShotsPer18)) },
           ].map((row) => (
             <div key={row.label} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 1fr", padding: "9px 16px", borderTop: "1px solid var(--line-soft)", fontSize: 13, alignItems: "center" }}>
               <span style={{ color: "var(--ink)", fontWeight: 500 }}>{row.label}</span>
@@ -768,26 +797,30 @@ export default function ClubhousePage() {
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontSize: 9.5, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 700 }}>Club distances</div>
                 {!distEditing && (
-                  <button onClick={() => { setDistDraft({ ...clubDistances }); setDistEditing(true); }}
+                  <button onClick={() => { setDistDraft({ ...clubDistances }); setDistEditing(true); setDistSaveError(null); }}
                     style={{ fontSize: 11, color: "var(--green)", background: "none", border: "1px solid var(--green)", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontWeight: 600 }}>
                     Edit
                   </button>
                 )}
               </div>
-              {Object.entries(distEditing ? distDraft : clubDistances).map(([club, { min, max }], i) => (
+
+              {/* In the Bag */}
+              <div style={{ padding: "8px 16px 4px", borderTop: "1px solid var(--line-soft)", background: "var(--paper-alt)" }}>
+                <span style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--green)", fontWeight: 700, textTransform: "uppercase" }}>In the Bag · {inBagEntries.length}</span>
+              </div>
+              {inBagEntries.map(([club, { min, max }], i) => (
                 <div key={club} style={{
                   display: "grid", gridTemplateColumns: "64px 1fr auto", gap: 12, alignItems: "center",
-                  padding: "10px 16px", borderTop: i ? "1px solid var(--line-soft)" : "none",
+                  padding: "10px 16px", borderTop: i > 0 ? "1px solid var(--line-soft)" : "none",
                 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{club}</span>
                   <div style={{ position: "relative", height: 7, background: "var(--paper-alt)", borderRadius: 99 }}>
-                    <div style={{
-                      position: "absolute", top: 0, height: "100%", borderRadius: 99, background: "var(--green)",
-                      left: `${((min - 50) / 250) * 100}%`,
-                      width: `${((max - min) / 250) * 100}%`,
-                    }} />
+                    <div style={{ position: "absolute", top: 0, height: "100%", borderRadius: 99, background: "var(--green)", left: `${((min - 50) / 250) * 100}%`, width: `${((max - min) / 250) * 100}%` }} />
                   </div>
-                  <div style={{ display: "flex", gap: 4, alignItems: "center", minWidth: distEditing ? 130 : 70 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <button onClick={() => toggleInBag(club)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, cursor: "pointer", fontWeight: 600, border: "1px solid var(--line)", background: "var(--paper-alt)", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                      Move to Reserve
+                    </button>
                     {distEditing ? (
                       <>
                         <input type="number" value={min}
@@ -806,6 +839,54 @@ export default function ClubhousePage() {
                   </div>
                 </div>
               ))}
+
+              {/* Reserve */}
+              {reserveEntries.length > 0 && (
+                <>
+                  <div style={{ padding: "8px 16px 4px", borderTop: "1px solid var(--line)", background: "var(--paper-alt)" }}>
+                    <span style={{ fontSize: 9, letterSpacing: 1.5, color: "var(--muted-2)", fontWeight: 700, textTransform: "uppercase" }}>Reserve · {reserveEntries.length}</span>
+                  </div>
+                  {reserveEntries.map(([club, { min, max }], i) => (
+                    <div key={club} style={{
+                      display: "grid", gridTemplateColumns: "64px 1fr auto", gap: 12, alignItems: "center",
+                      padding: "10px 16px", borderTop: i > 0 ? "1px solid var(--line-soft)" : "none",
+                      opacity: 0.6,
+                    }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{club}</span>
+                      <div style={{ position: "relative", height: 7, background: "var(--paper-alt)", borderRadius: 99 }}>
+                        <div style={{ position: "absolute", top: 0, height: "100%", borderRadius: 99, background: "var(--muted-2)", left: `${((min - 50) / 250) * 100}%`, width: `${((max - min) / 250) * 100}%` }} />
+                      </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <button onClick={() => toggleInBag(club)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, cursor: "pointer", fontWeight: 600, border: "1px solid var(--green)", background: "var(--green-soft)", color: "var(--green)", whiteSpace: "nowrap" }}>
+                          Move to Bag
+                        </button>
+                        {distEditing ? (
+                          <>
+                            <input type="number" value={min}
+                              onChange={e => setDistDraft(d => ({ ...d, [club]: { ...d[club], min: Number(e.target.value) } }))}
+                              style={{ width: 52, textAlign: "center", padding: "3px 4px", border: "1px solid var(--line)", borderRadius: 5, fontSize: 12, color: "var(--ink)", background: "var(--paper)" }} />
+                            <span style={{ fontSize: 10, color: "var(--muted-2)" }}>–</span>
+                            <input type="number" value={max}
+                              onChange={e => setDistDraft(d => ({ ...d, [club]: { ...d[club], max: Number(e.target.value) } }))}
+                              style={{ width: 52, textAlign: "center", padding: "3px 4px", border: "1px solid var(--line)", borderRadius: 5, fontSize: 12, color: "var(--ink)", background: "var(--paper)" }} />
+                            <button onClick={() => setDistDraft(d => { const n = { ...d }; delete n[club]; return n; })}
+                              style={{ fontSize: 11, color: "var(--bad)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>✕</button>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: 11.5, fontFamily: "monospace", color: "var(--muted)", fontWeight: 600 }}>{min}–{max}y</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {distSaveError && (
+                <div style={{ padding: "8px 16px", background: "#fdecea", borderTop: "1px solid #e57373", fontSize: 12, color: "#b71c1c" }}>
+                  ⚠ {distSaveError}
+                </div>
+              )}
+
               {distEditing && (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "64px 1fr auto", gap: 12, alignItems: "center", padding: "8px 16px", borderTop: "1px dashed var(--line)", background: "var(--paper-alt)" }}>
@@ -832,7 +913,7 @@ export default function ClubhousePage() {
                       style={{ flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 600, background: "var(--green-deep)", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
                       {distSaving ? "Saving…" : distSaved ? "Saved!" : "Save distances"}
                     </button>
-                    <button onClick={() => setDistEditing(false)}
+                    <button onClick={() => { setDistEditing(false); setDistSaveError(null); }}
                       style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, background: "var(--paper-alt)", color: "var(--muted)", border: "1px solid var(--line)", borderRadius: 8, cursor: "pointer" }}>
                       Cancel
                     </button>

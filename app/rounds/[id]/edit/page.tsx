@@ -164,7 +164,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
 
   const [showCalc, setShowCalc] = useState(false);
   const courseHoles: any[] = allVersions[0]?.holes ?? [];
-  const CALC_DIST: Record<string,number> = { Driver:230,"3W":210,"5W":195,"7W":180,"4i":185,"5i":175,"6i":165,"7i":155,"8i":145,"9i":130,PW:120,SW:100,LW:80 };
+  const CALC_DIST: Record<string,number> = { Driver:230,"3W":210,"5W":195,"7W":180,"4i":185,"5i":175,"6i":165,"7i":155,"8i":145,"9i":130,PW:120,GW:105,SW:100,LW:80 };
 
   function calcEstRem(rh: RoundHole): number | null {
     if (rh.par < 4 || !rh.club || !CALC_DIST[rh.club]) return null;
@@ -557,6 +557,30 @@ export default function EditRound() {
         </div>
       </div>
 
+      {/* Handicap at time of round */}
+      {(courseHandicap != null || handicapIndex != null) && (
+        <div style={{ background:"var(--green-soft)", border:"1px solid var(--green)", borderRadius:12, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+          <div style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", textTransform:"uppercase", letterSpacing:1.6, whiteSpace:"nowrap" }}>Handicap at round</div>
+          {[
+            { label:"HI", value: handicapIndex != null ? handicapIndex.toFixed(1) : "—" },
+            { label:"Course HCP", value: courseHandicap != null ? String(courseHandicap) : "—" },
+            { label:"Adj Gross", value: adjustedGrossScore != null && adjustedGrossScore > 0 ? String(adjustedGrossScore) : "—" },
+            { label:"Differential", value: scoreDifferential != null ? (holesPlayed <= 9 ? (scoreDifferential * 2).toFixed(1) : scoreDifferential.toFixed(1)) : "—" },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+              <span style={{ fontSize:20, fontWeight:700, fontFamily:"var(--font-display)", fontStyle:"italic", color:"var(--green-deep)" }}>{value}</span>
+              <span style={{ fontSize:10, color:"var(--green)", fontWeight:600, letterSpacing:0.3 }}>{label}</span>
+            </div>
+          ))}
+          {courseHandicap != null && (
+            <span style={{ fontSize:11, color:"var(--green-deep)", fontStyle:"italic", marginLeft:"auto" }}>
+              strokes on SI 1–{Math.min(courseHandicap, 18)}
+              {courseHandicap > 18 ? ` + 2× on SI 1–${courseHandicap - 18}` : ""}
+            </span>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 20 }}>
         {[
           { label: "Score", value: totalScore || "—" },
@@ -583,32 +607,6 @@ export default function EditRound() {
           </div>
         ) : null;
       })}
-
-      {/* Handicap calculations */}
-      {(courseHandicap != null || handicapIndex != null) && (
-        <div style={{ background:"var(--green-soft)", border:"1px solid var(--green)", borderRadius:12, padding:"14px 18px", marginBottom:20 }}>
-          <div style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", textTransform:"uppercase", letterSpacing:1.6, marginBottom:12 }}>Round Handicap</div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
-            {[
-              { label:"HI at round", value: handicapIndex != null ? handicapIndex.toFixed(1) : "—" },
-              { label:"Course HCP", value: courseHandicap != null ? courseHandicap : "—" },
-              { label:"Adj Gross", value: adjustedGrossScore != null && adjustedGrossScore > 0 ? adjustedGrossScore : "—" },
-              { label:"Differential", value: scoreDifferential != null ? (holesPlayed <= 9 ? (scoreDifferential * 2).toFixed(1) : scoreDifferential.toFixed(1)) : "—" },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ textAlign:"center", background:"var(--paper)", borderRadius:8, padding:"10px 4px", border:"1px solid var(--line)" }}>
-                <div style={{ fontSize:18, fontWeight:600, fontFamily:"var(--font-display)", fontStyle:"italic", color:"var(--green-deep)" }}>{value}</div>
-                <div style={{ fontSize:9, color:"var(--ink-mute)", marginTop:3, letterSpacing:0.3 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-          {courseHandicap != null && (
-            <p style={{ fontSize:11, color:"var(--green-deep)", margin:"10px 0 0", fontStyle:"italic" }}>
-              Course HCP {courseHandicap}: you receive 1 stroke on holes ranked 1–{Math.min(courseHandicap, 18)}
-              {courseHandicap > 18 ? ` plus 2 strokes on holes ranked 1–${courseHandicap - 18}` : ""}
-            </p>
-          )}
-        </div>
-      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {roundHoles.map((hole, i) => (
@@ -649,7 +647,7 @@ export default function EditRound() {
                   <div><label style={labelStyle}>DRIV Club</label>
                     <select style={selectStyle} value={hole.club ?? ""} onChange={e => updateHole(i, "club", e.target.value)}>
                       <option value="">—</option>
-                      {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => <option key={c} value={c}>{c}</option>)}
+                      {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"].map(c => <option key={c} value={c}>{c}</option>)}
                     </select></div>
                   <div><label style={labelStyle}>DRIV Acc</label>
                     <select style={selectStyle} value={hole.tee_accuracy} onChange={e => updateHole(i, "tee_accuracy", e.target.value)}>
@@ -659,7 +657,7 @@ export default function EditRound() {
                   <div><label style={labelStyle}>APPR Club</label>
                     <select style={selectStyle} value={hole.appr_distance ?? ""} onChange={e => updateHole(i, "appr_distance", e.target.value)}>
                       <option value="">—</option>
-                      {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => <option key={c} value={c}>{c}</option>)}
+                      {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"].map(c => <option key={c} value={c}>{c}</option>)}
                     </select></div>
                   <div><label style={labelStyle}>APPR Acc</label>
                     <select style={selectStyle} value={hole.appr_accuracy ?? ""} onChange={e => updateHole(i, "appr_accuracy", e.target.value)}>

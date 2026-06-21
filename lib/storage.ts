@@ -3,21 +3,48 @@ import { CourseRecord } from "./types";
 import type { ClubDistances, PlayerForm } from "./planTypes";
 import { DEFAULT_CLUB_DISTANCES } from "./planTypes";
 
+const LS_KEY = "golf-club-distances-v2";
+
+function lsRead(): ClubDistances | null {
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem(LS_KEY) : null;
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function lsWrite(d: ClubDistances) {
+  try { typeof window !== "undefined" && localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch {}
+}
+
+export function getClubDistancesSync(): ClubDistances {
+  const ls = lsRead();
+  return ls ? { ...DEFAULT_CLUB_DISTANCES, ...ls } : { ...DEFAULT_CLUB_DISTANCES };
+}
+
 export async function getClubDistances(): Promise<ClubDistances> {
   const { data } = await supabase
     .from("player_data")
     .select("club_distances")
     .eq("id", "singleton")
     .single();
-  return (data?.club_distances as ClubDistances | null) ?? DEFAULT_CLUB_DISTANCES;
+  const saved = data?.club_distances as ClubDistances | null;
+  const merged = saved
+    ? { ...DEFAULT_CLUB_DISTANCES, ...saved }
+    : { ...DEFAULT_CLUB_DISTANCES };
+  // Keep localStorage in sync with Supabase truth
+  lsWrite(merged);
+  return merged;
 }
 
 export async function saveClubDistances(distances: ClubDistances): Promise<void> {
-  await supabase.from("player_data").upsert({
+  // Write to localStorage immediately so a page refresh before Supabase responds still works
+  lsWrite(distances);
+  const { error } = await supabase.from("player_data").upsert({
     id: "singleton",
     club_distances: distances,
     updated_at: new Date().toISOString(),
   });
+  if (error) throw new Error(error.message);
 }
 
 export async function getClubForm(): Promise<PlayerForm | null> {

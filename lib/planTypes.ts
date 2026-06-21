@@ -24,7 +24,7 @@ export type PlanAnswers = {
 };
 
 /** Per-club carry distance range (yards), stored in player_data.club_distances */
-export type ClubDistance = { min: number; max: number };
+export type ClubDistance = { min: number; max: number; inBag?: boolean };
 export type ClubDistances = Record<string, ClubDistance>;
 
 export const DEFAULT_CLUB_DISTANCES: ClubDistances = {
@@ -39,6 +39,7 @@ export const DEFAULT_CLUB_DISTANCES: ClubDistances = {
   "8i":   { min: 130, max: 140 },
   "9i":   { min: 120, max: 130 },
   PW:     { min: 110, max: 120 },
+  GW:     { min: 95,  max: 105 },
   SW:     { min: 80,  max: 90  },
   LW:     { min: 60,  max: 70  },
 };

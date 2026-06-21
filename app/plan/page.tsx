@@ -35,7 +35,7 @@ function clubGroup(club: string): string {
   if (club === "Driver") return "Driver";
   if (club === "3W") return "3W";
   if (club === "5W") return "5W";
-  if (["4i","5i","6i","7i","8i","9i","PW","SW","LW"].includes(club)) return "Irons";
+  if (["4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"].includes(club)) return "Irons";
   return "";
 }
 
@@ -272,7 +272,7 @@ export default function PlanPage() {
   const [rawRounds, setRawRounds] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [holesMode, setHolesMode] = useState<HolesMode>("all");
-  const [overrides, setOverrides] = useState<Record<number, { pref?: string; aim?: import("@/lib/planTypes").HoleStrategy["aim"] }>>({});
+  const [overrides, setOverrides] = useState<Record<number, { pref?: string; aim?: import("@/lib/planTypes").HoleStrategy["aim"]; aim_dir?: string; aim_level?: 0 | 1 | 2 }>>({});
   const [clubDistances, setClubDistances] = useState<ClubDistances | undefined>(undefined);
   const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
   const [planEnrichedMap, setPlanEnrichedMap] = useState<Record<number, PlanEnrichedHole[]>>({});
@@ -561,7 +561,6 @@ export default function PlanPage() {
         putts: "",
         tee_accuracy: "",
         appr_accuracy: "",
-        appr_distance: "",
         water_penalty: "",
         drop_or_out: "",
         tree_haz: "",
@@ -570,10 +569,14 @@ export default function PlanPage() {
         gir: false,
         grints: false,
         first_putt_distance: "",
-        club: strat?.pref ?? "",
+        club: h.par === 3 ? "" : (strat?.pref ?? ""),
+        appr_distance: h.par === 3 ? (strat?.pref ?? "") : "",
         aim: strat?.aim ?? "",
         plan_club: strat?.pref ?? "",
-        preferred_club_override: "",
+        preferred_club_override: h.par === 3 ? "" : (strat?.pref ?? ""),
+        tee_land: strat?.aim ?? "",
+        aim_dir: overrides[h.hole]?.aim_dir ?? ((h as any).aim_dir ?? ""),
+        aim_level: overrides[h.hole]?.aim_level ?? ((h as any).aim_level ?? 0),
         scoring_opp: scoringOpps[h.hole] ?? 0,
         diff_max: finalDiffMaxes[h.hole] ?? 2,
         opportunity: opportunities[h.hole] ?? "birdie",
@@ -679,6 +682,8 @@ export default function PlanPage() {
                   setRoundDate={setRoundDate}
                   teeTime={teeTime}
                   setTeeTime={setTeeTime}
+                  handicapIndex={handicapIndex}
+                  courseHandicap={courseHandicapVal}
                   onNext={() => { setStage("questions"); if (courseId) prefetchEnriched(courseId); }}
                 />
               )}
@@ -718,6 +723,8 @@ export default function PlanPage() {
                   opportunities={opportunities}
                   onClubChange={(hole, club) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], pref: club } }))}
                   onAimChange={(hole, aim) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], aim } }))}
+                  onGreensideAimChange={(hole, dir, level) => setOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], aim_dir: dir, aim_level: level } }))}
+                  greensideAimOverrides={overrides}
                   onScoringOppChange={(hole, v) => setScoringOppOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], scoringOpp: v } }))}
                   onDiffMaxChange={(hole, v) => setScoringOppOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], diffMax: v } }))}
                   onOpportunityChange={(hole, v) => setScoringOppOverrides(prev => ({ ...prev, [hole]: { ...prev[hole], opportunity: v } }))}
@@ -864,7 +871,7 @@ function WeatherGrid({ windScore, wetnessScore, onChange }: {
 
 // ─── Setup stage ──────────────────────────────────────────────────────────────
 
-function StageSetup({ courseList, courseId, setCourseId, course, history, loading, holesMode, setHolesMode, allCourseRounds, onCourseNameChange, roundDate, setRoundDate, teeTime, setTeeTime, onNext }: {
+function StageSetup({ courseList, courseId, setCourseId, course, history, loading, holesMode, setHolesMode, allCourseRounds, onCourseNameChange, roundDate, setRoundDate, teeTime, setTeeTime, handicapIndex, courseHandicap, onNext }: {
   courseList: CourseRecord[];
   courseId: string;
   setCourseId: (id: string) => void;
@@ -879,6 +886,8 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
   setRoundDate: (d: string) => void;
   teeTime: string;
   setTeeTime: (t: string) => void;
+  handicapIndex: number | null;
+  courseHandicap: number | null;
   onNext: () => void;
 }) {
   const isMobile = useIsMobile();
@@ -990,6 +999,29 @@ function StageSetup({ courseList, courseId, setCourseId, course, history, loadin
                 {course.rating && course.slope ? ` · Rating ${course.rating} / Slope ${course.slope}` : ""}
               </div>
             </div>
+
+            {(handicapIndex !== null || courseHandicap !== null) && (
+              <div style={{ display:"flex", alignItems:"center", gap:14, maxWidth:480, background:"var(--green-soft)", border:"1px solid var(--green)", borderRadius:10, padding:"10px 16px", marginBottom:14, flexWrap:"wrap" }}>
+                <span style={{ fontSize:10, fontWeight:700, color:"var(--green-deep)", textTransform:"uppercase", letterSpacing:1.5, whiteSpace:"nowrap" }}>Your handicap</span>
+                {handicapIndex !== null && (
+                  <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                    <span style={{ fontSize:22, fontWeight:700, fontFamily:"var(--font-display)", fontStyle:"italic", color:"var(--green-deep)" }}>{handicapIndex.toFixed(1)}</span>
+                    <span style={{ fontSize:10, color:"var(--green)", fontWeight:600 }}>Index</span>
+                  </div>
+                )}
+                {courseHandicap !== null && (
+                  <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                    <span style={{ fontSize:22, fontWeight:700, fontFamily:"var(--font-display)", fontStyle:"italic", color:"var(--green-deep)" }}>{courseHandicap}</span>
+                    <span style={{ fontSize:10, color:"var(--green)", fontWeight:600 }}>Course HCP</span>
+                  </div>
+                )}
+                {courseHandicap !== null && (
+                  <span style={{ fontSize:11, color:"var(--green-deep)", fontStyle:"italic" }}>
+                    strokes on SI 1–{Math.min(courseHandicap, 18)}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Holes picker */}
             {(() => {
@@ -1830,7 +1862,7 @@ function RecapAdvicePanel({ recap }: { recap: Record<string, any> }) {
 
 // ─── Plan stage ───────────────────────────────────────────────────────────────
 
-function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, holeHistEntries, planEnrichedMap, planEnrichedReady, latestRecap, clubDistances, scoringOpps, diffMaxes, opportunities, onClubChange, onAimChange, onScoringOppChange, onDiffMaxChange, onOpportunityChange, onTeeItUp, onRestart }: {
+function StagePlan({ course, planHoles, strategies, form, answers, target, holeHistMap, holeHistEntries, planEnrichedMap, planEnrichedReady, latestRecap, clubDistances, scoringOpps, diffMaxes, opportunities, onClubChange, onAimChange, onGreensideAimChange, onScoringOppChange, onDiffMaxChange, onOpportunityChange, onTeeItUp, onRestart, greensideAimOverrides }: {
   course: CourseRecord;
   planHoles: import("@/lib/types").HoleData[];
   strategies: Record<number, import("@/lib/planTypes").HoleStrategy>;
@@ -1846,10 +1878,12 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
   opportunities: Record<number, OpportunityType>;
   onClubChange: (hole: number, club: string) => void;
   onAimChange: (hole: number, aim: import("@/lib/planTypes").HoleStrategy["aim"]) => void;
+  onGreensideAimChange: (hole: number, dir: string, level: 0 | 1 | 2) => void;
   onScoringOppChange: (hole: number, v: ScoringOpp) => void;
   onDiffMaxChange: (hole: number, v: 2 | 3) => void;
   onOpportunityChange: (hole: number, v: OpportunityType) => void;
   onTeeItUp: () => void; onRestart: () => void;
+  greensideAimOverrides: Record<number, { aim_dir?: string; aim_level?: 0 | 1 | 2 }>;
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const totalYards = planHoles.reduce((s, h) => s + h.yards, 0);
@@ -1887,6 +1921,9 @@ function StagePlan({ course, planHoles, strategies, form, answers, target, holeH
             opportunity={opportunities[h.hole] ?? "birdie"}
             onClubChange={(club) => onClubChange(h.hole, club)}
             onAimChange={(aim) => onAimChange(h.hole, aim)}
+            aimDir={greensideAimOverrides[h.hole]?.aim_dir ?? ((h as any).aim_dir ?? "")}
+            aimLevel={greensideAimOverrides[h.hole]?.aim_level ?? ((h as any).aim_level ?? 0)}
+            onGreensideAimChange={(dir, level) => onGreensideAimChange(h.hole, dir, level)}
             onScoringOppChange={(v) => onScoringOppChange(h.hole, v)}
             onDiffMaxChange={(v) => onDiffMaxChange(h.hole, v)}
             onOpportunityChange={(v) => onOpportunityChange(h.hole, v)}

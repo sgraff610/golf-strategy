@@ -257,7 +257,7 @@ export default function AddRound() {
                         onChange={e => updateHole(i, "club", e.target.value)}
                       >
                         <option value="">—</option>
-                        {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
+                        {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"].map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>
@@ -285,7 +285,7 @@ export default function AddRound() {
                       <label style={labelStyle}>APPR Club</label>
                       <select style={selectStyle} value={hole.appr_distance} onChange={e => updateHole(i, "appr_distance", e.target.value)}>
                         <option value="">—</option>
-                        {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"].map(c => (
+                        {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"].map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
                       </select>

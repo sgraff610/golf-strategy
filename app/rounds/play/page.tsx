@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { loadCourses, getClubDistances } from "@/lib/storage";
 import type { ClubDistances } from "@/lib/planTypes";
 import { CourseRecord } from "@/lib/types";
+import { AimDial } from "@/app/plan/PlanHoleCard";
 import GreensideSelector, { type GreensideState, type AimValue, flatToGreenside } from "@/app/components/GreensideSelector";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
@@ -26,8 +27,10 @@ type RoundHole = {
   aim_level: 0 | 1 | 2;
 };
 
-const CLUBS = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","SW","LW"];
-const IRONS = ["4i","5i","6i","7i","8i","9i","PW","SW","LW"];
+const CLUBS = ["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"];
+const IRONS = ["4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"];
+type AimPos = "L" | "LF" | "CF" | "RF" | "R";
+const AIM_VALID: readonly string[] = ["L", "LF", "CF", "RF", "R"];
 const DOGLEG_LABELS: Record<string,string> = {
   severe_left:"Severe Left",moderate_left:"Moderate Left",slight_left:"Slight Left",
   straight:"Straight",slight_right:"Slight Right",moderate_right:"Moderate Right",severe_right:"Severe Right",
@@ -215,7 +218,7 @@ function RoundScorecard({ roundHoles, courseName, teeBox, date, allVersions, rou
 
   const [showCalc, setShowCalc] = useState(false);
   const courseHoles: any[] = allVersions[0]?.holes ?? [];
-  const CALC_DIST: Record<string,number> = { Driver:230,"3W":210,"5W":195,"7W":180,"4i":185,"5i":175,"6i":165,"7i":155,"8i":145,"9i":130,PW:120,SW:100,LW:80 };
+  const CALC_DIST: Record<string,number> = { Driver:230,"3W":210,"5W":195,"7W":180,"4i":185,"5i":175,"6i":165,"7i":155,"8i":145,"9i":130,PW:120,GW:105,SW:100,LW:80 };
 
   function calcEstRem(rh: RoundHole): number | null {
     if (rh.par < 4 || !rh.club || !CALC_DIST[rh.club]) return null;
@@ -379,6 +382,8 @@ function PlayCourseInner() {
 
   // ── ALL useState hooks ────────────────────────────────────────────────────────
   const [hasUnsaved, setHasUnsaved] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingSync, setPendingSync] = useState(false);
   const [courses, setCourses] = useState<CourseRecord[]>([]);
   const [courseId, setCourseId] = useState(initCourseId);
   const [roundDate, setRoundDate] = useState(new Date().toISOString().split("T")[0]);
@@ -405,16 +410,61 @@ function PlayCourseInner() {
   const [showScorecard, setShowScorecard] = useState(false);
   const [allTeeVersions, setAllTeeVersions] = useState<CourseRecord[]>([]);
   const [clubDistances, setClubDistances] = useState<ClubDistances | null>(null);
+  const clubList = clubDistances
+    ? Object.entries(clubDistances).filter(([, v]) => v.inBag !== false).map(([k]) => k)
+    : CLUBS;
   const [scoreInputMode, setScoreInputMode] = useState<"quick"|"full">("full");
   const [activeSection, setActiveSection] = useState<"tee"|"approach"|"score">("tee");
   const [scorecardPanel, setScorecardPanel] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number|null>(null);
 
+  // ── Offline helpers ───────────────────────────────────────────────────────────
+  function localKey(id: string) { return `play_round_${id}`; }
+
+  function saveLocal(id: string, holes: RoundHole[], meta: Record<string, any>) {
+    try { localStorage.setItem(localKey(id), JSON.stringify({ id, holes, ...meta, savedAt: Date.now() })); }
+    catch {}
+  }
+
+  function clearLocal(id: string) {
+    try { localStorage.removeItem(localKey(id)); } catch {}
+  }
+
+  function readLocal(id: string): any | null {
+    try { const s = localStorage.getItem(localKey(id)); return s ? JSON.parse(s) : null; }
+    catch { return null; }
+  }
+
   // ── ALL useEffect hooks ───────────────────────────────────────────────────────
   useEffect(() => {
+    setIsOnline(navigator.onLine);
     loadCourses().then(data => { setCourses(data); });
     getClubDistances().then(setClubDistances);
   }, []);
+
+  // Online/offline detection + auto-sync when connection returns
+  useEffect(() => {
+    const handleOnline = async () => {
+      setIsOnline(true);
+      if (!roundId) return;
+      const local = readLocal(roundId);
+      if (!local) return;
+      const { error } = await supabase.from("rounds").upsert({
+        id: local.id, course_id: local.course_id, course_name: local.course_name,
+        date: local.date, holes_played: local.holes_played,
+        tee_box: local.tee_box ?? "", starting_hole: local.starting_hole ?? 1,
+        holes: local.holes,
+      });
+      if (!error) { clearLocal(roundId); setPendingSync(false); }
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [roundId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!initRoundId) return;
@@ -555,12 +605,14 @@ function PlayCourseInner() {
     setCurrentHoleIdx(0);
     const id = `round_${Date.now()}`;
     setRoundId(id);
-    await supabase.from("rounds").insert({
-      id, course_id: courseId,
-      course_name: selectedCourse.name,
+    const roundMeta = {
+      course_id: courseId, course_name: selectedCourse.name,
       tee_box: selectedCourse.tee_box ?? "",
-      date: roundDate, holes_played: holesPlayed, starting_hole: startingHole, holes,
-    });
+      date: roundDate, holes_played: holesPlayed, starting_hole: startingHole,
+    };
+    saveLocal(id, holes, roundMeta);
+    const { error: insertErr } = await supabase.from("rounds").insert({ id, ...roundMeta, holes });
+    if (insertErr) setPendingSync(true);
     const allCourses = await loadCourses();
     setAllTeeVersions(allCourses.filter(c => c.name === selectedCourse.name));
     setStarted(true);
@@ -595,7 +647,24 @@ function PlayCourseInner() {
   async function saveCurrentHole() {
     if (!roundId) return;
     setSaving(true);
-    await supabase.from("rounds").update({ holes: roundHoles }).eq("id", roundId);
+    // Always write to localStorage first — works with no connection
+    const existing = readLocal(roundId) ?? {};
+    saveLocal(roundId, roundHoles, {
+      course_id: existing.course_id ?? courseId,
+      course_name: existing.course_name ?? selectedCourse?.name ?? "",
+      date: existing.date ?? roundDate,
+      holes_played: existing.holes_played ?? holesPlayed,
+      tee_box: existing.tee_box ?? selectedCourse?.tee_box ?? "",
+      starting_hole: existing.starting_hole ?? startingHole,
+    });
+    // Then try Supabase
+    if (navigator.onLine) {
+      const { error } = await supabase.from("rounds").update({ holes: roundHoles }).eq("id", roundId);
+      if (!error) { clearLocal(roundId); setPendingSync(false); }
+      else setPendingSync(true);
+    } else {
+      setPendingSync(true);
+    }
     setSaving(false);
   }
 
@@ -778,12 +847,12 @@ function scoreBg(score: number|"", par: number): string {
           <span style={{ fontSize:12, fontWeight:700, color:"var(--green)", fontFamily:"var(--font-display)", fontStyle:"italic" }}>
             {selectedCourse?.name ?? ""} · Hole {currentHole?.hole}
           </span>
-          <span style={{ fontSize:12, color: saving ? "var(--accent)" : "var(--muted)" }}>
-            {saving ? "Saving..." : "Saved"}
+          <span style={{ fontSize:12, color: saving ? "var(--accent)" : pendingSync ? "#b06000" : isOnline ? "var(--muted)" : "#b06000" }}>
+            {saving ? "Saving…" : pendingSync ? "📵 Local" : isOnline ? "✓ Saved" : "📵 Offline"}
           </span>
         </div>
 
-        {/* Unsaved banner */}
+        {/* Unsaved / offline banners */}
         {hasUnsaved && (
           <div style={{ background:"var(--accent-soft)", borderTop:"1px solid var(--accent)", padding:"6px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:12, color:"#7a5c00" }}>⚠ Unsaved changes</span>
@@ -791,6 +860,11 @@ function scoreBg(score: number|"", par: number): string {
               <button onClick={() => setHasUnsaved(false)} style={{ fontSize:12, color:"var(--green)", background:"none", border:"none", cursor:"pointer" }}>Keep editing</button>
               <button onClick={saveAndClear} style={{ fontSize:12, fontWeight:700, color:"var(--green)", background:"none", border:"1px solid var(--green)", borderRadius:6, padding:"2px 10px", cursor:"pointer" }}>Save now</button>
             </div>
+          </div>
+        )}
+        {!hasUnsaved && pendingSync && (
+          <div style={{ background:"#fff8e1", borderTop:"1px solid #f0c040", padding:"5px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ fontSize:12, color:"#7a5c00" }}>📵 Saved on device — will sync when online</span>
           </div>
         )}
 
@@ -1014,7 +1088,7 @@ function scoreBg(score: number|"", par: number): string {
                         value={currentHole.appr_distance}
                         onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
                         <option value="">—</option>
-                        {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                        {clubList.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
@@ -1063,7 +1137,7 @@ function scoreBg(score: number|"", par: number): string {
                         value={isPar3?"":currentHole.club} disabled={isPar3}
                         onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
                         <option value="">—</option>
-                        {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                        {clubList.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                   </div>
@@ -1106,7 +1180,7 @@ function scoreBg(score: number|"", par: number): string {
                             value={isPar3?"":currentHole.club} disabled={isPar3}
                             onChange={e => !isPar3 && updateHoleFieldTracked("club", e.target.value)}>
                             <option value="">—</option>
-                            {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                            {clubList.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                         <div>
@@ -1140,7 +1214,7 @@ function scoreBg(score: number|"", par: number): string {
                           <select style={selStyle} value={currentHole.appr_distance}
                             onChange={e => updateHoleFieldTracked("appr_distance", e.target.value)}>
                             <option value="">—</option>
-                            {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                            {clubList.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                         <div>
@@ -1255,7 +1329,7 @@ function scoreBg(score: number|"", par: number): string {
                   value={currentHole.preferred_club_override || (selectedCourse?.holes.find((x:any)=>x.hole===currentHole.hole) as any)?.preferred_club || ""}
                   onChange={e => updateHoleFieldTracked("preferred_club_override", e.target.value)}>
                   <option value="">—</option>
-                  {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                  {clubList.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
@@ -1274,6 +1348,17 @@ function scoreBg(score: number|"", par: number): string {
                   {["L","LF","CF","RF","R"].map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
+            </div>
+            {/* Aim Dial — tee aim (L/LF/CF/RF/R), saved to tee_land */}
+            <div style={{ marginTop:14, paddingTop:12, borderTop:"1px solid var(--line-soft)" }}>
+              <AimDial
+                value={AIM_VALID.includes(currentHole.tee_land ?? "") ? (currentHole.tee_land as AimPos) :
+                       AIM_VALID.includes(currentHole.aim_dir ?? "") ? (currentHole.aim_dir as AimPos) : "CF"}
+                onChange={(v) => {
+                  updateHoleFieldTracked("tee_land" as keyof RoundHole, v);
+                }}
+                hole={strategy?.hole ?? selectedCourse?.holes.find((x: any) => x.hole === currentHole.hole) ?? {}}
+              />
             </div>
           </div>
         )}
@@ -1327,21 +1412,21 @@ function scoreBg(score: number|"", par: number): string {
           </div>
         )}
 
-        {/* Aim */}
+        {/* Approach Aim */}
         {currentHole && (
           <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12, order:2 }}>
             {(() => {
               const ch2 = selectedCourse?.holes.find((x: any) => x.hole === currentHole.hole) ?? {};
               const gs: GreensideState = {
-                ...flatToGreenside(ch2),
+                ...flatToGreenside(ch2 as Record<string, boolean | number | string | null | undefined>),
                 aim_dir:   currentHole.aim_dir   ?? "",
                 aim_level: (currentHole.aim_level ?? 0) as AimValue,
               };
               return (
                 <GreensideSelector
-                  label="Aim"
+                  label="Approach Aim"
                   value={gs}
-                  onChange={(next) => {
+                  onChange={(next: GreensideState) => {
                     updateHoleFieldTracked("aim_dir"   as keyof RoundHole, next.aim_dir);
                     updateHoleFieldTracked("aim_level" as keyof RoundHole, next.aim_level);
                   }}
@@ -1525,7 +1610,7 @@ function scoreBg(score: number|"", par: number): string {
                     <select value={approachClub} onChange={e => setApproachClub(e.target.value)}
                       style={{ padding:"3px 8px", fontSize:13, border:"1px solid var(--green)", borderRadius:6, color:"var(--green)", fontWeight:600, background:"white" }}>
                       <option value="">—</option>
-                      {CLUBS.map(c => <option key={c} value={c}>{c}</option>)}
+                      {clubList.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                 </div>
