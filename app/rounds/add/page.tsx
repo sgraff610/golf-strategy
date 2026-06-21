@@ -70,9 +70,13 @@ export default function AddRound() {
   const [loadingCourses, setLoadingCourses] = useState(true);
 
   useEffect(() => {
+    const preselect = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("course") ?? ""
+      : "";
     loadCourses().then((data) => {
       setCourses(data);
-      if (data.length > 0) setCourseId(data[0].id);
+      const match = preselect && data.find(c => c.id === preselect);
+      setCourseId(match ? preselect : data[0]?.id ?? "");
       setLoadingCourses(false);
     });
   }, []);
