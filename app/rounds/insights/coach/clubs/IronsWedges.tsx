@@ -32,24 +32,27 @@ function computeRows(holes: ApproachHole[]): Club[] {
   const baseline = holes.reduce((s, h) => s + (h.score - h.par), 0) / holes.length;
   const result: Club[] = [];
   for (const club of SCORING_CLUBS) {
-    const shots = holes.filter(h => h.appr_distance === club && h.appr_accuracy && h.appr_accuracy !== "");
-    if (shots.length < 3) continue;
+    const shots = holes.filter(h => h.appr_distance === club);
+    if (shots.length < 1) continue;
     const n = shots.length;
+    // only shots with accuracy logged contribute to dispersion
+    const withAcc = shots.filter(h => h.appr_accuracy && h.appr_accuracy !== "");
+    const na = withAcc.length;
     const counts = { on: 0, long: 0, short: 0, left: 0, right: 0 };
-    for (const h of shots) {
+    for (const h of withAcc) {
       if      (h.appr_accuracy === "Hit")   counts.on++;
       else if (h.appr_accuracy === "Long")  counts.long++;
       else if (h.appr_accuracy === "Short") counts.short++;
       else if (h.appr_accuracy === "Left")  counts.left++;
       else if (h.appr_accuracy === "Right") counts.right++;
     }
-    const disp: Disp = {
-      on:    Math.round(counts.on    / n * 100),
-      long:  Math.round(counts.long  / n * 100),
-      short: Math.round(counts.short / n * 100),
-      left:  Math.round(counts.left  / n * 100),
-      right: Math.round(counts.right / n * 100),
-    };
+    const disp: Disp = na > 0 ? {
+      on:    Math.round(counts.on    / na * 100),
+      long:  Math.round(counts.long  / na * 100),
+      short: Math.round(counts.short / na * 100),
+      left:  Math.round(counts.left  / na * 100),
+      right: Math.round(counts.right / na * 100),
+    } : { on: 0, long: 0, short: 0, left: 0, right: 0 };
     const girHoles = shots.filter(h => h.appr_accuracy === "Hit" && h.putts > 0);
     const avgPutts = girHoles.length > 0
       ? Math.round(girHoles.reduce((s, h) => s + h.putts, 0) / girHoles.length * 10) / 10
@@ -188,8 +191,9 @@ export default function IronsWedges({ holes, totalRounds, onShowFactors }: Props
           {rows.map((c, i) => {
             const tone = sgTone(c.sg);
             const gir = c.disp.on;
-            const [miss] = topMiss(c.disp);
-            const missBad = miss !== "On";
+            const hasAcc = Object.values(c.disp).some(v => v > 0);
+            const [miss] = hasAcc ? topMiss(c.disp) : ["—", 0];
+            const missBad = miss !== "On" && miss !== "—";
             const isSel = sel?.club === c.club;
             const barCol = tone === "good"
               ? "var(--green)"
