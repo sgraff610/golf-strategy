@@ -506,7 +506,7 @@ const TOKENS = `
 function heatLabel(v: number): string {
   if (v >= 75) return "🔥 on fire";
   if (v >= 55) return "✓ solid";
-  if (v >= 35) return "~ neutral";
+  if (v >= 35) return "— neutral";
   return "❄ cold";
 }
 function heatFg(v: number): string {
@@ -592,7 +592,7 @@ function Stepper({ stage, onBack }: { stage: "input" | "analysis"; onBack: () =>
 
 const TIER_STYLE = {
   cold:    { fg: "var(--cold)",  bg: "var(--cold-bg)",    bd: "var(--cold)",  label: "❄ Cold" },
-  neutral: { fg: "var(--muted)", bg: "var(--paper-alt)",  bd: "var(--line)",  label: "~ OK" },
+  neutral: { fg: "var(--muted)",  bg: "rgba(93,107,122,0.16)", bd: "var(--muted)", label: "— OK" },
   solid:   { fg: "var(--green)", bg: "var(--green-soft)", bd: "var(--green)", label: "✓ Solid" },
   hot:     { fg: "var(--flag)",  bg: "#f6e4d6",           bd: "var(--bad)",   label: "🔥 Hot" },
 } as const;
@@ -650,7 +650,7 @@ function DialRow({ label, value, onChange }: { label: string; value: number; onC
                   alignItems: "center", justifyContent: "center",
                   fontSize: 10, fontWeight: 700, color: st.fg, lineHeight: 1,
                 }}>
-                  {seg.tier === "cold" ? "❄" : seg.tier === "neutral" ? "~" : seg.tier === "solid" ? "✓" : "🔥"}
+                  {seg.tier === "cold" ? "❄" : seg.tier === "neutral" ? "—" : seg.tier === "solid" ? "✓" : "🔥"}
                 </div>
               )}
             </button>
