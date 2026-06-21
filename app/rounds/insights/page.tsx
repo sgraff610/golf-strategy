@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import FocusBoard from "./coach/FocusBoard";
+import IronsWedges from "./coach/clubs/IronsWedges";
 import type { Leak as FBLeak, Strength as FBStrength } from "./coach/leaks";
 import { supabase } from "@/lib/supabase";
 import { getCourse } from "@/lib/storage";
@@ -1396,7 +1397,7 @@ export default function RoundsInsights() {
   const [useLastN, setUseLastN] = useState(false);
   const [lastN, setLastN] = useState(10);
   const [lastNInput, setLastNInput] = useState("10");
-  const [tab, setTab] = useState<"coach" | "trends" | "factors" | "putting">("coach");
+  const [tab, setTab] = useState<"coach" | "clubs" | "trends" | "factors" | "putting">("coach");
   const [coachingInsights, setCoachingInsights] = useState<CoachingInsights | null>(null);
   const [heavyReady, setHeavyReady] = useState(false);
   const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
@@ -1932,7 +1933,7 @@ export default function RoundsInsights() {
 
   return (
     <div style={COACH_ROOT}>
-    <main style={{ maxWidth: tab === "coach" ? 1280 : 900, width: "100%", margin: "0 auto", padding: isMobile ? "0 16px 80px" : "0 24px 80px", boxSizing: "border-box" }}>
+    <main style={{ maxWidth: tab === "coach" || tab === "clubs" ? 1280 : 900, width: "100%", margin: "0 auto", padding: isMobile ? "0 16px 80px" : "0 24px 80px", boxSizing: "border-box" }}>
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 0 16px" }}>
@@ -1954,6 +1955,7 @@ export default function RoundsInsights() {
       <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: 24, gap: 0, overflowX: "auto" }}>
         {([
           { id: "coach" as const, label: "Coach" },
+          { id: "clubs" as const, label: "Irons & Wedges" },
           { id: "trends" as const, label: "Performance Trend" },
           { id: "factors" as const, label: "Factor Correlations" },
           { id: "putting" as const, label: "Putting" },
@@ -1975,6 +1977,10 @@ export default function RoundsInsights() {
           strengths={focusBoardData?.strengths}
           player={focusBoardData?.player}
         />
+      </div>
+
+      <div style={{ display: tab === "clubs" ? "block" : "none" }}>
+        <IronsWedges />
       </div>
 
       <div style={{ display: tab === "trends" ? "block" : "none" }}>
