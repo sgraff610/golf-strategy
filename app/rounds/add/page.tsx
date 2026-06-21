@@ -125,8 +125,8 @@ export default function AddRound() {
     color: "#bbb",
     cursor: "not-allowed" as const,
   };
-  const labelStyle = { fontSize: 12, color: "white", display: "block" as const, marginBottom: 3 };
-  const disabledLabelStyle = { ...labelStyle, color: "rgba(255,255,255,0.4)" };
+  const labelStyle = { fontSize: 12, color: "#131821", display: "block" as const, marginBottom: 3 };
+  const disabledLabelStyle = { ...labelStyle, color: "#aab0b8" };
   const sectionLabel = { fontSize: 11, fontWeight: 600 as const, color: "#0f6e56", textTransform: "uppercase" as const, letterSpacing: 1, margin: "0 0 6px" };
   const btnStyle = (primary: boolean) => ({
     padding: "10px 20px", fontSize: 15, fontWeight: 600 as const,
