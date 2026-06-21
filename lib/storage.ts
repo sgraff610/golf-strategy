@@ -22,29 +22,12 @@ export function getClubDistancesSync(): ClubDistances {
 }
 
 export async function getClubDistances(): Promise<ClubDistances> {
-  const { data } = await supabase
-    .from("player_data")
-    .select("club_distances")
-    .eq("id", "singleton")
-    .single();
-  const saved = data?.club_distances as ClubDistances | null;
-  const merged = saved
-    ? { ...DEFAULT_CLUB_DISTANCES, ...saved }
-    : { ...DEFAULT_CLUB_DISTANCES };
-  // Keep localStorage in sync with Supabase truth
-  lsWrite(merged);
-  return merged;
+  // club_distances is not a Supabase column — localStorage is the store
+  return getClubDistancesSync();
 }
 
 export async function saveClubDistances(distances: ClubDistances): Promise<void> {
-  // Write to localStorage immediately so a page refresh before Supabase responds still works
   lsWrite(distances);
-  const { error } = await supabase.from("player_data").upsert({
-    id: "singleton",
-    club_distances: distances,
-    updated_at: new Date().toISOString(),
-  });
-  if (error) throw new Error(error.message);
 }
 
 export async function getClubForm(): Promise<PlayerForm | null> {

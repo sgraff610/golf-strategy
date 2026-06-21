@@ -199,7 +199,6 @@ export default function ClubhousePage() {
   const [distEditing, setDistEditing] = useState(false);
   const [distSaving, setDistSaving] = useState(false);
   const [distSaved, setDistSaved] = useState(false);
-  const [distSaveError, setDistSaveError] = useState<string | null>(null);
   const [newItem, setNewItem] = useState("");
   const [newClubName, setNewClubName] = useState("");
   const [newClubMin, setNewClubMin] = useState("");
@@ -261,18 +260,12 @@ export default function ClubhousePage() {
 
   async function saveDistances() {
     setDistSaving(true);
-    setDistSaveError(null);
-    try {
-      await saveClubDistances(distDraft);
-      setClubDistances(distDraft);
-      setDistEditing(false);
-      setDistSaved(true);
-      setTimeout(() => setDistSaved(false), 2000);
-    } catch (e: any) {
-      setDistSaveError(e?.message || "Save failed — changes stored locally and will retry on next save.");
-    } finally {
-      setDistSaving(false);
-    }
+    await saveClubDistances(distDraft);
+    setClubDistances(distDraft);
+    setDistEditing(false);
+    setDistSaving(false);
+    setDistSaved(true);
+    setTimeout(() => setDistSaved(false), 2000);
   }
 
   async function toggleInBag(club: string) {
@@ -280,12 +273,7 @@ export default function ClubhousePage() {
     const updated = { ...clubDistances, [club]: { ...clubDistances[club], inBag: !current } };
     setClubDistances(updated);
     setDistDraft(updated);
-    setDistSaveError(null);
-    try {
-      await saveClubDistances(updated);
-    } catch (e: any) {
-      setDistSaveError(e?.message || "Save failed — change stored locally.");
-    }
+    await saveClubDistances(updated);
   }
 
   async function saveChangeLog(updated: string[]) {
@@ -797,7 +785,7 @@ export default function ClubhousePage() {
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontSize: 9.5, letterSpacing: 2, color: "var(--muted-2)", textTransform: "uppercase", fontWeight: 700 }}>Club distances</div>
                 {!distEditing && (
-                  <button onClick={() => { setDistDraft({ ...clubDistances }); setDistEditing(true); setDistSaveError(null); }}
+                  <button onClick={() => { setDistDraft({ ...clubDistances }); setDistEditing(true); }}
                     style={{ fontSize: 11, color: "var(--green)", background: "none", border: "1px solid var(--green)", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontWeight: 600 }}>
                     Edit
                   </button>
@@ -818,9 +806,11 @@ export default function ClubhousePage() {
                     <div style={{ position: "absolute", top: 0, height: "100%", borderRadius: 99, background: "var(--green)", left: `${((min - 50) / 250) * 100}%`, width: `${((max - min) / 250) * 100}%` }} />
                   </div>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <button onClick={() => toggleInBag(club)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, cursor: "pointer", fontWeight: 600, border: "1px solid var(--line)", background: "var(--paper-alt)", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                      Move to Reserve
-                    </button>
+                    {distEditing && (
+                      <button onClick={() => toggleInBag(club)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, cursor: "pointer", fontWeight: 600, border: "1px solid var(--line)", background: "var(--paper-alt)", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                        Move to Reserve
+                      </button>
+                    )}
                     {distEditing ? (
                       <>
                         <input type="number" value={min}
@@ -857,9 +847,11 @@ export default function ClubhousePage() {
                         <div style={{ position: "absolute", top: 0, height: "100%", borderRadius: 99, background: "var(--muted-2)", left: `${((min - 50) / 250) * 100}%`, width: `${((max - min) / 250) * 100}%` }} />
                       </div>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <button onClick={() => toggleInBag(club)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, cursor: "pointer", fontWeight: 600, border: "1px solid var(--green)", background: "var(--green-soft)", color: "var(--green)", whiteSpace: "nowrap" }}>
-                          Move to Bag
-                        </button>
+                        {distEditing && (
+                          <button onClick={() => toggleInBag(club)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 99, cursor: "pointer", fontWeight: 600, border: "1px solid var(--green)", background: "var(--green-soft)", color: "var(--green)", whiteSpace: "nowrap" }}>
+                            Move to Bag
+                          </button>
+                        )}
                         {distEditing ? (
                           <>
                             <input type="number" value={min}
@@ -879,12 +871,6 @@ export default function ClubhousePage() {
                     </div>
                   ))}
                 </>
-              )}
-
-              {distSaveError && (
-                <div style={{ padding: "8px 16px", background: "#fdecea", borderTop: "1px solid #e57373", fontSize: 12, color: "#b71c1c" }}>
-                  ⚠ {distSaveError}
-                </div>
               )}
 
               {distEditing && (
@@ -913,7 +899,7 @@ export default function ClubhousePage() {
                       style={{ flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 600, background: "var(--green-deep)", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}>
                       {distSaving ? "Saving…" : distSaved ? "Saved!" : "Save distances"}
                     </button>
-                    <button onClick={() => { setDistEditing(false); setDistSaveError(null); }}
+                    <button onClick={() => setDistEditing(false)}
                       style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, background: "var(--paper-alt)", color: "var(--muted)", border: "1px solid var(--line)", borderRadius: 8, cursor: "pointer" }}>
                       Cancel
                     </button>
