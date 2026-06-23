@@ -475,8 +475,11 @@ export default function EditRound() {
       setScoreDifferential(finalSd);
     }
 
+    const holesToSave = roundHoles.map(h =>
+      h.par === 3 ? { ...h, club: "", tee_accuracy: "" } : h
+    );
     const { error } = await supabase.from("rounds").update({
-      date, holes_played: holesPlayed, starting_hole: startingHole, holes: roundHoles,
+      date, holes_played: holesPlayed, starting_hole: startingHole, holes: holesToSave,
       course_name: courseName,
       handicap_index: handicapIndex,
       course_handicap: courseHandicap,
@@ -643,17 +646,17 @@ export default function EditRound() {
               </div>
               <div>
                 <p style={sectionLabel}>Tee & Approach</p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                  <div><label style={labelStyle}>DRIV Club</label>
+                <div style={{ display: "grid", gridTemplateColumns: hole.par === 3 ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 8 }}>
+                  {hole.par !== 3 && (<div><label style={labelStyle}>DRIV Club</label>
                     <select style={selectStyle} value={hole.club ?? ""} onChange={e => updateHole(i, "club", e.target.value)}>
                       <option value="">—</option>
                       {["Driver","3W","5W","7W","4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"].map(c => <option key={c} value={c}>{c}</option>)}
-                    </select></div>
-                  <div><label style={labelStyle}>DRIV Acc</label>
+                    </select></div>)}
+                  {hole.par !== 3 && (<div><label style={labelStyle}>DRIV Acc</label>
                     <select style={selectStyle} value={hole.tee_accuracy} onChange={e => updateHole(i, "tee_accuracy", e.target.value)}>
                       <option value="">—</option>
                       {["Hit","Left","Right","Short","Long"].map(v => <option key={v} value={v}>{v}</option>)}
-                    </select></div>
+                    </select></div>)}
                   <div><label style={labelStyle}>APPR Club</label>
                     <select style={selectStyle} value={hole.appr_distance ?? ""} onChange={e => updateHole(i, "appr_distance", e.target.value)}>
                       <option value="">—</option>

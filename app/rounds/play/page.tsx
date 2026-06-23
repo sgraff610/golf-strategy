@@ -647,9 +647,13 @@ function PlayCourseInner() {
   async function saveCurrentHole() {
     if (!roundId) return;
     setSaving(true);
+    // Strip driving fields from par 3 holes before saving — par 3 tee shot IS the approach
+    const holesToSave = roundHoles.map(h =>
+      h.par === 3 ? { ...h, club: "", tee_accuracy: "" as TeeAccuracy } : h
+    );
     // Always write to localStorage first — works with no connection
     const existing = readLocal(roundId) ?? {};
-    saveLocal(roundId, roundHoles, {
+    saveLocal(roundId, holesToSave, {
       course_id: existing.course_id ?? courseId,
       course_name: existing.course_name ?? selectedCourse?.name ?? "",
       date: existing.date ?? roundDate,
@@ -659,7 +663,7 @@ function PlayCourseInner() {
     });
     // Then try Supabase
     if (navigator.onLine) {
-      const { error } = await supabase.from("rounds").update({ holes: roundHoles }).eq("id", roundId);
+      const { error } = await supabase.from("rounds").update({ holes: holesToSave }).eq("id", roundId);
       if (!error) { clearLocal(roundId); setPendingSync(false); }
       else setPendingSync(true);
     } else {
