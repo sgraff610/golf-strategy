@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import FocusBoard from "./coach/FocusBoard";
 import IronsWedges from "./coach/clubs/IronsWedges";
 import type { Leak as FBLeak, Strength as FBStrength } from "./coach/leaks";
@@ -13,6 +13,125 @@ import {
   ComposedChart, ScatterChart, Scatter,
   BarChart, Bar, Cell,
 } from "recharts";
+
+// ── Performance grade helpers ────────────────────────────────────────────────
+const INS_DIST_ORDER = ["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"];
+const INS_PUTT_FB: Record<string,number> = {
+  "Gimme":1.00,"3ft":1.07,"5ft":1.28,"7ft":1.52,"10ft":1.75,
+  "15ft":1.90,"20ft":1.97,"30ft":2.05,"40ft":2.12,"50ft":2.18,"50+":2.23,
+};
+const INS_IRON_CLUBS = ["4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"];
+const INS_DIST_FT: Record<string,number> = {
+  "Gimme":1,"3ft":3,"5ft":5,"7ft":7,"10ft":10,
+  "15ft":15,"20ft":20,"30ft":30,"40ft":40,"50ft":50,"50+":60,
+};
+
+type PerfGrade = { letter: string; color: string; bg: string; detail: string };
+type RoundGrades = { driver: PerfGrade | null; iron: PerfGrade | null; chipping: PerfGrade | null; putter: PerfGrade | null };
+
+function insSG(sg: number)       { return sg>=3?"A+":sg>=1.5?"A":sg>=0?"B":sg>=-1.5?"C":sg>=-3?"D":"F"; }
+function insDriver(d: number)    { return d>=15?"A+":d>=8?"A":d>=-5?"B":d>=-15?"C":d>=-25?"D":"F"; }
+function insChip(ccs: number)    { return ccs>=2?"A+":ccs>=1?"A":ccs>=0?"B":ccs>=-1?"C":ccs>=-2?"D":"F"; }
+function insIron(delta: number)  { return delta>=2?"A+":delta>=1?"A":delta>=0?"B":delta>=-1?"C":delta>=-2?"D":"F"; }
+
+const GRADE_BG: Record<string,{bg:string;color:string}> = {
+  "A+": {bg:"#0f6e56",color:"#fff"}, "A": {bg:"#27ae60",color:"#fff"},
+  "B":  {bg:"#2980b9",color:"#fff"}, "C": {bg:"#f5c842",color:"#333"},
+  "D":  {bg:"#e67e22",color:"#fff"}, "F": {bg:"#c0392b",color:"#fff"},
+};
+
+function computeInsightGrades(allRounds: any[], ri: number): RoundGrades {
+  const round = allRounds[ri];
+  const allHoles = allRounds.flatMap((r: any) => r.holes ?? []);
+  const rh: any[] = round.holes ?? [];
+
+  // Putter
+  const puttBase: Record<string,number> = { ...INS_PUTT_FB };
+  for (const dist of INS_DIST_ORDER) {
+    const hs = allHoles.filter((h: any) => h.first_putt_distance === dist && Number(h.putts) > 0);
+    if (hs.length >= 5) puttBase[dist] = hs.reduce((s: number, h: any) => s + Number(h.putts), 0) / hs.length;
+  }
+  const putterH = rh.filter(h => h.first_putt_distance && puttBase[h.first_putt_distance] != null && Number(h.putts) > 0);
+  let putter: PerfGrade | null = null;
+  if (putterH.length >= 3) {
+    const exp = putterH.reduce((s: number, h: any) => s + puttBase[h.first_putt_distance], 0);
+    const act = putterH.reduce((s: number, h: any) => s + Number(h.putts), 0);
+    const sg = Math.round((exp - act) * 10) / 10;
+    const letter = insSG(sg);
+    putter = { ...GRADE_BG[letter], letter, detail: `${sg>=0?"+":""}${sg} strokes vs avg (${putterH.length} holes)` };
+  }
+
+  // Iron
+  const ironBase: Record<string,number> = {};
+  for (const club of INS_IRON_CLUBS) {
+    const shots = allHoles.filter((h: any) => h.appr_distance === club && h.appr_accuracy && h.appr_accuracy !== "");
+    if (shots.length >= 3) ironBase[club] = shots.filter((h: any) => h.appr_accuracy === "Hit").length / shots.length;
+  }
+  const ironShots = rh.filter((h: any) => INS_IRON_CLUBS.includes(h.appr_distance) && h.appr_accuracy && h.appr_accuracy !== "" && ironBase[h.appr_distance] != null);
+  let iron: PerfGrade | null = null;
+  if (ironShots.length >= 3) {
+    const exp = ironShots.reduce((s: number, h: any) => s + (ironBase[h.appr_distance] ?? 0), 0);
+    const act = ironShots.filter((h: any) => h.appr_accuracy === "Hit").length;
+    const delta = Math.round((act - exp) * 10) / 10;
+    const letter = insIron(delta);
+    iron = { ...GRADE_BG[letter], letter, detail: `${delta>=0?"+":""}${delta} greens vs avg (${ironShots.length} shots)` };
+  }
+
+  // Chipping
+  const apr26 = allRounds.filter((r: any) => r.date >= "2026-04-01");
+  let totalExtra = 0, chipRounds = 0, totalProxFt = 0, totalProxHoles = 0;
+  for (const r of apr26) {
+    const hs: any[] = r.holes ?? [];
+    const norm = (r.holes_played ?? hs.length) <= 9 ? 2 : 1;
+    const extra = hs.filter((h: any) => (Number(h.chips)||0)+(Number(h.greenside_bunker)||0)>=2).length * norm;
+    const proxH = hs.filter((h: any) => (Number(h.chips)||0)+(Number(h.greenside_bunker)||0)>=1 && INS_DIST_FT[h.first_putt_distance] != null);
+    if (proxH.length >= 1) {
+      totalExtra += extra; chipRounds++;
+      totalProxFt += proxH.reduce((s: number, h: any) => s + INS_DIST_FT[h.first_putt_distance], 0);
+      totalProxHoles += proxH.length;
+    }
+  }
+  let chipping: PerfGrade | null = null;
+  if (chipRounds >= 2 && round.date >= "2026-04-01") {
+    const baseExtra = totalExtra / chipRounds;
+    const baseProx = totalProxHoles > 0 ? totalProxFt / totalProxHoles : null;
+    const norm = (round.holes_played ?? rh.length) <= 9 ? 2 : 1;
+    const roundExtra = rh.filter((h: any) => (Number(h.chips)||0)+(Number(h.greenside_bunker)||0)>=2).length * norm;
+    const roundProxH = rh.filter((h: any) => (Number(h.chips)||0)+(Number(h.greenside_bunker)||0)>=1 && INS_DIST_FT[h.first_putt_distance] != null);
+    if (roundProxH.length >= 2) {
+      const roundProx = roundProxH.reduce((s: number, h: any) => s + INS_DIST_FT[h.first_putt_distance], 0) / roundProxH.length;
+      const ccs = Math.round((baseExtra - roundExtra + (baseProx != null ? (baseProx - roundProx) * 0.08 : 0)) * 10) / 10;
+      const letter = insChip(ccs);
+      chipping = { ...GRADE_BG[letter], letter, detail: `${ccs>=0?"+":""}${ccs} composite · ${Math.round(roundProx*10)/10}ft avg` };
+    }
+  }
+
+  // Driver
+  const last50 = [...allRounds].sort((a: any, b: any) => b.date.localeCompare(a.date)).slice(0, 50);
+  const base = last50.reduce((acc: {hit:number;total:number}, r: any) => {
+    const dh = (r.holes ?? []).filter((h: any) => h.par === 4 || h.par === 5);
+    acc.hit += dh.filter((h: any) => h.tee_accuracy === "Hit").length;
+    acc.total += dh.length;
+    return acc;
+  }, { hit: 0, total: 0 });
+  let driver: PerfGrade | null = null;
+  if (base.total >= 20) {
+    const baseFIR = (base.hit / base.total) * 100;
+    const dh = rh.filter((h: any) => h.par === 4 || h.par === 5);
+    if (dh.length >= 2) {
+      const hit = dh.filter((h: any) => h.tee_accuracy === "Hit").length;
+      const fir = (hit / dh.length) * 100;
+      const delta = Math.round((fir - baseFIR) * 10) / 10;
+      const letter = insDriver(delta);
+      driver = { ...GRADE_BG[letter], letter, detail: `${hit}/${dh.length} FIR (${Math.round(fir)}%) · ${delta>=0?"+":""}${delta}pp vs avg` };
+    }
+  }
+
+  return { driver, iron, chipping, putter };
+}
+
+// Grade letter → approximate per-hole stroke impact (negative = costs strokes)
+const GRADE_LEAK_IMPACT: Record<string, number> = { "C": 0.08, "D": 0.22, "F": 0.40 };
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
 type CellValue = 0 | 1 | 2;
@@ -810,16 +929,48 @@ function CoachBriefing({
   heavyReady,
   allHoles,
   onNavigate,
+  roundGrades,
+  roundSummaries,
 }: {
   insights: CoachingInsights | null;
   totalRounds: number;
   heavyReady: boolean;
   allHoles: EnrichedHole[];
   onNavigate: (tab: "trends" | "factors") => void;
+  roundGrades: Record<number, RoundGrades>;
+  roundSummaries: RoundSummary[];
 }) {
   const [expandedLeak, setExpandedLeak] = useState<string | null>(null);
   const isMobile = useIsMobile();
-  const topLeak = insights?.leaks[0] ?? null;
+
+  // Compute grade-based leaks from last 5 rounds that have at least one grade
+  const gradeLeaks = useMemo(() => {
+    const recent = [...roundSummaries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+    const cats = [
+      { key: "driver" as const, label: "Driver accuracy", tactic: "Your tee accuracy has been grading below your baseline — try a fairway wood on tight holes or tee up on the trouble side of the box." },
+      { key: "iron" as const,   label: "Iron approach",   tactic: "Your approach accuracy is below your baseline — club up one and aim center-green rather than chasing the flag." },
+      { key: "chipping" as const, label: "Chipping / GS", tactic: "Your chipping is leaving the ball too far from the hole — pick a precise landing spot and commit to a bump-and-run when the path allows." },
+      { key: "putter" as const, label: "Putting",         tactic: "Your putting is costing extra strokes vs your baseline — focus on speed control to a 3-foot circle on first putts over 15 feet." },
+    ];
+    return cats.flatMap(cat => {
+      const graded = recent.map(s => roundGrades[s.idx]?.[cat.key]).filter((g): g is PerfGrade => g != null);
+      if (graded.length < 3) return [];
+      const badGrades = graded.filter(g => ["C","D","F"].includes(g.letter));
+      if (badGrades.length < Math.ceil(graded.length * 0.6)) return [];
+      // Use worst grade's impact
+      const worst = badGrades.reduce((w, g) => (GRADE_LEAK_IMPACT[g.letter] ?? 0) > (GRADE_LEAK_IMPACT[w.letter] ?? 0) ? g : w);
+      const impact = GRADE_LEAK_IMPACT[worst.letter] ?? 0.08;
+      return [{ id: `grade-${cat.key}`, label: cat.label, impact, count: graded.length, tactic: cat.tactic, gradeLetter: worst.letter, gradeBg: worst.bg, gradeColor: worst.color }];
+    });
+  }, [roundGrades, roundSummaries]);
+
+  const allLeaks = useMemo(() => {
+    const base = insights?.leaks ?? [];
+    const merged = [...base, ...gradeLeaks.filter(gl => !base.some(l => l.id === gl.id))];
+    return merged.sort((a, b) => b.impact - a.impact);
+  }, [insights, gradeLeaks]);
+
+  const topLeak = allLeaks[0] ?? null;
 
   // ── Frequency trends: last 5 rounds vs all-time ────────────────────────────
   const freqTrends = React.useMemo(() => {
@@ -957,22 +1108,32 @@ function CoachBriefing({
         ))}
       </div>
 
-      {/* Leaks list */}
-      {insights && insights.leaks.length > 0 && (
+      {/* Leaks list — merged with grade-based leaks */}
+      {(insights && insights.leaks.length > 0) || gradeLeaks.length > 0 ? (
         <div style={{ marginBottom: 22 }}>
           <div style={{ fontFamily: "Georgia,serif", fontStyle: "italic", fontWeight: 500, fontSize: 20, color: "var(--ink)", marginBottom: 12 }}>
             Top leaks
           </div>
           <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
-            {insights.leaks.map((leak, i) => {
+            {allLeaks.map((leak: any, i) => {
               const open = expandedLeak === leak.id;
+              const isGradeLeak = leak.id?.startsWith("grade-");
               return (
                 <div key={leak.id} style={{ background: "var(--paper)", border: `1px solid ${open ? "var(--accent)" : "var(--line)"}`, borderRadius: 14, overflow: "hidden" }}>
                   <button onClick={() => setExpandedLeak(open ? null : leak.id)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 14px", background: "none", border: "none", textAlign: "left" as const, cursor: "pointer" }}>
                     <div style={{ fontSize: 13, color: "var(--muted-2)", width: 20, fontWeight: 700, fontFeatureSettings: '"tnum" 1' }}>{i + 1}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{leak.label}</div>
-                      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>{leak.count} holes</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{leak.label}</span>
+                        {isGradeLeak && leak.gradeLetter && (
+                          <span style={{ fontSize: 11, fontWeight: 800, padding: "1px 6px", borderRadius: 5, background: leak.gradeBg, color: leak.gradeColor, fontFamily: "monospace" }}>
+                            {leak.gradeLetter}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>
+                        {isGradeLeak ? `${leak.count} recent rounds graded C or worse` : `${leak.count} holes`}
+                      </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ fontFamily: "Georgia,serif", fontSize: 16, fontWeight: 600, color: "var(--accent)", fontFeatureSettings: '"tnum" 1' }}>+{leak.impact.toFixed(2)}</div>
@@ -992,7 +1153,7 @@ function CoachBriefing({
             })}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Strengths */}
       {insights && insights.strengths.length > 0 && (
@@ -1080,6 +1241,254 @@ function readLocalCache(): LocalCache | null {
 }
 function writeLocalCache(c: LocalCache) {
   try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(c)); } catch {}
+}
+
+// ─── Chipping Insights tab ────────────────────────────────────────────────────
+
+const DIST_FT: Record<string, number> = {
+  "Gimme":1,"3ft":3,"5ft":5,"7ft":7,"10ft":10,
+  "15ft":15,"20ft":20,"30ft":30,"40ft":40,"50ft":50,"50+":60,
+};
+
+function chipGrade(ccs: number): { letter: string; color: string; bg: string } {
+  if (ccs >= 2.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (ccs >= 1.0)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (ccs >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (ccs >= -1.0) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (ccs >= -2.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                   { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+
+function ChippingInsights({ allHoles, roundSummaries }: {
+  allHoles: EnrichedHole[];
+  roundSummaries: RoundSummary[];
+}) {
+  // April 2026+ only — chip tracking not reliable before then
+  const apr2026Idx = React.useMemo(
+    () => new Set(roundSummaries.filter(s => s.date >= "2026-04-01").map(s => s.idx)),
+    [roundSummaries]
+  );
+
+  const trackingHoles = React.useMemo(
+    () => allHoles.filter(h => apr2026Idx.has(h.roundIndex)),
+    [allHoles, apr2026Idx]
+  );
+
+  // Baseline: per-round averages across all April 2026+ rounds
+  const baseline = React.useMemo(() => {
+    const byRound: Record<number, EnrichedHole[]> = {};
+    for (const h of trackingHoles) {
+      if (!byRound[h.roundIndex]) byRound[h.roundIndex] = [];
+      byRound[h.roundIndex].push(h);
+    }
+    const roundEntries = Object.entries(byRound);
+    if (!roundEntries.length) return null;
+
+    // Normalize extra SG shots to 18H equivalent
+    // "Extra" = (chips + GS bunker) >= 2 on a hole (expectation: 1 shot to get on)
+    let totalDC18 = 0;
+    let roundsWithChipData = 0;
+    let totalProxFt = 0;
+    let totalProxHoles = 0;
+
+    for (const [, hs] of roundEntries) {
+      const s = roundSummaries.find(r => r.idx === hs[0].roundIndex);
+      const norm = (s?.totalHoles ?? 18) <= 9 ? 2 : 1;
+      const dc = hs.filter(h => (h.chips ?? 0) + (h.greenside_bunker ?? 0) >= 2).length * norm;
+      const chipHoles = hs.filter(h => (h.chips ?? 0) + (h.greenside_bunker ?? 0) >= 1 && DIST_FT[h.first_putt_distance] != null);
+      if (chipHoles.length >= 1) {
+        totalDC18 += dc;
+        roundsWithChipData++;
+        totalProxFt += chipHoles.reduce((s2, h) => s2 + DIST_FT[h.first_putt_distance], 0);
+        totalProxHoles += chipHoles.length;
+      }
+    }
+    if (!roundsWithChipData) return null;
+    return {
+      avgDC: totalDC18 / roundsWithChipData,
+      avgProx: totalProxHoles > 0 ? totalProxFt / totalProxHoles : null,
+      totalRounds: roundsWithChipData,
+    };
+  }, [trackingHoles, roundSummaries]);
+
+  // Per-round grades
+  const roundChipData = React.useMemo(() => {
+    if (!baseline) return [];
+    const byRound: Record<number, EnrichedHole[]> = {};
+    for (const h of trackingHoles) {
+      if (!byRound[h.roundIndex]) byRound[h.roundIndex] = [];
+      byRound[h.roundIndex].push(h);
+    }
+    const rows = Object.entries(byRound).map(([, hs]) => {
+      const idx = hs[0].roundIndex;
+      const s = roundSummaries.find(r => r.idx === idx);
+      const norm = (s?.totalHoles ?? 18) <= 9 ? 2 : 1;
+      const chipHoles = hs.filter(h => (h.chips ?? 0) + (h.greenside_bunker ?? 0) >= 1 && DIST_FT[h.first_putt_distance] != null);
+      if (chipHoles.length < 2) return null;
+
+      const dc18 = hs.filter(h => (h.chips ?? 0) + (h.greenside_bunker ?? 0) >= 2).length * norm;
+      const avgProx = chipHoles.reduce((s2, h) => s2 + DIST_FT[h.first_putt_distance], 0) / chipHoles.length;
+
+      // CCS: extra-SG-shot delta weighted 1 stroke each; prox delta weighted 0.08/ft
+      const dcSG   = baseline.avgDC - dc18;
+      const proxSG = baseline.avgProx != null ? (baseline.avgProx - avgProx) * 0.08 : 0;
+      const ccs    = Math.round((dcSG + proxSG) * 10) / 10;
+
+      return {
+        idx, date: s?.date ?? "", name: s?.date ?? "", courseName: s?.courseName ?? "",
+        ccs, dc18, avgProx: Math.round(avgProx * 10) / 10, chipHoles: chipHoles.length,
+        ...chipGrade(ccs),
+      };
+    }).filter(Boolean).sort((a: any, b: any) => a.date > b.date ? 1 : -1) as any[];
+
+    return rows.map((r, i) => {
+      const w = rows.slice(Math.max(0, i - 4), i + 1);
+      const roll = w.length ? Math.round(w.reduce((s2: number, x: any) => s2 + x.ccs, 0) / w.length * 10) / 10 : null;
+      return { ...r, rollingAvg: roll };
+    });
+  }, [trackingHoles, roundSummaries, baseline]);
+
+  const gradeRows = [
+    { letter:"A+", desc:"2+ composite strokes above your avg", bg:"#0f6e56", color:"#fff" },
+    { letter:"A",  desc:"1–2 strokes above your avg",          bg:"#27ae60", color:"#fff" },
+    { letter:"B",  desc:"0–1 strokes above your avg",          bg:"#2980b9", color:"#fff" },
+    { letter:"C",  desc:"Around your average",                 bg:"#f5c842", color:"#333" },
+    { letter:"D",  desc:"1–2 strokes below your avg",          bg:"#e67e22", color:"#fff" },
+    { letter:"F",  desc:"2+ strokes below your avg",           bg:"#c0392b", color:"#fff" },
+  ];
+
+  if (!trackingHoles.length) return (
+    <p style={{ color:"var(--muted)", fontStyle:"italic" }}>No chip data from April 2026+ yet.</p>
+  );
+
+  return (
+    <div style={{ maxWidth:900 }}>
+
+      {/* Summary strip */}
+      {baseline && (
+        <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap:"wrap" }}>
+          {[
+            { label:"Avg extra SG shots / 18 holes", val: baseline.avgDC.toFixed(1) },
+            { label:"Avg 1st putt after chip",  val: baseline.avgProx != null ? `${baseline.avgProx.toFixed(1)} ft` : "—" },
+            { label:"Rounds tracked",            val: String(baseline.totalRounds) },
+          ].map(s => (
+            <div key={s.label} style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:14, padding:"12px 18px", flex:"1 1 120px" }}>
+              <div style={{ fontFamily:"var(--font-mono)", fontSize:10, letterSpacing:1.2, textTransform:"uppercase", color:"var(--ink-mute)", fontWeight:700 }}>{s.label}</div>
+              <div className="tnum" style={{ fontFamily:"var(--font-display)", fontSize:22, fontWeight:600, marginTop:4 }}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Grade chart */}
+      <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"20px 22px", marginBottom:24 }}>
+        <span style={{ fontSize:14, fontWeight:700, color:"var(--ink)" }}>Chipping Grade by Round</span>
+        <p style={{ fontSize:12, color:"var(--muted)", margin:"4px 0 18px" }}>
+          Composite of extra short-game shots and proximity vs your own averages. An extra SG shot is any hole where chips + GS bunker ≥ 2 (expectation: 1 shot to get on). Each extra shot = 1 stroke; each foot of proximity ≈ 0.08 strokes. C = at your norm. Line = 5-round average.
+        </p>
+
+        {roundChipData.length < 2 ? (
+          <p style={{ color:"var(--muted)", fontStyle:"italic", fontSize:13 }}>Need more rounds with chip data logged (need first-putt distance on chip holes).</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <ComposedChart data={roundChipData as any} margin={{ top:8, right:8, bottom:0, left:-20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+              <XAxis dataKey="name" height={36} tick={(props: any) => {
+                const { x, y, payload } = props;
+                const d: string = payload.value ?? "";
+                const i2 = (roundChipData as any[]).findIndex((r: any) => r.name === d);
+                const isYearStart = i2 === 0 || (i2 > 0 && d.slice(0,4) !== ((roundChipData as any[])[i2-1]?.name ?? "").slice(0,4));
+                return (
+                  <g transform={`translate(${x},${y})`}>
+                    <text x={0} y={0} dy={11} textAnchor="middle" fill="var(--muted)" fontSize={10}>
+                      {d ? `${d.slice(5,7)}/${d.slice(8)}` : ""}
+                    </text>
+                    {isYearStart && (
+                      <text x={0} y={0} dy={22} textAnchor="middle" fill="#555" fontSize={8} fontWeight={700}>{d.slice(0,4)}</text>
+                    )}
+                  </g>
+                );
+              }} />
+              <YAxis tickFormatter={(v: number) => v >= 0 ? `+${v}` : `${v}`} tick={{ fontSize:10, fill:"var(--muted)" }} />
+              <ReferenceLine y={0} stroke="var(--muted)" strokeDasharray="4 2" />
+              <Tooltip content={({ active, payload }: any) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0].payload;
+                const g = chipGrade(d.ccs);
+                return (
+                  <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:8, padding:"10px 14px", fontSize:12 }}>
+                    <div style={{ fontWeight:700, marginBottom:4 }}>{d.date} · {d.courseName}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                      <span style={{ background:g.bg, color:g.color, borderRadius:6, padding:"2px 8px", fontWeight:700, fontSize:13 }}>{g.letter}</span>
+                      <span style={{ color: d.ccs >= 0 ? "var(--green)" : "var(--bad)", fontWeight:700 }}>
+                        {d.ccs >= 0 ? "+" : ""}{d.ccs} composite
+                      </span>
+                    </div>
+                    <div style={{ color:"var(--muted)" }}>
+                      {d.dc18} extra SG shots · avg 1st putt {d.avgProx} ft · {d.chipHoles} chip/bunker holes
+                    </div>
+                  </div>
+                );
+              }} />
+              <Bar dataKey="ccs" name="Chip Grade" radius={[4,4,0,0]}>
+                {(roundChipData as any[]).map((r: any, i: number) => (
+                  <Cell key={i} fill={r.bg} fillOpacity={0.9} />
+                ))}
+              </Bar>
+              <Line dataKey="rollingAvg" type="monotone" stroke="#f29450" strokeWidth={2.5} dot={false} name="5-rnd avg" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:16 }}>
+          {gradeRows.map(g => (
+            <div key={g.letter} style={{ display:"flex", alignItems:"center", gap:5 }}>
+              <span style={{ background:g.bg, color:g.color, borderRadius:6, padding:"2px 7px", fontSize:11, fontWeight:700 }}>{g.letter}</span>
+              <span style={{ fontSize:10, color:"var(--muted-2)" }}>{g.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Round log */}
+      {roundChipData.length > 0 && (
+        <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"20px 22px" }}>
+          <span style={{ fontSize:14, fontWeight:700, color:"var(--ink)", display:"block", marginBottom:14 }}>Round Log</span>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ borderCollapse:"collapse", width:"100%", fontSize:12 }}>
+              <thead>
+                <tr style={{ borderBottom:"2px solid var(--line)" }}>
+                  {["Date","Course","Grade","Score","Extra SG Shots","Avg Prox","SG Holes"].map(h => (
+                    <th key={h} style={{ padding:"6px 10px", textAlign:"left", fontSize:10, fontWeight:700, color:"var(--muted-2)", textTransform:"uppercase", letterSpacing:1, whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {([...(roundChipData as any[])].reverse()).map((r: any, i: number) => {
+                  const g = chipGrade(r.ccs);
+                  return (
+                    <tr key={i} style={{ borderBottom:"1px solid var(--line-soft)" }}>
+                      <td style={{ padding:"7px 10px", color:"var(--muted)", whiteSpace:"nowrap" }}>{r.date}</td>
+                      <td style={{ padding:"7px 10px", color:"var(--ink-soft)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.courseName}</td>
+                      <td style={{ padding:"7px 10px" }}>
+                        <span style={{ background:g.bg, color:g.color, borderRadius:6, padding:"2px 8px", fontWeight:700, fontSize:12 }}>{g.letter}</span>
+                      </td>
+                      <td style={{ padding:"7px 10px", fontWeight:700, color: r.ccs >= 0 ? "var(--green)" : "var(--bad)" }}>
+                        {r.ccs >= 0 ? "+" : ""}{r.ccs}
+                      </td>
+                      <td style={{ padding:"7px 10px", color:"var(--ink-soft)" }}>{r.dc18}</td>
+                      <td style={{ padding:"7px 10px", color:"var(--muted)" }}>{r.avgProx} ft</td>
+                      <td style={{ padding:"7px 10px", color:"var(--muted)" }}>{r.chipHoles}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Putting Insights tab ─────────────────────────────────────────────────────
@@ -1397,10 +1806,11 @@ export default function RoundsInsights() {
   const [useLastN, setUseLastN] = useState(false);
   const [lastN, setLastN] = useState(10);
   const [lastNInput, setLastNInput] = useState("10");
-  const [tab, setTab] = useState<"coach" | "clubs" | "trends" | "factors" | "putting">("coach");
+  const [tab, setTab] = useState<"coach" | "clubs" | "trends" | "factors" | "chipping" | "putting">("coach");
   const [coachingInsights, setCoachingInsights] = useState<CoachingInsights | null>(null);
   const [heavyReady, setHeavyReady] = useState(false);
   const [handicapIndex, setHandicapIndex] = useState<number | null>(null);
+  const [roundGrades, setRoundGrades] = useState<Record<number, RoundGrades>>({});
 
   useEffect(() => {
     async function init() {
@@ -1531,6 +1941,13 @@ export default function RoundsInsights() {
       setAvailableYears(Array.from(years).sort((a,b) => b-a));
       setAllHoles(enriched);
       setRoundSummaries(summaries_);
+
+      // Compute performance grades for every round (uses all rounds as baseline)
+      const gradeMap: Record<number, RoundGrades> = {};
+      for (let gi = 0; gi < rounds.length; gi++) {
+        gradeMap[gi] = computeInsightGrades(rounds, gi);
+      }
+      setRoundGrades(gradeMap);
 
       const scoreChecksum = enriched.reduce((s, h) => s + h.score + h.putts, 0);
       const dataChanged = local?.scoreChecksum !== scoreChecksum;
@@ -1750,11 +2167,65 @@ export default function RoundsInsights() {
       ? r2(rec.reduce((s,r)=>s+r.toPar,0)/rec.length - pri.reduce((s,r)=>s+r.toPar,0)/pri.length)
       : 0;
 
+    // Grade-based leaks: inject if a grade category is trending C or worse
+    const GRADE_CATS_FB = [
+      { key: "driver" as const, cat: "Tee" as const, label: "Driver grade declining", freqLabel: "recent rounds grade C or worse",
+        fix1: ["Club swap","Try a fairway wood on tight holes","Lower-lofted tee clubs reduce miss-rate by 15-20pp while losing minimal distance"] as [string,string,string],
+        fix2: ["Aim","Tee up on the trouble side of the box","Angles your swing path away from trouble — same mechanics, better outcome"] as [string,string,string] },
+      { key: "iron" as const, cat: "Approach" as const, label: "Iron grade declining", freqLabel: "recent rounds grade C or worse",
+        fix1: ["Club up","Take one more club on every approach — no exceptions","The #1 pattern in amateur golf: underclubbing on approach shots"] as [string,string,string],
+        fix2: ["Target","Aim center-green instead of flag-hunting","Center-of-green misses cost 0.4 fewer strokes than pin-hunts"] as [string,string,string] },
+      { key: "chipping" as const, cat: "Short game" as const, label: "Chipping grade declining", freqLabel: "recent rounds grade C or worse",
+        fix1: ["Landing","Pick a precise landing spot before every chip","Visualizing the landing zone cuts chip variability by ~40%"] as [string,string,string],
+        fix2: ["Club","Use a bump-and-run (7-iron) when path allows","A less-lofted chip is more forgiving than a pitching wedge around the green"] as [string,string,string] },
+      { key: "putter" as const, cat: "Putting" as const, label: "Putting grade declining", freqLabel: "recent rounds grade C or worse",
+        fix1: ["Speed","Lag to a 3-foot circle — focus on speed, not line","3-putts are almost always speed problems, not line problems"] as [string,string,string],
+        fix2: ["Distance","Practice from 15-30ft until you stop within 3ft","Speed control from medium range eliminates most 3-putt distance problems"] as [string,string,string] },
+    ];
+    const recent10 = [...roundSummaries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+    const gradeLeakResults: FBLeak[] = GRADE_CATS_FB.flatMap(gc => {
+      const graded = recent10.map(s => roundGrades[s.idx]?.[gc.key]).filter((g): g is PerfGrade => g != null);
+      if (graded.length < 3) return [];
+      const badGrades = graded.filter(g => ["C","D","F"].includes(g.letter));
+      if (badGrades.length < Math.ceil(graded.length * 0.6)) return [];
+      const worst = badGrades.reduce((w, g) => (GRADE_LEAK_IMPACT[g.letter]??0) > (GRADE_LEAK_IMPACT[w.letter]??0) ? g : w);
+      const impact = r2(GRADE_LEAK_IMPACT[worst.letter] ?? 0.08);
+      const freqPct = Math.round(badGrades.length / graded.length * 100);
+      // Build chart from holes in rounds where grade was good vs bad
+      const goodIdx = new Set(recent10.filter(s => { const g = roundGrades[s.idx]?.[gc.key]; return g != null && !["C","D","F"].includes(g.letter); }).map(s => s.idx));
+      const badIdx  = new Set(recent10.filter(s => { const g = roundGrades[s.idx]?.[gc.key]; return g != null && ["C","D","F"].includes(g.letter); }).map(s => s.idx));
+      const goodHs = allHoles.filter(h => goodIdx.has(h.roundIndex));
+      const badHs  = allHoles.filter(h => badIdx.has(h.roundIndex));
+      const chart = [
+        { x: "Good grade rounds", v: safeImp(goodHs) },
+        { x: "Poor grade rounds", v: safeImp(badHs), hi: true },
+      ];
+      return [{
+        id: `grade-${gc.key}`, rank: 99, cat: gc.cat, label: gc.label,
+        impact, holes: badGrades.length, freqPct,
+        freqLabel: gc.freqLabel,
+        diagnosis: `${freqPct}% of your last ${graded.length} graded rounds scored ${worst.letter} in ${gc.label.replace(" grade declining","").toLowerCase()} — this is a consistent drag on your score.`,
+        chart,
+        goals: {
+          frequency: { metric: `${gc.label} C+ rate`, current: freqPct, target: Math.max(0, freqPct - 40), unit: "%" as const, note: "Reduce rounds grading below B." },
+          impact:    { metric: "Strokes lost / round", current: impact, target: r2(impact * 0.4), unit: "" as const, note: "Get back to your baseline performance." },
+        },
+        fixes: [
+          { tag: gc.fix1[0], title: gc.fix1[1], body: gc.fix1[2], stat: `${badGrades.length}/${graded.length} recent rounds graded ${worst.letter}.`, proj: r2(impact * 0.5), recommended: true },
+          { tag: gc.fix2[0], title: gc.fix2[1], body: gc.fix2[2], stat: `Target: ≤${Math.max(0,freqPct-40)}% poor-grade rounds.`, proj: r2(impact * 0.3) },
+        ],
+      }];
+    });
+    const allLeaksForFB = [...leaks, ...gradeLeakResults]
+      .sort((a, b) => b.impact - a.impact)
+      .slice(0, 7)
+      .map((l, idx) => ({ ...l, rank: idx + 1 }));
+
     return {
-      leaks, strengths,
+      leaks: allLeaksForFB, strengths,
       player:{ handicap: handicapIndex ?? 0, rounds: roundSummaries.length, trend30d },
     };
-  }, [allHoles, roundSummaries, handicapIndex]);
+  }, [allHoles, roundSummaries, handicapIndex, roundGrades]);
 
   const anyActive =
     filters.driveAcc.size > 0 || filters.apprAcc.size > 0 ||
@@ -1859,6 +2330,32 @@ export default function RoundsInsights() {
   const apprBuckets  = groupedCorr("Appr Dist",  h => h.appr_dist_num > 0 ? apprDistBucket(h.appr_dist_num) : "");
   const parBuckets   = groupedCorr("Par",         h => `Par ${h.par}`);
 
+  // Grade correlations: holes from rounds with each grade bucket
+  const GRADE_CORR_CATS = [
+    { key: "driver" as const, label: "Driver" },
+    { key: "iron" as const,   label: "Irons" },
+    { key: "chipping" as const, label: "Chipping" },
+    { key: "putter" as const, label: "Putting" },
+  ];
+  const GRADE_CORR_BUCKETS = [
+    { suffix: "A+/A", letters: ["A+","A"] },
+    { suffix: "B",    letters: ["B"] },
+    { suffix: "C",    letters: ["C"] },
+    { suffix: "D/F",  letters: ["D","F"] },
+  ];
+  const gradeCorrelations = GRADE_CORR_CATS.flatMap(gc =>
+    GRADE_CORR_BUCKETS.map(bucket => {
+      const holes = filtered.filter(h => {
+        const g = roundGrades[h.roundIndex]?.[gc.key];
+        return g != null && bucket.letters.includes(g.letter);
+      });
+      return { label: `Grade: ${gc.label} ${bucket.suffix}`, holes };
+    })
+  ).map(({ label, holes }) => ({
+    label, count: holes.length, avg: calcAvg(holes),
+    impact: holes.length > 0 ? calcAvg(holes) - baseline : NaN,
+  }));
+
   function getFactorType(label: string): string {
     if (label.startsWith("Par:")) return "Par";
     if (label.startsWith("Hole Yards:")) return "Hole Yards";
@@ -1875,11 +2372,13 @@ export default function RoundsInsights() {
     if (label.startsWith("GS Bunker:") || label.startsWith("GS Green:") || label === "GS Bunker") return "Greenside";
     if (label.startsWith("Green Depth")) return "Green Depth";
     if (label === "1+ Chips") return "Short Game";
+    if (label.startsWith("Grade:")) return "Performance Grades";
     return "Other";
   }
 
   const allCorrelations = [
     ...correlations, ...yardsBuckets, ...holeClusters, ...siBuckets, ...doglegBuckets, ...apprBuckets, ...parBuckets,
+    ...gradeCorrelations,
   ]
     .filter(c => c.count >= MIN_HOLES)
     .filter(c => {
@@ -1958,6 +2457,7 @@ export default function RoundsInsights() {
           { id: "trends" as const, label: "Performance Trend" },
           { id: "factors" as const, label: "Factor Correlations" },
           { id: "clubs" as const, label: "Irons & Wedges" },
+          { id: "chipping" as const, label: "Chipping" },
           { id: "putting" as const, label: "Putting" },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -1983,6 +2483,7 @@ export default function RoundsInsights() {
         <IronsWedges
           holes={allHoles}
           totalRounds={totalRounds}
+          roundSummaries={roundSummaries}
           onShowFactors={(club) => {
             setFilters(f => ({ ...f, apprClubs: new Set([club]), impactDir: "all" }));
             setFactorTypeFilter("");
@@ -2311,7 +2812,7 @@ export default function RoundsInsights() {
               <option value="">All factor types</option>
               {["Par","Hole Yards","Hole Cluster","Handicap Tier","Dogleg","Approach Distance",
                 "Drive Accuracy","Approach Accuracy","GIR","Putting","Tee Hazards","Approach Hazards",
-                "Greenside","Green Depth","Short Game"
+                "Greenside","Green Depth","Short Game","Performance Grades"
               ].map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
@@ -2354,6 +2855,10 @@ export default function RoundsInsights() {
         </div>
           </div>
         )}
+      </div>
+
+      <div style={{ display: tab === "chipping" ? "block" : "none" }}>
+        <ChippingInsights allHoles={allHoles} roundSummaries={roundSummaries} />
       </div>
 
       <div style={{ display: tab === "putting" ? "block" : "none" }}>
