@@ -115,6 +115,8 @@ const SHARED_BODY = `
       const el = document.querySelector('select[name="' + fn + '"]');
       if (el) { el.value = val; el.dispatchEvent(new Event('change', { bubbles: true })); }
     }, teeFieldName, teeMatch.v).catch(() => {});
+    // Wait for TheGrint to re-render the scorecard after tee selection
+    await waitMs(2000);
   }
 
   // Round type
@@ -171,6 +173,10 @@ ${SHARED_BODY}
         if (el && !el.checked) el.click();
       }).catch(() => {});
     }
+
+    // Screenshot of the filled form before submitting (returned on failure for diagnosis)
+    const preSubmitShot = await page.screenshot({ encoding: "base64" }).catch(() => null);
+    const preSubmitScreenshot = preSubmitShot ? "data:image/png;base64," + preSubmitShot : null;
 
     // Auto-accept any native confirm/alert dialogs
     page.on('dialog', d => d.accept().catch(() => {}));
@@ -257,7 +263,7 @@ ${SHARED_BODY}
       error: pageError
         ? 'TheGrint validation error: ' + pageError
         : 'Submission did not complete — TheGrint stayed on the entry page. Try "Preview form" to see what was filled, or use the manual fill script.',
-      screenshot,
+      screenshot: preSubmitScreenshot || screenshot,
     };
   } catch (err) {
     return { ok: false, error: 'Submit error: ' + String(err) };
