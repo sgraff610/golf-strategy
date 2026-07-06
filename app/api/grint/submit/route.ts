@@ -45,23 +45,21 @@ const SHARED_BODY = `
     setSelect("year", y); setSelect("month", m); setSelect("date", d);
   }, yyyy, mm, dd);
 
-  // Course autocomplete — evaluate sets most of the value instantly;
-  // keyboard.type fires real key events for the last chars (no selector-wait timeout)
+  // Course autocomplete — type full name via keyboard so all autocomplete events fire
   await page.waitForSelector("#ucourse", { timeout: 4000 }).catch(() => {});
   await page.click("#ucourse").catch(() => {});
-  await page.evaluate((name) => {
+  // Clear any existing value before typing
+  await page.evaluate(() => {
     const el = document.querySelector("#ucourse");
-    if (!el) return;
-    el.value = name.slice(0, 10);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  }, courseName);
-  const triggerChars = courseName.slice(10, 14);
-  if (triggerChars) await page.keyboard.type(triggerChars, { delay: 40 }).catch(() => {});
+    if (el) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); }
+  }).catch(() => {});
+  await waitMs(200);
+  await page.keyboard.type(courseName, { delay: 60 }).catch(() => {});
 
-  // Poll for suggestion to appear (up to 3s, check every 200ms)
-  const suggestionSels = [".suggestion", ".ui-menu-item", ".ui-autocomplete li", "[class*='suggestion']", "[class*='autocomplete'] li"];
+  // Poll for suggestion to appear (up to 4s, check every 200ms)
+  const suggestionSels = [".suggestion", ".ui-menu-item", ".ui-autocomplete li", "[class*='suggestion']", "[class*='autocomplete'] li", "li[class*='item']"];
   let suggEl = null;
-  for (let si = 0; si < 15; si++) {
+  for (let si = 0; si < 20; si++) {
     await waitMs(200);
     for (const sel of suggestionSels) {
       suggEl = await page.$(sel).catch(() => null);
@@ -69,12 +67,21 @@ const SHARED_BODY = `
     }
     if (suggEl) break;
   }
-  if (suggEl) await suggEl.click().catch(() => {});
+  if (!suggEl) {
+    return { ok: false, error: "Course not found — TheGrint autocomplete didn't suggest a match for: " + courseName + ". Open TheGrint and confirm the exact course name." };
+  }
+  // Click suggestion via mouse events for reliability
+  await page.evaluate((el) => {
+    el.scrollIntoView();
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new MouseEvent("mouseup",   { bubbles: true, cancelable: true }));
+    el.click();
+  }, suggEl).catch(() => {});
 
-  // Poll for tees to populate (up to 5s, check every 200ms)
+  // Poll for tees to populate (up to 6s, check every 200ms)
   let teeFieldName = "";
   let teeOpts = [];
-  for (let ti = 0; ti < 25; ti++) {
+  for (let ti = 0; ti < 30; ti++) {
     await waitMs(200);
     const tr = await page.evaluate(() => {
       const el = document.querySelector('select[name="tees"]') || document.querySelector('select[name="tee"]');
