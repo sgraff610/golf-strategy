@@ -24,20 +24,13 @@ const SHARED_BODY = `
 
   async function waitMs(ms) { await new Promise(r => setTimeout(r, ms)); }
 
-  // Block heavy resources — page loads 3-4x faster
-  await page.setRequestInterception(true);
-  page.on('request', req => {
-    const t = req.resourceType();
-    if (t === 'image' || t === 'stylesheet' || t === 'font' || t === 'media') req.abort();
-    else req.continue();
-  });
-
   if (cookies && cookies.length) await page.setCookie(...cookies);
 
-  await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 15000 });
+  await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 30000 });
+  await waitMs(500);
 
   if (page.url().includes("passthru")) {
-    return Response.json({ ok: false, error: "Session expired — please try again." });
+    return { ok: false, error: "Session expired — please try again." };
   }
 
   // Date
@@ -52,40 +45,68 @@ const SHARED_BODY = `
     setSelect("year", y); setSelect("month", m); setSelect("date", d);
   }, yyyy, mm, dd);
 
-  // Course autocomplete
-  await page.waitForSelector("#ucourse", { timeout: 5000 }).catch(() => {});
+  // Course autocomplete — evaluate sets most of the value instantly;
+  // keyboard.type fires real key events for the last chars (no selector-wait timeout)
+  await page.waitForSelector("#ucourse", { timeout: 4000 }).catch(() => {});
   await page.click("#ucourse").catch(() => {});
-  await page.type("#ucourse", courseName.slice(0, 12), { delay: 60 });
-  await waitMs(3000);
+  await page.evaluate((name) => {
+    const el = document.querySelector("#ucourse");
+    if (!el) return;
+    el.value = name.slice(0, 10);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, courseName);
+  const triggerChars = courseName.slice(10, 14);
+  if (triggerChars) await page.keyboard.type(triggerChars, { delay: 40 }).catch(() => {});
 
+  // Poll for suggestion to appear (up to 3s, check every 200ms)
   const suggestionSels = [".suggestion", ".ui-menu-item", ".ui-autocomplete li", "[class*='suggestion']", "[class*='autocomplete'] li"];
-  for (const sel of suggestionSels) {
-    const el = await page.$(sel).catch(() => null);
-    if (el) { await el.click().catch(() => {}); break; }
+  let suggEl = null;
+  for (let si = 0; si < 15; si++) {
+    await waitMs(200);
+    for (const sel of suggestionSels) {
+      suggEl = await page.$(sel).catch(() => null);
+      if (suggEl) break;
+    }
+    if (suggEl) break;
+  }
+  if (suggEl) await suggEl.click().catch(() => {});
+
+  // Poll for tees to populate (up to 5s, check every 200ms)
+  let teeFieldName = "";
+  let teeOpts = [];
+  for (let ti = 0; ti < 25; ti++) {
+    await waitMs(200);
+    const tr = await page.evaluate(() => {
+      const el = document.querySelector('select[name="tees"]') || document.querySelector('select[name="tee"]');
+      if (!el) return null;
+      const opts = Array.from(el.options).map(o => ({ v: o.value, t: (o.textContent || "").trim() })).filter(o => o.v !== "");
+      return opts.length > 0 ? { name: el.name, opts } : null;
+    }).catch(() => null);
+    if (tr) { teeFieldName = tr.name; teeOpts = tr.opts; break; }
   }
 
-  // Tees
-  await waitMs(3000);
-  const teeOpts = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('select[name="tees"] option'))
-      .map(o => ({ v: o.value, t: (o.textContent || "").trim() }))
-      .filter(o => o.v !== "")
-  ).catch(() => []);
-
   if (teeOpts.length === 0) {
-    return Response.json({ ok: false, error: "Course not found in TheGrint — the autocomplete did not match \\"" + courseName + "\\". Open TheGrint directly to confirm the exact course name." });
+    return { ok: false, error: "Course not found — autocomplete did not match " + courseName + ". Open TheGrint directly and confirm the exact course name." };
   }
 
   const teeMatch = teeOpts.find(o =>
     tee && (o.t.toLowerCase().includes(tee.toLowerCase()) || tee.toLowerCase().includes(o.t.toLowerCase()))
   ) || teeOpts[0];
-  if (teeMatch && teeMatch.v) await page.select('select[name="tees"]', teeMatch.v).catch(() => {});
+  if (teeMatch && teeMatch.v) {
+    await page.evaluate((fn, val) => {
+      const el = document.querySelector('select[name="' + fn + '"]');
+      if (el) { el.value = val; el.dispatchEvent(new Event('change', { bubbles: true })); }
+    }, teeFieldName, teeMatch.v).catch(() => {});
+  }
 
   // Round type
   const is9 = holes.length <= 9;
   const isBack = is9 && holes[0] && holes[0].hole > 9;
   if (is9) {
-    await page.select('select[name="round"]', isBack ? "B9" : "F9").catch(() => {});
+    await page.evaluate((val) => {
+      const el = document.querySelector('select[name="round"]');
+      if (el) { el.value = val; el.dispatchEvent(new Event('change', { bubbles: true })); }
+    }, isBack ? "B9" : "F9").catch(() => {});
     await waitMs(400);
   }
 
@@ -98,6 +119,7 @@ const SHARED_BODY = `
       if (!el) return;
       el.value = val;
       el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, cancelable: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
     }
     for (const h of holes) {
@@ -118,57 +140,109 @@ const SHARED_BODY = `
     }
   }, hs);
 
-  // Verify scores filled
-  const missing = await page.evaluate((holeNums) => {
-    var bad = [];
-    for (var i = 0; i < holeNums.length; i++) {
-      var n = holeNums[i];
-      var el = document.querySelector('input[name="scH' + n + '"]');
-      var val = el ? el.value.trim() : "";
-      if (!val || val === "0") bad.push(n);
-    }
-    return bad;
-  }, holes.map(h => h.hole));
-
-  if (missing.length > 0) {
-    return Response.json({ ok: false, error: "Score fields not filled for hole(s): " + missing.join(", ") + ". The form may not have loaded correctly — please try again." });
-  }
 `;
 
-// Submit path — clicks the submit button after filling scores.
 const SUBMIT_CODE = `
 export default async function({ page, context }) {
   try {
 ${SHARED_BODY}
 
-    // Practice round
     if (practiceRound) {
-      const checked = await page.$eval("#practice_score", el => el.checked).catch(() => false);
-      if (!checked) await page.click("#practice_score").catch(() => {});
+      await page.evaluate(() => {
+        const el = document.querySelector('#practice_score');
+        if (el && !el.checked) el.click();
+      }).catch(() => {});
     }
 
-    // Submit
+    // Auto-accept any native confirm/alert dialogs
+    page.on('dialog', d => d.accept().catch(() => {}));
+
+    // Listen for navigation BEFORE clicking Submit
+    const navDone = page.waitForNavigation({ timeout: 15000, waitUntil: 'domcontentloaded' }).catch(() => null);
+
+    // Click submit button — try common label variants, fall back to form.requestSubmit()
     await page.evaluate(() => {
-      const el = Array.from(document.querySelectorAll("a,button")).find(e => (e.textContent || "").includes("Submit"));
-      if (el) el.click();
-    });
-    await waitMs(600);
+      const candidates = Array.from(document.querySelectorAll('a,button,input[type="submit"],input[type="button"]'));
+      const LABELS = ['submit', 'post score', 'add score', 'save score', 'save'];
+      const el = candidates.find(e => {
+        const t = (e.textContent || e.value || '').toLowerCase().trim();
+        return LABELS.some(l => t.includes(l));
+      });
+      if (el) { el.click(); return; }
+      const form = document.querySelector('form');
+      if (form) { try { form.requestSubmit(); } catch { form.submit(); } }
+    }).catch(() => {});
+
+    await Promise.race([navDone, waitMs(10000)]);
+
+    // Dismiss pro-membership upsell if it appears
     await page.evaluate(() => {
-      const el = Array.from(document.querySelectorAll("a")).find(e => (e.textContent || "").includes("Not now"));
+      const el = Array.from(document.querySelectorAll('a')).find(e => (e.textContent || '').includes('Not now'));
       if (el) el.click();
-    });
-    await waitMs(800);
+    }).catch(() => {});
+    await waitMs(500);
+
+    const teeLabel = (teeMatch && teeMatch.t) || tee || 'unknown tee';
+
+    // Handle any confirmation / review page — TheGrint may require a second "Post" click
+    const urlAfterFirstNav = page.url();
+    if (!urlAfterFirstNav.includes('add_full_score')) {
+      const CONFIRM_LABELS = ['confirm', 'post round', 'post score', 'post', 'done', 'finish'];
+      const hasConfirmBtn = await page.evaluate((labels) => {
+        const btns = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]'));
+        return btns.some(b => {
+          const t = (b.textContent || b.value || '').toLowerCase().trim();
+          if (t.includes('cancel') || t.includes('back') || t.includes('edit')) return false;
+          return labels.some(l => t.includes(l));
+        });
+      }, CONFIRM_LABELS).catch(() => false);
+
+      if (hasConfirmBtn) {
+        const confirmNav = page.waitForNavigation({ timeout: 10000, waitUntil: 'domcontentloaded' }).catch(() => null);
+        await page.evaluate((labels) => {
+          const btns = Array.from(document.querySelectorAll('button,input[type="submit"],input[type="button"]'));
+          const btn = btns.find(b => {
+            const t = (b.textContent || b.value || '').toLowerCase().trim();
+            if (t.includes('cancel') || t.includes('back') || t.includes('edit')) return false;
+            return labels.some(l => t.includes(l));
+          });
+          if (btn) btn.click();
+        }, CONFIRM_LABELS).catch(() => {});
+        await Promise.race([confirmNav, waitMs(8000)]);
+        await waitMs(500);
+      }
+    }
 
     const finalUrl = page.url();
-    const teeLabel = (teeMatch && teeMatch.t) || tee || "unknown tee";
-    return Response.json({
-      ok: true,
-      message: !finalUrl.includes("add_full_score")
-        ? "Score submitted and saved to TheGrint. Tee: " + teeLabel
-        : "Score submitted — verify it appeared in your score history. Tee: " + teeLabel,
-    });
+
+    // Always take a screenshot so the caller can see exactly where we landed
+    const shotB64 = await page.screenshot({ encoding: "base64" }).catch(() => null);
+    const screenshot = shotB64 ? "data:image/png;base64," + shotB64 : null;
+
+    // Session expired → redirected to login
+    if (finalUrl.includes('passthru') || (finalUrl.includes('/login') && !finalUrl.includes('add_full_score'))) {
+      return { ok: false, error: 'Session expired — TheGrint redirected to login. Try again.', screenshot };
+    }
+
+    if (!finalUrl.includes('add_full_score')) {
+      return { ok: true, message: 'Score submitted to TheGrint. Tee: ' + teeLabel + ' · landed on: ' + finalUrl, screenshot };
+    }
+
+    // Still on the entry page — submission didn't go through. Check for a page-level error.
+    const pageError = await page.evaluate(() => {
+      const errEl = document.querySelector('.alert-danger,.alert-error,[class*="error"],[class*="Error"],.notification-error,.flash-error');
+      return errEl ? (errEl.textContent || '').trim().slice(0, 300) : null;
+    }).catch(() => null);
+
+    return {
+      ok: false,
+      error: pageError
+        ? 'TheGrint validation error: ' + pageError
+        : 'Submission did not complete — TheGrint stayed on the entry page. Try "Preview form" to see what was filled, or use the manual fill script.',
+      screenshot,
+    };
   } catch (err) {
-    return Response.json({ ok: false, error: "Submit error: " + String(err) });
+    return { ok: false, error: 'Submit error: ' + String(err) };
   }
 }
 `;
@@ -180,9 +254,9 @@ export default async function({ page, context }) {
 ${SHARED_BODY}
 
     const shot = await page.screenshot({ encoding: "base64" });
-    return Response.json({ ok: true, previewShot: "data:image/png;base64," + shot });
+    return { ok: true, previewShot: "data:image/png;base64," + shot };
   } catch (err) {
-    return Response.json({ ok: false, error: "Preview error: " + String(err) });
+    return { ok: false, error: "Preview error: " + String(err) };
   }
 }
 `;
@@ -292,11 +366,11 @@ export async function POST(req: NextRequest) {
           }
           const pd = (result?.data && typeof result.data === "object") ? result.data : result;
           if (pd?.ok === true) {
-            // preview response uses previewShot key; submit uses message
-            jsonOut = { ok: true, message: pd.message || "Submitted.", preview: !!pd.previewShot, screenshot: pd.previewShot };
+            // preview response uses previewShot key; submit uses message + screenshot
+            jsonOut = { ok: true, message: pd.message || "Submitted.", preview: !!pd.previewShot, screenshot: pd.previewShot || pd.screenshot || null };
           } else {
             const errMsg = pd?.error || pd?.message || JSON.stringify(result).slice(0, 200);
-            jsonOut = { ok: false, error: errMsg || "Unknown error from Browserless" };
+            jsonOut = { ok: false, error: errMsg || "Unknown error from Browserless", screenshot: pd?.screenshot || null };
           }
         }
       } catch (err: any) {

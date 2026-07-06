@@ -66,7 +66,7 @@ function GrintContent() {
     typeof window !== "undefined" ? localStorage.getItem("grint_password") ?? "" : ""
   );
   const [submitting, setSubmitting] = useState(false);
-  const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string } | null>(null);
+  const [submitResult, setSubmitResult] = useState<{ ok: boolean; message?: string; error?: string; screenshot?: string | null } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -158,11 +158,12 @@ function GrintContent() {
   await wait(300);
 
   const ci=document.querySelector('#ucourse');
-  if(ci){ci.value='${courseName}';ci.dispatchEvent(new Event('input',{bubbles:true}));ci.dispatchEvent(new Event('change',{bubbles:true}));await wait(1200);const sg=document.querySelector('.suggestion');if(sg){sg.click();await wait(1500);}}
+  if(ci){ci.focus();ci.value='${courseName}';ci.dispatchEvent(new Event('input',{bubbles:true}));ci.dispatchEvent(new Event('change',{bubbles:true}));await wait(1500);const sg=document.querySelector('.suggestion')||document.querySelector('[class*="suggestion"] li');if(sg){sg.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));await wait(50);sg.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true}));sg.click();let teeFound=false;for(let i=0;i<20;i++){await wait(200);const teeEl=document.querySelector('select[name="tees"]')||document.querySelector('select[name="tee"]');if(teeEl&&Array.from(teeEl.options).filter(o=>o.value).length){teeFound=true;break;}}if(!teeFound)await wait(500);}}
 
-  const teeOpts=Array.from(document.querySelectorAll('select[name="tees"] option')).filter(o=>o.value);
+  const teeSel=document.querySelector('select[name="tees"]')||document.querySelector('select[name="tee"]');
+  const teeOpts=teeSel?Array.from(teeSel.options).filter(o=>o.value):[];
   const teeMatch=teeOpts.find(o=>o.text.toLowerCase().includes('${teeBox.toLowerCase()}'))||teeOpts[0];
-  if(teeMatch)selOpt('select[name="tees"]',teeMatch.value);
+  if(teeMatch&&teeSel)selOpt(teeSel.name?'select[name="'+teeSel.name+'"]':'select[name="tees"]',teeMatch.value);
   await wait(400);
 
 ${is9 ? `  selOpt('select[name="round"]','${isBack ? "B9" : "F9"}');await wait(800);` : ""}
@@ -569,13 +570,33 @@ ${practiceRound ? `  const pr=document.querySelector('#practice_score');if(pr&&!
           </button>
 
           {submitResult && (
-            <div style={{
-              marginTop: 12, padding: "10px 12px", borderRadius: 8, fontSize: 13,
-              background: submitResult.ok ? "#e8f5e9" : "#fdecea",
-              border: `1px solid ${submitResult.ok ? "#81c784" : "#e57373"}`,
-              color: submitResult.ok ? "#1b5e20" : "#b71c1c",
-            }}>
-              {submitResult.ok ? `✓ ${submitResult.message}` : `✗ ${submitResult.error || "Submission failed — unknown error. Check your credentials and try again."}`}
+            <div style={{ marginTop: 12 }}>
+              <div style={{
+                padding: "10px 12px", borderRadius: 8, fontSize: 13,
+                background: submitResult.ok ? "#e8f5e9" : "#fdecea",
+                border: `1px solid ${submitResult.ok ? "#81c784" : "#e57373"}`,
+                color: submitResult.ok ? "#1b5e20" : "#b71c1c",
+              }}>
+                {submitResult.ok ? `✓ ${submitResult.message}` : `✗ ${submitResult.error || "Submission failed — unknown error. Check your credentials and try again."}`}
+              </div>
+              {submitResult.screenshot && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-soft)" }}>
+                      What Browserless saw after submitting
+                    </span>
+                    <button
+                      onClick={() => setSubmitResult(prev => prev ? { ...prev, screenshot: null } : prev)}
+                      style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--ink-mute)", lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                  <img
+                    src={submitResult.screenshot}
+                    alt="Post-submit page screenshot"
+                    style={{ width: "100%", borderRadius: 8, border: "1px solid var(--line)", display: "block" }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

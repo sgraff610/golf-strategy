@@ -26,6 +26,7 @@ type RoundHole = {
   grints: boolean;
   club: string;
   first_putt_distance: string;
+  hole_notes?: string | null;
 };
 
 function calcGir(score: number | "", par: number, putts: number | ""): boolean {
@@ -54,7 +55,7 @@ function buildHoles(courseHoles: HoleData[], startingHole: number, holesPlayed: 
     score: "", chips: "", putts: "", tee_accuracy: "", appr_accuracy: "",
     appr_distance: "", water_penalty: "", drop_or_out: "", tree_haz: "",
     fairway_bunker: "", greenside_bunker: "", gir: false, grints: false,
-    club: "", first_putt_distance: "",
+    club: "", first_putt_distance: "", hole_notes: h.hole_notes ?? null,
   }));
 }
 
@@ -211,6 +212,13 @@ export default function AddRound() {
                   {hole.grints && <span style={{ fontSize: 11, background: "#e3f2fd", color: "#1565c0", padding: "2px 8px", borderRadius: 20 }}>GRINTS</span>}
                 </div>
               </div>
+
+              {hole.hole_notes && (
+                <div style={{ background: "#f0faf6", border: "1px solid #c8e6c9", borderRadius: 8, padding: "8px 12px", marginBottom: 4 }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: "#0f6e56", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 4px" }}>Hole Note</p>
+                  <p style={{ fontSize: 13, color: "#084634", margin: 0, lineHeight: 1.5, whiteSpace: "pre-line" }}>{hole.hole_notes}</p>
+                </div>
+              )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {/* Scoring */}
