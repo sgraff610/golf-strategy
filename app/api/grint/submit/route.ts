@@ -27,11 +27,19 @@ const SHARED_BODY = `
   if (cookies && cookies.length) await page.setCookie(...cookies);
 
   await page.goto("https://thegrint.com/score/add_full_score/", { waitUntil: "domcontentloaded", timeout: 30000 });
-  await waitMs(500);
+  await waitMs(800);
 
   if (page.url().includes("passthru")) {
     return { ok: false, error: "Session expired — please try again." };
   }
+
+  // Dismiss cookie consent banner before interacting with anything
+  await page.evaluate(() => {
+    const btns = Array.from(document.querySelectorAll('button,a'));
+    const accept = btns.find(b => /^accept/i.test((b.textContent || '').trim()));
+    if (accept) accept.click();
+  }).catch(() => {});
+  await waitMs(600);
 
   // Date
   const [yyyy, mm, dd] = date.split("-");
@@ -48,12 +56,12 @@ const SHARED_BODY = `
   // Course autocomplete — type first ~10 chars via keyboard to trigger the search,
   // then wait for the AJAX round-trip before polling for the dropdown.
   await page.waitForSelector("#ucourse", { timeout: 4000 }).catch(() => {});
-  await page.click("#ucourse").catch(() => {});
+  // Use programmatic focus (not coordinate click) so overlays can't intercept
   await page.evaluate(() => {
     const el = document.querySelector("#ucourse");
-    if (el) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); }
+    if (el) { el.value = ""; el.focus(); el.dispatchEvent(new Event("input", { bubbles: true })); }
   }).catch(() => {});
-  await waitMs(200);
+  await waitMs(300);
   // Type first 10 chars to trigger autocomplete without over-filtering results
   await page.keyboard.type(courseName.slice(0, 10), { delay: 80 }).catch(() => {});
   // Give TheGrint's server time to respond (debounce + round-trip)
