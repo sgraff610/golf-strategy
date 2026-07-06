@@ -253,6 +253,11 @@ function drivingTotal(holes: any[]) { return holes.filter(h => h.par === 4 || h.
 function girsHit(holes: any[]) { return holes.filter(h => h.gir).length; }
 function threePuttCount(holes: any[]) { return holes.filter(h => Number(h.putts) >= 3).length; }
 function gsExtraShotCount(holes: any[]) { return holes.reduce((s, h) => s + Math.max(0, (Number(h.chips) || 0) + (Number(h.greenside_bunker) || 0) - 1), 0); }
+function avgFirstPuttAfterChip(holes: any[]): string {
+  const ch = holes.filter(h => Number(h.chips) > 0 && PUTT_DIST_MAP[h.first_putt_distance] !== undefined);
+  if (ch.length === 0) return "—";
+  return (ch.reduce((s, h) => s + PUTT_DIST_MAP[h.first_putt_distance], 0) / ch.length).toFixed(1) + "ft";
+}
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 
@@ -812,10 +817,11 @@ export default function ClubhousePage() {
                             </div>
                           ))}
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 4 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 4 }}>
                           {[
                             { label: "3-Putt", val: threePuttCount(round.holes) || "—" },
                             { label: "GS Extra Shots", val: round.date >= "2026-01-01" ? (gsExtraShotCount(round.holes) || "—") : "—" },
+                            { label: "Avg 1st Putt / Chip", val: avgFirstPuttAfterChip(round.holes) },
                           ].map(({ label, val }) => (
                             <div key={label} style={{ background: "var(--paper-alt)", borderRadius: 8, padding: "6px 8px", textAlign: "center" }}>
                               <div style={{ fontSize: 8.5, color: "var(--muted-2)", fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
