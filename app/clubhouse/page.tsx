@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { getClubDistances, getClubDistancesSync, saveClubDistances } from "@/lib/storage";
 import { DEFAULT_CLUB_DISTANCES } from "@/lib/planTypes";
@@ -31,6 +31,143 @@ type Round = {
   recap?: Record<string, unknown> | null;
 };
 type CourseInfo = { rating: number | null; slope: number | null; hole_count: number | null };
+
+// ─── Grade helpers ────────────────────────────────────────────────────────────
+
+const GRADE_DIST_ORDER = ["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"];
+const GRADE_PUTT_FALLBACK: Record<string,number> = {
+  "Gimme":1.00,"3ft":1.07,"5ft":1.28,"7ft":1.52,"10ft":1.75,
+  "15ft":1.90,"20ft":1.97,"30ft":2.05,"40ft":2.12,"50ft":2.18,"50+":2.23,
+};
+const GRADE_IRON_CLUBS = ["4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"];
+const GRADE_DIST_FT: Record<string,number> = {
+  "Gimme":1,"3ft":3,"5ft":5,"7ft":7,"10ft":10,
+  "15ft":15,"20ft":20,"30ft":30,"40ft":40,"50ft":50,"50+":60,
+};
+
+type PerfGrade = { letter: string; color: string; bg: string; detail: string };
+type Grades = { driver: PerfGrade | null; iron: PerfGrade | null; chipping: PerfGrade | null; putter: PerfGrade | null };
+
+function gSG(sg: number) {
+  if (sg >= 3.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (sg >= 1.5)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (sg >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (sg >= -1.5) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (sg >= -3.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                  { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+function gDriver(d: number) {
+  if (d >= 15)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (d >= 8)   return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (d >= -5)  return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (d >= -15) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (d >= -25) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return               { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+function gChip(ccs: number) {
+  if (ccs >= 2.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (ccs >= 1.0)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (ccs >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (ccs >= -1.0) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (ccs >= -2.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                   { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+function gIron(delta: number) {
+  if (delta >= 2.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (delta >= 1.0)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (delta >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (delta >= -1.0) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (delta >= -2.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                    { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+
+function computeGrades(allRounds: Round[], round: Round): Grades {
+  const allHoles = allRounds.flatMap(r => r.holes ?? []);
+  const rh = round.holes ?? [];
+
+  // Putter
+  const puttBase: Record<string,number> = { ...GRADE_PUTT_FALLBACK };
+  for (const dist of GRADE_DIST_ORDER) {
+    const hs = allHoles.filter(h => h.first_putt_distance === dist && Number(h.putts) > 0);
+    if (hs.length >= 5) puttBase[dist] = hs.reduce((s,h) => s + Number(h.putts), 0) / hs.length;
+  }
+  const putterHoles = rh.filter(h => h.first_putt_distance && puttBase[h.first_putt_distance] != null && Number(h.putts) > 0);
+  let putter: PerfGrade | null = null;
+  if (putterHoles.length >= 3) {
+    const exp = putterHoles.reduce((s,h) => s + puttBase[h.first_putt_distance], 0);
+    const act = putterHoles.reduce((s,h) => s + Number(h.putts), 0);
+    const sg = Math.round((exp - act) * 10) / 10;
+    const cost = Math.round(-sg * 10) / 10;
+    putter = { ...gSG(sg), detail: `${cost >= 0 ? "+" : ""}${cost} strokes vs avg (${putterHoles.length} holes)` };
+  }
+
+  // Iron
+  const ironBase: Record<string,number> = {};
+  for (const club of GRADE_IRON_CLUBS) {
+    const shots = allHoles.filter(h => h.appr_distance === club && h.appr_accuracy && h.appr_accuracy !== "");
+    if (shots.length >= 3) ironBase[club] = shots.filter(h => h.appr_accuracy === "Hit").length / shots.length;
+  }
+  const ironShots = rh.filter(h => GRADE_IRON_CLUBS.includes(h.appr_distance) && h.appr_accuracy && h.appr_accuracy !== "" && ironBase[h.appr_distance] != null);
+  let iron: PerfGrade | null = null;
+  if (ironShots.length >= 3) {
+    const exp = ironShots.reduce((s,h) => s + (ironBase[h.appr_distance] ?? 0), 0);
+    const act = ironShots.filter(h => h.appr_accuracy === "Hit").length;
+    const delta = Math.round((act - exp) * 10) / 10;
+    iron = { ...gIron(delta), detail: `${delta >= 0 ? "+" : ""}${delta} greens vs avg (${ironShots.length} shots)` };
+  }
+
+  // Chipping (April 2026+ baseline)
+  const apr26 = allRounds.filter(r => r.date >= "2026-04-01");
+  let totalExtra = 0, chipRounds = 0, totalProxFt = 0, totalProxHoles = 0;
+  for (const r of apr26) {
+    const hs: any[] = r.holes ?? [];
+    const norm = (r.holes_played ?? hs.length) <= 9 ? 2 : 1;
+    const extra = hs.filter(h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 2).length * norm;
+    const proxHoles = hs.filter(h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 1 && GRADE_DIST_FT[h.first_putt_distance] != null);
+    if (proxHoles.length >= 1) {
+      totalExtra += extra; chipRounds++;
+      totalProxFt += proxHoles.reduce((s,h) => s + GRADE_DIST_FT[h.first_putt_distance], 0);
+      totalProxHoles += proxHoles.length;
+    }
+  }
+  let chipping: PerfGrade | null = null;
+  if (chipRounds >= 2 && round.date >= "2026-04-01") {
+    const baseExtra = totalExtra / chipRounds;
+    const baseProx = totalProxHoles > 0 ? totalProxFt / totalProxHoles : null;
+    const norm = (round.holes_played ?? rh.length) <= 9 ? 2 : 1;
+    const roundExtra = rh.filter(h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 2).length * norm;
+    const roundProxH = rh.filter(h => (Number(h.chips)||0) + (Number(h.greenside_bunker)||0) >= 1 && GRADE_DIST_FT[h.first_putt_distance] != null);
+    if (roundProxH.length >= 2) {
+      const roundProx = roundProxH.reduce((s,h) => s + GRADE_DIST_FT[h.first_putt_distance], 0) / roundProxH.length;
+      const dcSG = baseExtra - roundExtra;
+      const proxSG = baseProx != null ? (baseProx - roundProx) * 0.08 : 0;
+      const ccs = Math.round((dcSG + proxSG) * 10) / 10;
+      chipping = { ...gChip(ccs), detail: `${ccs >= 0 ? "+" : ""}${ccs} composite · ${Math.round(roundProx * 10) / 10}ft avg` };
+    }
+  }
+
+  // Driver
+  const last50 = [...allRounds].sort((a,b) => b.date.localeCompare(a.date)).slice(0, 50);
+  const base = last50.reduce((acc,r) => {
+    const dh = (r.holes ?? []).filter((h: any) => h.par === 4 || h.par === 5);
+    acc.hit += dh.filter((h: any) => h.tee_accuracy === "Hit").length;
+    acc.total += dh.length;
+    return acc;
+  }, { hit: 0, total: 0 });
+  let driver: PerfGrade | null = null;
+  if (base.total >= 20) {
+    const baseFIR = (base.hit / base.total) * 100;
+    const dh = rh.filter(h => h.par === 4 || h.par === 5);
+    if (dh.length >= 2) {
+      const hit = dh.filter(h => h.tee_accuracy === "Hit").length;
+      const fir = (hit / dh.length) * 100;
+      const delta = Math.round((fir - baseFIR) * 10) / 10;
+      driver = { ...gDriver(delta), detail: `${hit}/${dh.length} FIR (${Math.round(fir)}%) · ${delta >= 0 ? "+" : ""}${delta}pp vs avg` };
+    }
+  }
+
+  return { driver, iron, chipping, putter };
+}
 
 // ─── Math ─────────────────────────────────────────────────────────────────────
 
@@ -353,6 +490,15 @@ export default function ClubhousePage() {
     if (yearFilter && !r.date?.startsWith(yearFilter)) return false;
     return true;
   });
+
+  const gradesMap = useMemo((): Record<string, Grades> => {
+    if (rounds.length === 0) return {};
+    const sorted = [...rounds].sort((a, b) => b.date.localeCompare(a.date));
+    const recent20 = sorted.slice(0, 20);
+    const map: Record<string, Grades> = {};
+    for (const r of recent20) map[r.id] = computeGrades(rounds, r);
+    return map;
+  }, [rounds]);
 
   const iconBtn = (color: string, id: string): React.CSSProperties => ({
     display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -678,6 +824,32 @@ export default function ClubhousePage() {
                           ))}
                         </div>
                       </div>
+
+                      {/* Grade chips */}
+                      {(() => {
+                        const grades = gradesMap[round.id];
+                        if (!grades) return null;
+                        const chips = [
+                          { label: "Driver",   grade: grades.driver },
+                          { label: "Irons",    grade: grades.iron },
+                          { label: "Chipping", grade: grades.chipping },
+                          { label: "Putting",  grade: grades.putter },
+                        ].filter(g => g.grade != null);
+                        if (chips.length === 0) return null;
+                        return (
+                          <div style={{ display: "flex", gap: 5, marginTop: 10, flexWrap: "wrap" as const }}>
+                            {chips.map(({ label, grade }) => (
+                              <div key={label} title={grade!.detail} style={{
+                                display: "flex", alignItems: "center", gap: 4,
+                                background: grade!.bg, borderRadius: 6, padding: "3px 7px",
+                              }}>
+                                <span style={{ fontSize: 12, fontWeight: 800, color: grade!.color, fontFamily: "monospace" }}>{grade!.letter}</span>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: grade!.color, textTransform: "uppercase" as const, letterSpacing: 0.5 }}>{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       {/* Action chips */}
                       <div style={{ marginTop: 10, display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
