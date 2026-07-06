@@ -8,6 +8,51 @@ import { getClubDistances, getClubDistancesSync, saveClubDistances, loadCourses 
 import type { ClubDistances } from "@/lib/planTypes";
 import type { CourseRecord } from "@/lib/types";
 
+// ─── Performance grade helpers (mirrors coach insights logic) ─────────────────
+
+const DIST_ORDER_RECAP = ["Gimme","3ft","5ft","7ft","10ft","15ft","20ft","30ft","40ft","50ft","50+"];
+const FALLBACK_PUTT_EXP: Record<string,number> = {
+  "Gimme":1.00,"3ft":1.07,"5ft":1.28,"7ft":1.52,"10ft":1.75,
+  "15ft":1.90,"20ft":1.97,"30ft":2.05,"40ft":2.12,"50ft":2.18,"50+":2.23,
+};
+const IRON_CLUBS_RECAP = ["4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"];
+
+function gradeFromSG(sg: number): { letter: string; color: string; bg: string } {
+  if (sg >= 3.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (sg >= 1.5)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (sg >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (sg >= -1.5) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (sg >= -3.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                  { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+
+function gradeFromDriverFIR(deltaPct: number): { letter: string; color: string; bg: string } {
+  if (deltaPct >= 15)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (deltaPct >= 8)   return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (deltaPct >= -5)  return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (deltaPct >= -15) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (deltaPct >= -25) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                      { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+
+function gradeFromChip(ccs: number): { letter: string; color: string; bg: string } {
+  if (ccs >= 2.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (ccs >= 1.0)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (ccs >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (ccs >= -1.0) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (ccs >= -2.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                   { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+
+function gradeFromIronDelta(delta: number): { letter: string; color: string; bg: string } {
+  if (delta >= 2.0)  return { letter:"A+", color:"#fff", bg:"#0f6e56" };
+  if (delta >= 1.0)  return { letter:"A",  color:"#fff", bg:"#27ae60" };
+  if (delta >= 0)    return { letter:"B",  color:"#fff", bg:"#2980b9" };
+  if (delta >= -1.0) return { letter:"C",  color:"#333", bg:"#f5c842" };
+  if (delta >= -2.0) return { letter:"D",  color:"#fff", bg:"#e67e22" };
+  return                    { letter:"F",  color:"#fff", bg:"#c0392b" };
+}
+
 // ─── Club dial config ──────────────────────────────────────────────────────────
 
 const DIAL_CLUBS = [
@@ -73,6 +118,13 @@ type RoundFacts = {
 type Win     = { title: string; body: string };
 type Cost    = { title: string; cost: string; headline: string; body: string; drill: string };
 type Pattern = { body: string };
+type PerfGrade = { letter: string; color: string; bg: string; detail: string };
+type PerformanceGrades = { putter: PerfGrade | null; iron: PerfGrade | null; chipping: PerfGrade | null; driver: PerfGrade | null };
+
+const DIST_FT_RECAP: Record<string, number> = {
+  "Gimme":1,"3ft":3,"5ft":5,"7ft":7,"10ft":10,
+  "15ft":15,"20ft":20,"30ft":30,"40ft":40,"50ft":50,"50+":60,
+};
 type Analysis = { verdict: string; facts: RoundFacts; wins: Win[]; costs: Cost[]; patterns: Pattern[] };
 
 // ─── Round facts ──────────────────────────────────────────────────────────────
@@ -720,6 +772,7 @@ function StageInput({
   groupNotes, onGroupNote,
   activeDialClubs,
   bagDistances, onToggleBag,
+  performanceGrades,
   onSubmit,
 }: {
   rounds: RoundRow[];
@@ -735,6 +788,7 @@ function StageInput({
   activeDialClubs: readonly { key: string; label: string }[];
   bagDistances: ClubDistances;
   onToggleBag: (club: string) => void;
+  performanceGrades: PerformanceGrades;
   onSubmit: () => void;
 }) {
   const round = rounds.find(r => r.id === roundId);
@@ -800,6 +854,34 @@ function StageInput({
             </div>
           );
         })()}
+      </div>
+
+      {/* Performance grades */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:24 }}>
+        {[
+          { label:"Driver Grade",   grade: performanceGrades.driver,   hint:"Track tee accuracy (FIR) on par 4s & 5s" },
+          { label:"Iron Grade",     grade: performanceGrades.iron,     hint:"Track approach club & accuracy (GIR)" },
+          { label:"Chipping Grade", grade: performanceGrades.chipping, hint:"Track chips & first putt distance" },
+          { label:"Putter Grade",   grade: performanceGrades.putter,   hint:"Track first putt distance on 3+ holes" },
+        ].map(({ label, grade, hint }) => (
+          <div key={label} style={{
+            background:"var(--paper)", border:"1px solid var(--line)",
+            borderRadius:10, padding:"12px 16px", display:"flex", alignItems:"center", gap:12,
+          }}>
+            <div style={{
+              width:44, height:44, borderRadius:10, flexShrink:0,
+              background: grade ? grade.bg : "var(--line)", display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <span style={{ fontSize: grade ? 18 : 20, fontWeight:800, color: grade ? grade.color : "var(--muted-2)", fontFamily:"var(--font-display)" }}>
+                {grade ? grade.letter : "—"}
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, letterSpacing:2, textTransform:"uppercase", color:"var(--muted-2)", marginBottom:2 }}>{label}</div>
+              <div style={{ fontSize:11, color:"var(--ink-soft)" }}>{grade ? grade.detail : hint}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Woods in bag */}
@@ -1172,6 +1254,110 @@ export default function RecapPage() {
     [facts, dials, groupNotes, overall, favs, wish, activeKeys],
   );
 
+  const performanceGrades = useMemo((): PerformanceGrades => {
+    const allHoles = rounds.flatMap(r => r.holes ?? []);
+    const roundHoles: any[] = round?.holes ?? [];
+
+    // ── Putter grade ──────────────────────────────────────────────────────────
+    const puttBaseline: Record<string, number> = { ...FALLBACK_PUTT_EXP };
+    for (const dist of DIST_ORDER_RECAP) {
+      const hs = allHoles.filter(h => h.first_putt_distance === dist && Number(h.putts) > 0);
+      if (hs.length >= 5) puttBaseline[dist] = hs.reduce((s, h) => s + Number(h.putts), 0) / hs.length;
+    }
+    const putterHoles = roundHoles.filter(h => h.first_putt_distance && puttBaseline[h.first_putt_distance] != null && Number(h.putts) > 0);
+    let putter: PerfGrade | null = null;
+    if (putterHoles.length >= 3) {
+      const exp = putterHoles.reduce((s, h) => s + puttBaseline[h.first_putt_distance], 0);
+      const act = putterHoles.reduce((s, h) => s + Number(h.putts), 0);
+      const sg = Math.round((exp - act) * 10) / 10;
+      const puttCost = Math.round(-sg * 10) / 10;
+      putter = { ...gradeFromSG(sg), detail: `${puttCost >= 0 ? "+" : ""}${puttCost} strokes vs your avg (${putterHoles.length} holes w/ dist)` };
+    }
+
+    // ── Iron grade ────────────────────────────────────────────────────────────
+    const ironBaseline: Record<string, number> = {};
+    for (const club of IRON_CLUBS_RECAP) {
+      const shots = allHoles.filter(h => h.appr_distance === club && h.appr_accuracy && h.appr_accuracy !== "");
+      if (shots.length >= 3) ironBaseline[club] = shots.filter(h => h.appr_accuracy === "Hit").length / shots.length;
+    }
+    const ironShots = roundHoles.filter(h =>
+      IRON_CLUBS_RECAP.includes(h.appr_distance) && h.appr_accuracy && h.appr_accuracy !== "" && ironBaseline[h.appr_distance] != null
+    );
+    let iron: PerfGrade | null = null;
+    if (ironShots.length >= 3) {
+      const exp = ironShots.reduce((s, h) => s + (ironBaseline[h.appr_distance] ?? 0), 0);
+      const act = ironShots.filter(h => h.appr_accuracy === "Hit").length;
+      const delta = Math.round((act - exp) * 10) / 10;
+      iron = { ...gradeFromIronDelta(delta), detail: `${delta >= 0 ? "+" : ""}${delta} greens vs your avg (${act}/${Math.round(exp * 10) / 10} exp, ${ironShots.length} shots)` };
+    }
+
+    // ── Chipping grade (April 2026+ baseline only) ────────────────────────────
+    const apr2026Rounds = rounds.filter(r => r.date >= "2026-04-01");
+    const apr2026Holes = apr2026Rounds.flatMap(r => r.holes ?? []);
+    // Per-round baseline
+    const roundsByIdx: Record<string, any[][]> = {};
+    for (const r of apr2026Rounds) {
+      roundsByIdx[r.id] = [r.holes ?? []];
+    }
+    let totalExtraSG18 = 0, chipRoundCount = 0, totalProxFt = 0, totalProxHoles = 0;
+    for (const r of apr2026Rounds) {
+      const hs: any[] = r.holes ?? [];
+      const norm = (r.holes_played ?? hs.length) <= 9 ? 2 : 1;
+      const extra = hs.filter(h => (Number(h.chips) || 0) + (Number(h.greenside_bunker) || 0) >= 2).length * norm;
+      const proxHoles = hs.filter(h => (Number(h.chips) || 0) + (Number(h.greenside_bunker) || 0) >= 1 && DIST_FT_RECAP[h.first_putt_distance] != null);
+      if (proxHoles.length >= 1) {
+        totalExtraSG18 += extra;
+        chipRoundCount++;
+        totalProxFt += proxHoles.reduce((s, h) => s + DIST_FT_RECAP[h.first_putt_distance], 0);
+        totalProxHoles += proxHoles.length;
+      }
+    }
+    let chipping: PerfGrade | null = null;
+    if (chipRoundCount >= 2) {
+      const baselineExtraSG = totalExtraSG18 / chipRoundCount;
+      const baselineProx = totalProxHoles > 0 ? totalProxFt / totalProxHoles : null;
+      const isTracked = round && round.date >= "2026-04-01";
+      if (isTracked) {
+        const norm = (round.holes_played ?? roundHoles.length) <= 9 ? 2 : 1;
+        const roundExtra = roundHoles.filter(h => (Number(h.chips) || 0) + (Number(h.greenside_bunker) || 0) >= 2).length * norm;
+        const roundProxHoles = roundHoles.filter(h => (Number(h.chips) || 0) + (Number(h.greenside_bunker) || 0) >= 1 && DIST_FT_RECAP[h.first_putt_distance] != null);
+        if (roundProxHoles.length >= 2) {
+          const roundProx = roundProxHoles.reduce((s, h) => s + DIST_FT_RECAP[h.first_putt_distance], 0) / roundProxHoles.length;
+          const dcSG = baselineExtraSG - roundExtra;
+          const proxSG = baselineProx != null ? (baselineProx - roundProx) * 0.08 : 0;
+          const ccs = Math.round((dcSG + proxSG) * 10) / 10;
+          const g = gradeFromChip(ccs);
+          chipping = { ...g, detail: `${ccs >= 0 ? "+" : ""}${ccs} composite · ${roundExtra} extra SG shots · avg ${Math.round(roundProx * 10) / 10} ft after chip` };
+        }
+      }
+    }
+
+    // ── Driver grade (last 50 rounds baseline) ────────────────────────────────
+    let driver: PerfGrade | null = null;
+    const last50 = [...rounds].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50);
+    const baselineFIRTotals = last50.reduce((acc, r) => {
+      const drivingHoles = (r.holes ?? []).filter((h: any) => h.par === 4 || h.par === 5);
+      acc.hit += drivingHoles.filter((h: any) => h.tee_accuracy === "Hit").length;
+      acc.total += drivingHoles.length;
+      return acc;
+    }, { hit: 0, total: 0 });
+    if (baselineFIRTotals.total >= 20) {
+      const baselineFIRPct = (baselineFIRTotals.hit / baselineFIRTotals.total) * 100;
+      const roundDriving = roundHoles.filter((h: any) => h.par === 4 || h.par === 5);
+      if (roundDriving.length >= 2) {
+        const roundHit = roundDriving.filter((h: any) => h.tee_accuracy === "Hit").length;
+        const roundFIRPct = (roundHit / roundDriving.length) * 100;
+        const delta = Math.round((roundFIRPct - baselineFIRPct) * 10) / 10;
+        driver = {
+          ...gradeFromDriverFIR(delta),
+          detail: `${roundHit}/${roundDriving.length} FIR (${Math.round(roundFIRPct)}%) · avg ${Math.round(baselineFIRPct)}% · ${delta >= 0 ? "+" : ""}${delta}pp`,
+        };
+      }
+    }
+
+    return { putter, iron, chipping, driver };
+  }, [round, rounds]);
+
   function handleSubmit() {
     setStage("analysis");
     setTimeout(() => topRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -1245,6 +1431,7 @@ export default function RecapPage() {
             activeDialClubs={activeDialClubs}
             bagDistances={bagDistances}
             onToggleBag={toggleBagClub}
+            performanceGrades={performanceGrades}
             onSubmit={handleSubmit}
           />
         )}
