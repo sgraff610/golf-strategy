@@ -45,22 +45,25 @@ const SHARED_BODY = `
     setSelect("year", y); setSelect("month", m); setSelect("date", d);
   }, yyyy, mm, dd);
 
-  // Course autocomplete — type full name via keyboard so all autocomplete events fire
+  // Course autocomplete — type first ~10 chars via keyboard to trigger the search,
+  // then wait for the AJAX round-trip before polling for the dropdown.
   await page.waitForSelector("#ucourse", { timeout: 4000 }).catch(() => {});
   await page.click("#ucourse").catch(() => {});
-  // Clear any existing value before typing
   await page.evaluate(() => {
     const el = document.querySelector("#ucourse");
     if (el) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); }
   }).catch(() => {});
   await waitMs(200);
-  await page.keyboard.type(courseName, { delay: 60 }).catch(() => {});
+  // Type first 10 chars to trigger autocomplete without over-filtering results
+  await page.keyboard.type(courseName.slice(0, 10), { delay: 80 }).catch(() => {});
+  // Give TheGrint's server time to respond (debounce + round-trip)
+  await waitMs(2500);
 
-  // Poll for suggestion to appear (up to 4s, check every 200ms)
+  // Poll for suggestion dropdown (up to 6s, check every 300ms)
   const suggestionSels = [".suggestion", ".ui-menu-item", ".ui-autocomplete li", "[class*='suggestion']", "[class*='autocomplete'] li", "li[class*='item']"];
   let suggEl = null;
   for (let si = 0; si < 20; si++) {
-    await waitMs(200);
+    await waitMs(300);
     for (const sel of suggestionSels) {
       suggEl = await page.$(sel).catch(() => null);
       if (suggEl) break;
@@ -68,7 +71,7 @@ const SHARED_BODY = `
     if (suggEl) break;
   }
   if (!suggEl) {
-    return { ok: false, error: "Course not found — TheGrint autocomplete didn't suggest a match for: " + courseName + ". Open TheGrint and confirm the exact course name." };
+    return { ok: false, error: "Course not found — autocomplete returned no results for: " + courseName + ". Verify the name on TheGrint directly." };
   }
   // Click suggestion via mouse events for reliability
   await page.evaluate((el) => {
