@@ -1837,11 +1837,18 @@ export default function RoundsInsights() {
       const roundCount = rounds.length;
       const latestDate = rounds.length > 0 ? rounds[rounds.length - 1].date ?? null : null;
       setTotalRounds(roundCount);
+      // Only include rounds in stats if: date is in the past OR all hole scores are entered.
+      const eligibleRounds = rounds.filter((r: any) => {
+        const isPast = (r.date ?? "") < today;
+        const scoredCount = (r.holes ?? []).filter((h: any) => h.score && Number(h.score) > 0).length;
+        const expectedHoles = (r.holes_played > 0) ? r.holes_played : 18;
+        return isPast || scoredCount >= expectedHoles;
+      });
       const years = new Set<number>();
       const enriched: EnrichedHole[] = [];
       const summaries_: RoundSummary[] = [];
-      for (let ri = 0; ri < rounds.length; ri++) {
-        const round = rounds[ri];
+      for (let ri = 0; ri < eligibleRounds.length; ri++) {
+        const round = eligibleRounds[ri];
         const course = await getCourse(round.course_id);
         const year = round.date ? new Date(round.date).getFullYear() : new Date().getFullYear();
         years.add(year);
@@ -1931,12 +1938,7 @@ export default function RoundsInsights() {
       // Compute handicap using the same USGA formula as the Clubhouse page,
       // preferring the score_differential field already stored on the round.
       // Only count a round if: its date is in the past, OR all hole scores are entered.
-      const hcapDiffs = rounds.map(r => {
-        const isPast = (r.date ?? "") < today;
-        const scoredCount = (r.holes ?? []).filter((h: any) => h.score && Number(h.score) > 0).length;
-        const expectedHoles = (r.holes_played > 0) ? r.holes_played : 18;
-        const isComplete = scoredCount >= expectedHoles;
-        if (!isPast && !isComplete) return null;
+      const hcapDiffs = eligibleRounds.map((r: any) => {
         const sd = r.score_differential;
         if (sd != null) return (r.holes_played ?? 18) <= 9 ? sd * 2 : sd;
         const d = summaries_.find(s => s.date === (r.date ?? ""))?.diff;
@@ -1948,10 +1950,10 @@ export default function RoundsInsights() {
       setAllHoles(enriched);
       setRoundSummaries(summaries_);
 
-      // Compute performance grades for every round (uses all rounds as baseline)
+      // Compute performance grades for every round (uses eligible rounds as baseline)
       const gradeMap: Record<number, RoundGrades> = {};
-      for (let gi = 0; gi < rounds.length; gi++) {
-        gradeMap[gi] = computeInsightGrades(rounds, gi);
+      for (let gi = 0; gi < eligibleRounds.length; gi++) {
+        gradeMap[gi] = computeInsightGrades(eligibleRounds, gi);
       }
       setRoundGrades(gradeMap);
 

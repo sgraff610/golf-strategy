@@ -468,9 +468,14 @@ export default function ClubhousePage() {
   const hcp5ago = diffsOnly.length > 5 ? computeHandicapIndex(diffsOnly.slice(0, -5)) : null;
   const trend = handicapIndex != null && hcp5ago != null ? handicapIndex - hcp5ago : null;
 
-  const stats5 = calcStats(roundsAsc.slice(-5));
-  const stats20 = calcStats(roundsAsc.slice(-20));
-  const statsAll = calcStats(roundsAsc);
+  const eligibleRoundsAsc = roundsAsc.filter(r => {
+    const scoredCount = r.holes.filter((h: any) => h.score && Number(h.score) > 0).length;
+    const expectedHoles = (r.holes_played > 0) ? r.holes_played : 18;
+    return (r.date ?? "") < todayISO || scoredCount >= expectedHoles;
+  });
+  const stats5 = calcStats(eligibleRoundsAsc.slice(-5));
+  const stats20 = calcStats(eligibleRoundsAsc.slice(-20));
+  const statsAll = calcStats(eligibleRoundsAsc);
 
   // Trophy computations
   const rounds18 = roundsDesc.filter(r => (r.holes_played ?? r.holes.length) >= 18 && totalScore(r.holes) > 0);
