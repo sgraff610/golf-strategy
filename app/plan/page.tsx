@@ -329,12 +329,20 @@ export default function PlanPage() {
         setRecapHistory(data.map((r: any) => ({ ...r.recap, course_name: r.course_name, date: r.date })));
       }
     });
-    // Compute handicap index from all rounds
-    supabase.from("rounds").select("score_differential, holes_played").order("date", { ascending: true })
+    // Compute handicap index from all rounds — same rule as home/clubhouse:
+    // only count a round if its date is in the past OR all hole scores are entered.
+    supabase.from("rounds").select("date, score_differential, holes_played, holes").order("date", { ascending: true })
       .then(({ data }) => {
         if (!data) return;
+        const todayISO = new Date().toISOString().split("T")[0];
         const diffs = data
-          .filter((r: any) => r.score_differential != null)
+          .filter((r: any) => {
+            const isPast = (r.date ?? "") < todayISO;
+            const scoredCount = (r.holes ?? []).filter((h: any) => h.score && Number(h.score) > 0).length;
+            const expectedHoles = (r.holes_played > 0) ? r.holes_played : 18;
+            const isComplete = scoredCount >= expectedHoles;
+            return (isPast || isComplete) && r.score_differential != null;
+          })
           .map((r: any) => (r.holes_played ?? 18) <= 9 ? r.score_differential * 2 : r.score_differential);
         if (diffs.length < 3) return;
         const last20 = diffs.slice(-20);
