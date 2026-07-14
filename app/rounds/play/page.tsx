@@ -587,10 +587,17 @@ function PlayCourseInner() {
       } else {
         setApproachClub("");
       }
-      // Load notes from all tee boxes of this course and merge
-      const { data: allTeeNotes } = await supabase.from("courses").select("hole_notes").eq("name", cName ?? selectedCourse?.name ?? "");
+      // Load notes from all tee boxes of this course and merge both storage locations:
+      // - courses.holes[i].hole_notes  (saved via the course edit page)
+      // - courses.hole_notes           (top-level JSONB saved from the play page, takes precedence)
+      const { data: allTeeNotes } = await supabase.from("courses").select("hole_notes, holes").eq("name", cName ?? selectedCourse?.name ?? "");
       const mergedNotes: Record<string,string> = {};
       for (const row of allTeeNotes ?? []) {
+        if (Array.isArray(row.holes)) {
+          for (const h of row.holes) {
+            if (h.hole && h.hole_notes) mergedNotes[String(h.hole)] = h.hole_notes;
+          }
+        }
         if (row.hole_notes) Object.assign(mergedNotes, row.hole_notes);
       }
       setHoleNotesText(mergedNotes[String(holeNum)] ?? "");
