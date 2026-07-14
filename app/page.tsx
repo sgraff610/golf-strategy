@@ -102,8 +102,8 @@ export default function Home() {
   const [nextRound, setNextRound] = useState<any>(null);
   const [nextRoundCourse, setNextRoundCourse] = useState<any>(null);
   const [nextRoundPlan, setNextRoundPlan] = useState<any>(null);
-  const [planAdders, setPlanAdders] = useState<Array<{hole:number;par:number;avg:number;count:number}>>([]);
-  const [planSavers, setPlanSavers] = useState<Array<{hole:number;par:number;avg:number;count:number}>>([]);
+  const [planAdders, setPlanAdders] = useState<Array<{hole:number;par:number;avg:number;count:number;similar?:boolean}>>([]);
+  const [planSavers, setPlanSavers] = useState<Array<{hole:number;par:number;avg:number;count:number;similar?:boolean}>>([]);
   const [loading, setLoading] = useState(true);
   // Responsive
   const [windowWidth, setWindowWidth] = useState(1440);
@@ -115,7 +115,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const CACHE_KEY = "gl-home-v4";
+    const CACHE_KEY = "gl-home-v5";
     const CACHE_TTL = 10 * 60 * 1000; // 10 min
 
     // ── Render from cache immediately ───────────────────────────────────────
@@ -168,7 +168,14 @@ export default function Home() {
       }
 
       // Differentials (with dates for 30-day trend)
+      const todayISO = new Date().toISOString().split("T")[0];
       const allDiffsRaw: {diff:number;date:string}[] = rounds.map((r:any) => {
+        // Don't count toward handicap unless: round date is in the past, OR all hole scores are entered.
+        const isPast = (r.date ?? "") < todayISO;
+        const scoredPre = (r.holes??[]).filter((h:any)=>h.score&&Number(h.score)>0);
+        const expectedHoles = (r.holes_played > 0) ? r.holes_played : 18;
+        const isComplete = scoredPre.length >= expectedHoles;
+        if (!isPast && !isComplete) return null;
         let diff: number|null = null;
         if (r.score_differential!=null) diff = r.holes_played<=9?r.score_differential*2:r.score_differential;
         else {
@@ -296,7 +303,7 @@ export default function Home() {
       // ── Next upcoming round (date >= today) ──────────────────────────────
       const todayStr=new Date().toISOString().split("T")[0];
       let nr: any = null, nrCourse: any = null, np: any = null;
-      const{data:nrData}=await supabase.from("rounds").select("id,course_id,course_name,date,tee_box,holes_played")
+      const{data:nrData}=await supabase.from("rounds").select("id,course_id,course_name,date,tee_box,holes_played,starting_hole,holes")
         .gte("date",todayStr).order("date",{ascending:true}).limit(1).maybeSingle();
       if(nrData){
         nr=nrData; setNextRound(nr);
@@ -311,25 +318,63 @@ export default function Home() {
         np=npData??null; setNextRoundPlan(np);
       }
 
-      // Per-hole performance for pre-round plan card
-      const holeMap: Record<number, {stps:number[];par:number}> = {};
-      const srcRounds = nr ? completedAll.filter((r:any)=>r.course_id===nr.course_id) : completedAll;
-      const finalSource = srcRounds.length===0 ? completedAll : srcRounds;
-      for (const r of finalSource) {
-        for (const h of (r.holes ?? [])) {
-          const hs=Number(h.score);
-          if (!hs||!h.par) continue;
-          if (!holeMap[h.hole]) holeMap[h.hole]={stps:[],par:h.par};
-          holeMap[h.hole].stps.push(hs-h.par);
+      // ── Pre-round plan: hardest / easiest holes for the NEXT round ────────
+      // Evaluate only the holes actually in the next round (so a 9-hole round
+      // looks at 9 holes, not 18), using this course's own history. If the course
+      // hasn't been played yet, estimate difficulty from similar holes elsewhere.
+      type PlanHoleStat = {hole:number;par:number;avg:number;count:number;similar?:boolean};
+      let addersArr: PlanHoleStat[] = [];
+      let saversArr: PlanHoleStat[] = [];
+      if (nr) {
+        const nrHoles: any[] = Array.isArray(nr.holes) ? nr.holes : [];
+        const nrHoleNums = new Set<number>(nrHoles.map((h:any)=>Number(h.hole)).filter((n:number)=>n>0));
+        const parByHole: Record<number,number> = {};
+        for (const h of nrHoles) if (h.par) parByHole[Number(h.hole)] = h.par;
+
+        const courseRounds = completedAll.filter((r:any)=>r.course_id===nr.course_id);
+        let holeAvg: PlanHoleStat[] = [];
+
+        if (courseRounds.length > 0) {
+          // Played here before — use real per-hole history, limited to this round's holes.
+          const holeMap: Record<number, {stps:number[];par:number}> = {};
+          for (const r of courseRounds) {
+            for (const h of (r.holes ?? [])) {
+              const hs=Number(h.score);
+              if (!hs||!h.par) continue;
+              if (nrHoleNums.size && !nrHoleNums.has(Number(h.hole))) continue;
+              if (!holeMap[h.hole]) holeMap[h.hole]={stps:[],par:h.par};
+              holeMap[h.hole].stps.push(hs-h.par);
+            }
+          }
+          holeAvg = Object.entries(holeMap).map(([hole,v])=>({
+            hole:Number(hole), par:v.par,
+            avg:v.stps.reduce((a,b)=>a+b,0)/v.stps.length,
+            count:v.stps.length,
+          }));
+        } else {
+          // Never played here — estimate from similar holes via /api/plan-enriched.
+          try {
+            const enrRes = await fetch("/api/plan-enriched", {
+              method:"POST", headers:{"Content-Type":"application/json"},
+              body: JSON.stringify({ courseId: nr.course_id }),
+            });
+            const enr: Record<number, Array<{stp:number}>> = enrRes.ok ? await enrRes.json() : {};
+            const targetHoles = nrHoleNums.size ? [...nrHoleNums] : Object.keys(enr).map(Number);
+            holeAvg = targetHoles.map((hole):PlanHoleStat|null => {
+              const recs = enr[hole] ?? [];
+              if (!recs.length) return null;
+              return {
+                hole, par: parByHole[hole] ?? 4,
+                avg: recs.reduce((s,x)=>s+(Number(x.stp)||0),0)/recs.length,
+                count: recs.length, similar:true,
+              };
+            }).filter((x):x is PlanHoleStat => x !== null);
+          } catch { holeAvg = []; }
         }
+
+        addersArr=[...holeAvg].sort((a,b)=>b.avg-a.avg).slice(0,2);
+        saversArr=[...holeAvg].sort((a,b)=>a.avg-b.avg).slice(0,2);
       }
-      const holeAvg=Object.entries(holeMap).map(([hole,v])=>({
-        hole:Number(hole),par:v.par,
-        avg:v.stps.reduce((a,b)=>a+b,0)/v.stps.length,
-        count:v.stps.length,
-      }));
-      const addersArr=[...holeAvg].sort((a,b)=>b.avg-a.avg).slice(0,2);
-      const saversArr=[...holeAvg].sort((a,b)=>a.avg-b.avg).slice(0,2);
       setPlanAdders(addersArr); setPlanSavers(saversArr);
 
       // ── Save to localStorage cache ────────────────────────────────────────
@@ -623,6 +668,11 @@ export default function Home() {
 
                     {(planAdders.length > 0 || planSavers.length > 0) && (
                       <div style={{ marginTop:14, display:"flex", flexDirection:"column", gap:10 }}>
+                        {(planAdders[0]?.similar || planSavers[0]?.similar) && (
+                          <div style={{ fontSize:9, fontStyle:"italic", color:"rgba(255,255,255,0.45)", marginTop:-2 }}>
+                            Estimated from similar holes — you haven&apos;t played here yet
+                          </div>
+                        )}
                         {planAdders.length > 0 && (
                           <div>
                             <div style={{ fontSize:9, fontWeight:700, letterSpacing:1.8, color:"rgba(255,140,100,0.85)", marginBottom:5 }}>TOUGH HOLES</div>
@@ -631,7 +681,7 @@ export default function Home() {
                                 <span style={B.planRowHole}>{h.hole}</span>
                                 <span style={B.planRowMeta}>P{h.par}</span>
                                 <span style={{...B.planRowAim, color:"#ffaa88"}}>+{h.avg.toFixed(2)} avg</span>
-                                <span style={{...B.planRowNote, marginLeft:"auto"}}>{h.count}r</span>
+                                <span style={{...B.planRowNote, marginLeft:"auto"}}>{h.count}{h.similar ? " sim" : "r"}</span>
                               </div>
                             ))}
                           </div>
@@ -644,7 +694,7 @@ export default function Home() {
                                 <span style={B.planRowHole}>{h.hole}</span>
                                 <span style={B.planRowMeta}>P{h.par}</span>
                                 <span style={{...B.planRowAim, color:"#7deba5"}}>{h.avg >= 0 ? "+" : ""}{h.avg.toFixed(2)} avg</span>
-                                <span style={{...B.planRowNote, marginLeft:"auto"}}>{h.count}r</span>
+                                <span style={{...B.planRowNote, marginLeft:"auto"}}>{h.count}{h.similar ? " sim" : "r"}</span>
                               </div>
                             ))}
                           </div>

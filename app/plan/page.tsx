@@ -25,6 +25,7 @@ import { FormRanger } from "./FormRanger";
 import { PlanHoleCard } from "./PlanHoleCard";
 import { buildPosture, buildStrategies, targetScore, leavesYardage, windClubAdjust, wetnessRollLoss } from "./planEngine";
 import { useIsMobile } from "@/app/hooks/useIsMobile";
+import { mergeGreensideAcrossTees, siblingTees } from "@/lib/greenside";
 
 export type HoleClubStat = { club: string; count: number; avgOverPar: number };
 export type HoleHistEntry = { date: string; score: number; par: number; club: string; tee_accuracy: string; appr_distance?: string; appr_accuracy?: string };
@@ -363,8 +364,9 @@ export default function PlanPage() {
     setAllCourseRounds([]);
     setHolesMode("all");
     setOverrides({});
-    Promise.all([getCourse(courseId), fetchRawRounds(courseId)]).then(([courseData, rounds]) => {
-      setCourse(courseData);
+    Promise.all([getCourse(courseId), fetchRawRounds(courseId), loadCourses()]).then(([courseData, rounds, allCourses]) => {
+      // Share greenside aim/positions from sibling tee versions of the same course.
+      setCourse(mergeGreensideAcrossTees(courseData, siblingTees(courseData, allCourses ?? [])));
       setRawRounds(rounds);
       if (courseData?.name) {
         supabase.from("rounds")
@@ -573,7 +575,7 @@ export default function PlanPage() {
         appr_distance: h.par === 3 ? (strat?.pref ?? "") : "",
         aim: strat?.aim ?? "",
         plan_club: strat?.pref ?? "",
-        preferred_club_override: h.par === 3 ? "" : (strat?.pref ?? ""),
+        preferred_club_override: "",
         tee_land: strat?.aim ?? "",
         aim_dir: overrides[h.hole]?.aim_dir ?? ((h as any).aim_dir ?? ""),
         aim_level: overrides[h.hole]?.aim_level ?? ((h as any).aim_level ?? 0),

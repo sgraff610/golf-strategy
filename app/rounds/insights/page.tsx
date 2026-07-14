@@ -1930,7 +1930,13 @@ export default function RoundsInsights() {
       }
       // Compute handicap using the same USGA formula as the Clubhouse page,
       // preferring the score_differential field already stored on the round.
+      // Only count a round if: its date is in the past, OR all hole scores are entered.
       const hcapDiffs = rounds.map(r => {
+        const isPast = (r.date ?? "") < today;
+        const scoredCount = (r.holes ?? []).filter((h: any) => h.score && Number(h.score) > 0).length;
+        const expectedHoles = (r.holes_played > 0) ? r.holes_played : 18;
+        const isComplete = scoredCount >= expectedHoles;
+        if (!isPast && !isComplete) return null;
         const sd = r.score_differential;
         if (sd != null) return (r.holes_played ?? 18) <= 9 ? sd * 2 : sd;
         const d = summaries_.find(s => s.date === (r.date ?? ""))?.diff;

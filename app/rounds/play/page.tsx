@@ -7,6 +7,7 @@ import type { ClubDistances } from "@/lib/planTypes";
 import { CourseRecord } from "@/lib/types";
 import { AimDial } from "@/app/plan/PlanHoleCard";
 import GreensideSelector, { type GreensideState, type AimValue, flatToGreenside } from "@/app/components/GreensideSelector";
+import { mergeGreensideAcrossTees, siblingTees } from "@/lib/greenside";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
 type RoundHole = {
@@ -493,7 +494,11 @@ function PlayCourseInner() {
   }, [currentHoleIdx, roundHoles.length]);
 
   // ── ALL useMemo hooks ─────────────────────────────────────────────────────────
-  const selectedCourse = useMemo(() => courses.find(c => c.id === courseId), [courses, courseId]);
+  const selectedCourse = useMemo(() => {
+    const c = courses.find(c => c.id === courseId);
+    // Share greenside aim/positions from sibling tee versions of the same course.
+    return mergeGreensideAcrossTees(c, siblingTees(c, courses)) ?? undefined;
+  }, [courses, courseId]);
 
   const enriched: EnrichedHole[] = useMemo(() => strategy?.enrichedHoles ?? [], [strategy]);
   const holeHistory = useMemo(() => strategy?.holeHistory ?? [], [strategy]);
@@ -1421,11 +1426,13 @@ function scoreBg(score: number|"", par: number): string {
           <div style={{ background:"var(--paper)", border:"1px solid var(--line)", borderRadius:12, padding:"12px 16px", marginBottom:12, order:2 }}>
             {(() => {
               const ch2 = selectedCourse?.holes.find((x: any) => x.hole === currentHole.hole) ?? {};
-              const gs: GreensideState = {
-                ...flatToGreenside(ch2 as Record<string, boolean | number | string | null | undefined>),
-                aim_dir:   currentHole.aim_dir   ?? "",
-                aim_level: (currentHole.aim_level ?? 0) as AimValue,
-              };
+              // Start from the course record (merged across tees), then use this
+              // round's own aim only when it has one — so the course-record aim
+              // defaults in when the round hole is blank.
+              const base = flatToGreenside(ch2 as Record<string, boolean | number | string | null | undefined>);
+              const gs: GreensideState = currentHole.aim_dir
+                ? { ...base, aim_dir: currentHole.aim_dir, aim_level: (currentHole.aim_level ?? 0) as AimValue }
+                : base;
               return (
                 <GreensideSelector
                   label="Approach Aim"

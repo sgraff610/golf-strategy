@@ -1,5 +1,9 @@
 "use client";
 import { useState, useRef, useEffect, useMemo } from "react";
+import {
+  ComposedChart, Bar, Cell, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
+} from "recharts";
 import { topMiss, sgTone, sgColor, type Club, type Disp } from "./clubData";
 import { HeatGrid } from "./HeatGrid";
 
@@ -11,6 +15,17 @@ type ApproachHole = {
   par: number;
   roundIndex: number;
 };
+
+type RoundSummarySlim = { idx: number; date: string; courseName: string };
+
+function ironGrade(delta: number): { letter: string; color: string; bg: string } {
+  if (delta >= 2.0) return { letter: "A+", color: "#fff", bg: "#0f6e56" };
+  if (delta >= 1.0) return { letter: "A",  color: "#fff", bg: "#27ae60" };
+  if (delta >= 0)   return { letter: "B",  color: "#fff", bg: "#2980b9" };
+  if (delta >= -1.0) return { letter: "C", color: "#333", bg: "#f5c842" };
+  if (delta >= -2.0) return { letter: "D", color: "#fff", bg: "#e67e22" };
+  return                    { letter: "F",  color: "#fff", bg: "#c0392b" };
+}
 
 const SCORING_CLUBS = ["4i","5i","6i","7i","8i","9i","PW","GW","SW","LW"];
 
@@ -69,9 +84,10 @@ type Props = {
   holes: ApproachHole[];
   totalRounds: number;
   onShowFactors: (club: string) => void;
+  roundSummaries?: RoundSummarySlim[];
 };
 
-export default function IronsWedges({ holes, totalRounds, onShowFactors }: Props) {
+export default function IronsWedges({ holes, totalRounds, onShowFactors, roundSummaries = [] }: Props) {
   const [range, setRange] = useState<"all" | "l20">("all");
   const [sel, setSel] = useState<{ club: string; top: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -87,6 +103,66 @@ export default function IronsWedges({ holes, totalRounds, onShowFactors }: Props
   );
 
   const rows = useMemo(() => computeRows(activeHoles), [activeHoles]);
+
+  // ── Per-club baseline hit rate across ALL rounds (used for grading) ──────────
+  const baselineHitRate = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const club of SCORING_CLUBS) {
+      const shots = holes.filter(h => h.appr_distance === club && h.appr_accuracy && h.appr_accuracy !== "");
+      if (shots.length >= 3) {
+        result[club] = shots.filter(h => h.appr_accuracy === "Hit").length / shots.length;
+      }
+    }
+    return result;
+  }, [holes]);
+
+  // ── Round-by-round iron grade ─────────────────────────────────────────────────
+  const roundIronData = useMemo(() => {
+    const byRound: Record<number, ApproachHole[]> = {};
+    for (const h of holes) {
+      if (!byRound[h.roundIndex]) byRound[h.roundIndex] = [];
+      byRound[h.roundIndex].push(h);
+    }
+    const rows2 = Object.entries(byRound).map(([idxStr, hs]) => {
+      const idx = Number(idxStr);
+      const summary = roundSummaries.find(s => s.idx === idx);
+      const ironShots = hs.filter(h =>
+        SCORING_CLUBS.includes(h.appr_distance) &&
+        h.appr_accuracy && h.appr_accuracy !== "" &&
+        baselineHitRate[h.appr_distance] != null
+      );
+      if (ironShots.length < 3) return null;
+      const expected = ironShots.reduce((s, h) => s + (baselineHitRate[h.appr_distance] ?? 0), 0);
+      const actual = ironShots.filter(h => h.appr_accuracy === "Hit").length;
+      const delta = Math.round((actual - expected) * 10) / 10;
+      return {
+        idx,
+        date: summary?.date ?? "",
+        name: summary?.date ?? "",
+        courseName: summary?.courseName ?? "",
+        delta,
+        actual,
+        expected: Math.round(expected * 10) / 10,
+        shots: ironShots.length,
+        ...ironGrade(delta),
+      };
+    }).filter(Boolean).sort((a: any, b: any) => a.date > b.date ? 1 : -1) as any[];
+
+    return rows2.map((r, i) => {
+      const window = rows2.slice(Math.max(0, i - 4), i + 1);
+      const roll = window.length ? Math.round(window.reduce((s: number, x: any) => s + x.delta, 0) / window.length * 10) / 10 : null;
+      return { ...r, rollingAvg: roll };
+    });
+  }, [holes, roundSummaries, baselineHitRate]);
+
+  const ironGradeRows = [
+    { letter: "A+", desc: "2+ greens above your avg",     bg: "#0f6e56", color: "#fff" },
+    { letter: "A",  desc: "1–2 greens above your avg",    bg: "#27ae60", color: "#fff" },
+    { letter: "B",  desc: "0–1 greens above your avg",    bg: "#2980b9", color: "#fff" },
+    { letter: "C",  desc: "0–1 greens below your avg",    bg: "#f5c842", color: "#333" },
+    { letter: "D",  desc: "1–2 greens below your avg",    bg: "#e67e22", color: "#fff" },
+    { letter: "F",  desc: "2+ greens below your avg",     bg: "#c0392b", color: "#fff" },
+  ];
 
   const totalShots = rows.reduce((s, c) => s + c.n, 0);
   const wAvgGir = totalShots > 0
@@ -297,6 +373,82 @@ export default function IronsWedges({ holes, totalRounds, onShowFactors }: Props
           </div>
         </div>
       )}
+
+      {/* ── Iron Grade by Round ─────────────────────────────────────────────── */}
+      <div style={{ marginTop: 40, background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 12, padding: "20px 22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>Iron Performance Grade by Round</span>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 18px" }}>
+          Greens hit vs your historical average hit rate for each club, weighted by the clubs you used that round. C = hit exactly as many greens as your average. A+ = 2+ greens above your norm. Line = 5-round average.
+        </p>
+
+        {roundIronData.length < 2 ? (
+          <p style={{ color: "var(--muted)", fontStyle: "italic", fontSize: 13 }}>Need more rounds with approach accuracy logged (at least 3 iron/wedge shots per round).</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <ComposedChart data={roundIronData} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+              <XAxis dataKey="name" height={36} tick={(props: any) => {
+                const { x, y, payload } = props;
+                const d: string = payload.value ?? "";
+                const idx2 = roundIronData.findIndex((r: any) => r.name === d);
+                const isYearStart = idx2 === 0 ||
+                  (idx2 > 0 && d.slice(0, 4) !== (roundIronData[idx2 - 1]?.name ?? "").slice(0, 4));
+                return (
+                  <g transform={`translate(${x},${y})`}>
+                    <text x={0} y={0} dy={11} textAnchor="middle" fill="var(--muted)" fontSize={10}>
+                      {d ? `${d.slice(5, 7)}/${d.slice(8)}` : ""}
+                    </text>
+                    {isYearStart && (
+                      <text x={0} y={0} dy={22} textAnchor="middle" fill="#555" fontSize={8} fontWeight={700}>
+                        {d.slice(0, 4)}
+                      </text>
+                    )}
+                  </g>
+                );
+              }} />
+              <YAxis tickFormatter={(v: number) => v >= 0 ? `+${v}` : `${v}`} tick={{ fontSize: 10, fill: "var(--muted)" }} />
+              <ReferenceLine y={0} stroke="var(--muted)" strokeDasharray="4 2" />
+              <Tooltip
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0].payload;
+                  const g = ironGrade(d.delta);
+                  return (
+                    <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 14px", fontSize: 12 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.date} · {d.courseName}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <span style={{ background: g.bg, color: g.color, borderRadius: 6, padding: "2px 8px", fontWeight: 700, fontSize: 13 }}>{g.letter}</span>
+                        <span style={{ color: d.delta >= 0 ? "var(--green)" : "var(--bad)", fontWeight: 700 }}>
+                          {d.delta >= 0 ? "+" : ""}{d.delta} greens vs expected
+                        </span>
+                      </div>
+                      <div style={{ color: "var(--muted)" }}>{d.actual} hit / {d.expected} expected · {d.shots} shots logged</div>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="delta" name="Iron Grade" radius={[4, 4, 0, 0]}>
+                {roundIronData.map((r: any, i: number) => (
+                  <Cell key={i} fill={r.bg} fillOpacity={0.9} />
+                ))}
+              </Bar>
+              <Line dataKey="rollingAvg" type="monotone" stroke="#f29450" strokeWidth={2.5} dot={false} name="5-rnd avg" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Grade legend */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 16 }}>
+          {ironGradeRows.map(g => (
+            <div key={g.letter} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ background: g.bg, color: g.color, borderRadius: 6, padding: "2px 7px", fontSize: 11, fontWeight: 700 }}>{g.letter}</span>
+              <span style={{ fontSize: 10, color: "var(--muted-2)" }}>{g.desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

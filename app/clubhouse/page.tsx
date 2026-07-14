@@ -441,7 +441,14 @@ export default function ClubhousePage() {
   const roundsAsc = [...rounds].sort((a, b) => a.date.localeCompare(b.date));
   const roundsDesc = [...rounds].sort((a, b) => b.date.localeCompare(a.date));
 
+  const todayISO = new Date().toISOString().split("T")[0];
   const diffsWithInfo = roundsAsc.map(r => {
+    // Don't count toward handicap unless: round date is in the past, OR all hole scores are entered.
+    const isPast = (r.date ?? "") < todayISO;
+    const scoredCount = r.holes.filter(h => h.score && Number(h.score) > 0).length;
+    const expectedHoles = (r.holes_played > 0) ? r.holes_played : 18;
+    const isComplete = scoredCount >= expectedHoles;
+    if (!isPast && !isComplete) return null;
     const d = r.score_differential != null
       ? (r.holes_played <= 9 ? r.score_differential * 2 : r.score_differential)
       : computeDiffNum(r, courseInfoMap[r.course_id]);
