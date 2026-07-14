@@ -482,7 +482,7 @@ function PlayCourseInner() {
         const allCourses = await loadCourses();
         setAllTeeVersions(allCourses.filter(c => c.name === data.course_name));
         if (data.holes?.length > 0) {
-          fetchStrategy(data.holes[0].hole, data.course_id);
+          fetchStrategy(data.holes[0].hole, data.course_id, data.course_name);
         }
       }
       setLoadingRound(false);
@@ -568,7 +568,7 @@ function PlayCourseInner() {
   const scorecardCourse = selectedCourse ?? allTeeVersions[0] ?? null;
 
   // ── Helper functions ──────────────────────────────────────────────────────────
-  async function fetchStrategy(holeNum: number, cId?: string) {
+  async function fetchStrategy(holeNum: number, cId?: string, cName?: string) {
     setLoadingStrategy(true); setStrategy(null);
     try {
       const res = await fetch("/api/strategy", {
@@ -588,7 +588,7 @@ function PlayCourseInner() {
         setApproachClub("");
       }
       // Load notes from all tee boxes of this course and merge
-      const { data: allTeeNotes } = await supabase.from("courses").select("hole_notes").eq("name", selectedCourse?.name ?? "");
+      const { data: allTeeNotes } = await supabase.from("courses").select("hole_notes").eq("name", cName ?? selectedCourse?.name ?? "");
       const mergedNotes: Record<string,string> = {};
       for (const row of allTeeNotes ?? []) {
         if (row.hole_notes) Object.assign(mergedNotes, row.hole_notes);
