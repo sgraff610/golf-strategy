@@ -475,7 +475,7 @@ export default function RoundsPage() {
                   const grades = gradesMap[round.id];
                   if (!grades) return null;
                   const chips = [
-                    { label: "Driver",   grade: grades.driver },
+                    { label: "Tee shots", grade: grades.driver },
                     { label: "Irons",    grade: grades.iron },
                     { label: "Chipping", grade: grades.chipping },
                     { label: "Putting",  grade: grades.putter },
