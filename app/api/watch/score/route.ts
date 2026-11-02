@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { recomputeRoundHandicap } from "@/lib/handicap";
 
 type ScorePatch = {
   roundId: string;
@@ -64,6 +65,8 @@ export async function PATCH(req: NextRequest) {
 
   if (updateErr)
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+  await recomputeRoundHandicap(supabase, roundId);
 
   return NextResponse.json({ ok: true });
 }

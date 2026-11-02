@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCourse, loadCourses } from "@/lib/storage";
 import { CourseRecord } from "@/lib/types";
+import { computeHandicapIndexAtDate, computeCourseHandicap, computeAdjustedGrossScore, computeScoreDifferential, handicapStrokesOnHole, adjustedScore, netDoubleBogey } from "@/lib/handicap";
 
 type TeeAccuracy = "Hit" | "Left" | "Right" | "Short" | "Long" | "";
 type RoundHole = {
@@ -22,81 +23,6 @@ function calcGir(score: number | "", par: number, putts: number | ""): boolean {
 function calcGrints(score: number | "", par: number): boolean {
   if (score === "") return false;
   return score <= par;
-}
-function computeHandicapIndexAtDate(allRounds: any[], beforeDate: string): number {
-  // Get rounds before this date, sorted chronologically
-  const prior = allRounds
-    .filter(r => r.date < beforeDate && r.score_differential != null)
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  // Build list of differentials — pad with 14.0 if fewer than 20
-  const diffs = prior.map(r => r.score_differential as number);
-  while (diffs.length < 20) diffs.unshift(14.0);
-  const last20 = diffs.slice(-20);
-
-  const sorted = [...last20].sort((a, b) => a - b);
-  const count = last20.length <= 6 ? 1
-    : last20.length <= 8 ? 2
-    : last20.length <= 11 ? 3
-    : last20.length <= 14 ? 4
-    : last20.length <= 16 ? 5
-    : last20.length <= 18 ? 6
-    : last20.length === 19 ? 7
-    : 8;
-  const best = sorted.slice(0, count);
-  const avg = best.reduce((s, d) => s + d, 0) / best.length;
-  return Math.floor(avg * 10) / 10;
-}
-
-function computeCourseHandicap(
-  handicapIndex: number,
-  slope: number,
-  rating: number,
-  par: number,
-  holesPlayed: number,
-  courseHoleCount: number = 18
-): number {
-  const is9Course = courseHoleCount <= 9;
-  const is9Round = holesPlayed <= 9;
-
-  let adjRating = rating;
-  if (!is9Round && is9Course) adjRating = rating * 2;
-  else if (is9Round && !is9Course) adjRating = rating / 2;
-
-  if (is9Round) {
-    const halfHI = Math.round(handicapIndex / 2 * 10) / 10;
-    return Math.round(halfHI * (slope / 113) + (adjRating - par));
-  }
-  return Math.round(handicapIndex * (slope / 113) + (adjRating - par));
-}
-
-function handicapStrokesOnHole(courseHandicap: number, strokeIndex: number): number {
-  // strokes = floor(courseHandicap / 18), plus 1 if strokeIndex <= (courseHandicap % 18)
-  const base = Math.floor(courseHandicap / 18);
-  const extra = courseHandicap % 18;
-  return base + (strokeIndex <= extra ? 1 : 0);
-}
-
-function netDoubleBogey(par: number, handicapStrokes: number): number {
-  return par + 2 + handicapStrokes;
-}
-
-function adjustedScore(actualScore: number | "", par: number, handicapStrokes: number): number | "" {
-  if (actualScore === "") return "";
-  const ndb = netDoubleBogey(par, handicapStrokes);
-  return Math.min(Number(actualScore), ndb);
-}
-
-function computeAdjustedGrossScore(holes: any[], courseHandicap: number): number {
-  return holes.reduce((sum, h) => {
-    const strokes = handicapStrokesOnHole(courseHandicap, h.stroke_index);
-    const adj = adjustedScore(h.score, h.par, strokes);
-    return sum + (adj === "" ? 0 : Number(adj));
-  }, 0);
-}
-
-function computeScoreDifferential(ags: number, rating: number, slope: number): number {
-  return Math.round(((ags - rating) * (113 / slope)) * 10) / 10;
 }
 function scoreColor(score:number, par:number):string {
   const d=score-par;

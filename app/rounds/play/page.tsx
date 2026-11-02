@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { recomputeRoundHandicap } from "@/lib/handicap";
 import { loadCourses, getClubDistances } from "@/lib/storage";
 import type { ClubDistances } from "@/lib/planTypes";
 import { CourseRecord } from "@/lib/types";
@@ -456,7 +457,7 @@ function PlayCourseInner() {
         tee_box: local.tee_box ?? "", starting_hole: local.starting_hole ?? 1,
         holes: local.holes,
       });
-      if (!error) { clearLocal(roundId); setPendingSync(false); }
+      if (!error) { clearLocal(roundId); setPendingSync(false); await recomputeRoundHandicap(supabase, roundId); }
     };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);
@@ -676,7 +677,7 @@ function PlayCourseInner() {
     // Then try Supabase
     if (navigator.onLine) {
       const { error } = await supabase.from("rounds").update({ holes: holesToSave }).eq("id", roundId);
-      if (!error) { clearLocal(roundId); setPendingSync(false); }
+      if (!error) { clearLocal(roundId); setPendingSync(false); await recomputeRoundHandicap(supabase, roundId); }
       else setPendingSync(true);
     } else {
       setPendingSync(true);
